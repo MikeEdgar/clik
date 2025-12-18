@@ -1,12 +1,17 @@
 package io.streamshub.clik;
 
+import jakarta.inject.Singleton;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
 import io.quarkus.picocli.runtime.annotations.TopCommand;
 import picocli.CommandLine;
+import picocli.CommandLine.IVersionProvider;
 
 @TopCommand
 @CommandLine.Command(name = Clik.NAME,
         mixinStandardHelpOptions = true,
-        version = "${quarkus.application.version}",
+        versionProvider = Clik.Version.class,
         description = "Command line interface for Apache Kafka",
         subcommands = {
                 CommandLine.HelpCommand.class,
@@ -14,4 +19,15 @@ import picocli.CommandLine;
 )
 public class Clik {
     public static final String NAME = "clik";
+
+    @Singleton
+    public static class Version implements IVersionProvider {
+        @ConfigProperty(name = "quarkus.application.version")
+        String applicationVersion;
+
+        @Override
+        public String[] getVersion() throws Exception {
+            return new String[] { applicationVersion };
+        }
+    }
 }
