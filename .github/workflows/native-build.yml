@@ -1,0 +1,102 @@
+name: Native Build and Test
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-build-and-test:
+    name: Native ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux AMD64
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+
+          # macOS x86_64 (Intel)
+          - os: macos
+            arch: amd64
+            runner: macos-15-intel
+
+          # macOS ARM64 (Apple Silicon)
+          - os: macos
+            arch: arm64
+            runner: macos-15
+
+          # Windows AMD64
+          - os: windows
+            arch: amd64
+            runner: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '21'
+          distribution: 'graalvm-community'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          native-image-job-reports: 'true'
+
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-${{ matrix.arch }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-maven-
+
+      # Non-Windows: Build and test natively
+      - name: Build and test native image
+        if: matrix.os != 'windows'
+        run: ./mvnw -B --no-transfer-progress verify -Pnative
+
+      # Windows: Build and test natively
+      - name: Build and test native image (Windows)
+        if: matrix.os == 'windows'
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          mvnw.cmd -B --no-transfer-progress verify -Pnative
+
+      # Upload test results on failure
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            target/surefire-reports/
+            target/failsafe-reports/
+          if-no-files-found: ignore
+
+      # Upload native executable for verification
+      - name: Upload native executable (Linux/macOS)
+        if: success() && matrix.os != 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.os }}-${{ matrix.arch }}
+          path: target/*-runner
+          if-no-files-found: error
+
+      - name: Upload native executable (Windows)
+        if: success() && matrix.os == 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.os }}-${{ matrix.arch }}
+          path: target/*-runner.exe
+          if-no-files-found: error
