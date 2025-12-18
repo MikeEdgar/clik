@@ -4,6 +4,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import io.quarkus.runtime.annotations.RegisterForReflection;
+
+@RegisterForReflection
 public class ContextConfig {
     private Map<String, String> common = new HashMap<>();
     private Map<String, String> admin = new HashMap<>();
