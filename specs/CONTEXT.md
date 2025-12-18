@@ -993,7 +993,7 @@ consumer:
 - [ ] Add `--context` flag to base command
 - [ ] Integrate ConfigurationLoader with KafkaClientFactory
 - [ ] Update future Kafka commands (topics, consumer-groups, etc.)
-- [ ] Integration tests for context commands
+- [x] Integration tests for context commands
 - [ ] Integration tests for context usage with Kafka commands
 
 ### Phase 3: Enhanced Features
