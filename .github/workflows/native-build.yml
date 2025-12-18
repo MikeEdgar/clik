@@ -28,12 +28,12 @@ jobs:
           # macOS x86_64 (Intel)
           - os: macos
             arch: amd64
-            runner: macos-13
+            runner: macos-15-intel
 
           # macOS ARM64 (Apple Silicon)
           - os: macos
             arch: arm64
-            runner: macos-14
+            runner: macos-15
 
           # Windows AMD64
           - os: windows
@@ -60,15 +60,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-maven-
 
-      # Linux: Build and test natively
-      - name: Build and test native image (Linux)
-        if: matrix.os == 'linux'
-        run: ./mvnw verify -Pnative
-
-      # macOS: Build and test natively
-      - name: Build and test native image (macOS)
-        if: matrix.os == 'macos'
-        run: ./mvnw verify -Pnative
+      # Non-Windows: Build and test natively
+      - name: Build and test native image
+        if: matrix.os != 'windows'
+        run: ./mvnw -B --no-transfer-progress verify -Pnative
 
       # Windows: Build and test natively
       - name: Build and test native image (Windows)
@@ -76,7 +71,7 @@ jobs:
         shell: cmd
         run: |
           call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-          mvnw.cmd verify -Pnative
+          mvnw.cmd -B --no-transfer-progress verify -Pnative
 
       # Upload test results on failure
       - name: Upload test results
