@@ -434,6 +434,40 @@ producer.acks=all
 3. Format according to `--output` flag
 4. Print configuration
 
+### Command: `clik context rename`
+
+Rename an existing context.
+
+**Syntax:**
+```bash
+clik context rename <old-name> <new-name>
+```
+
+**Examples:**
+
+```bash
+# Rename a context
+clik context rename dev development
+
+# Rename the current context
+clik context rename staging stage
+```
+
+**Behavior:**
+
+1. Validate old context exists
+2. Validate new context name format (alphanumeric, hyphens, underscores)
+3. Check that new context name doesn't already exist
+4. Rename the context directory from `contexts/<old-name>` to `contexts/<new-name>`
+5. If the old context was current, update `current-context` in root config
+6. Print success message
+
+**Error Conditions:**
+
+- Old context does not exist
+- New context name is invalid format
+- New context name already exists
+
 ## Integration with Kafka Commands
 
 All Kafka operation commands (topics, consumer groups, etc.) will accept a `--context` flag.
@@ -481,7 +515,8 @@ io.streamshub.clik/
 │   │   ├── UseContextCommand.java
 │   │   ├── CurrentContextCommand.java
 │   │   ├── DeleteContextCommand.java
-│   │   └── ShowContextCommand.java
+│   │   ├── ShowContextCommand.java
+│   │   └── RenameContextCommand.java
 ├── config/
 │   ├── ContextConfig.java                # Context YAML structure
 │   ├── RootConfig.java                   # Root config.yaml structure
@@ -525,6 +560,11 @@ public class ContextService {
      * Delete a context
      */
     void deleteContext(String name);
+
+    /**
+     * Rename a context
+     */
+    void renameContext(String oldName, String newName);
 
     /**
      * Check if context exists
@@ -991,8 +1031,8 @@ consumer:
 
 ### Phase 2: Enhanced Context Features
 - [x] Integration tests for context commands
+- [x] Context rename command
 - [ ] Shell completion for context names
-- [ ] Context rename command
 - [ ] Context update command
 
 ### Phase 3: Advanced Features (Future)

@@ -387,4 +387,76 @@ class ContextCommandTest {
         assertTrue(showResult.getOutput().contains("bootstrap.servers=localhost:9092"));
         assertFalse(showResult.getOutput().contains("localhost:9091"));
     }
+
+    @Test
+    void testRenameContext() {
+        // Create context using CLI
+        launcher.launch("context", "create", "old-name", "--bootstrap-servers", "localhost:9092");
+
+        // Rename the context
+        LaunchResult result = launcher.launch("context", "rename", "old-name", "new-name");
+
+        assertEquals(0, result.exitCode());
+        assertEquals("Context \"old-name\" renamed to \"new-name\".", result.getOutput().trim());
+
+        // Verify old context no longer exists
+        LaunchResult listResult = launcher.launch("context", "list", "-o", "name");
+        assertFalse(listResult.getOutput().contains("old-name"));
+
+        // Verify new context exists
+        assertTrue(listResult.getOutput().contains("new-name"));
+
+        // Verify configuration was preserved
+        LaunchResult showResult = launcher.launch("context", "show", "new-name", "-o", "properties");
+        assertTrue(showResult.getOutput().contains("bootstrap.servers=localhost:9092"));
+    }
+
+    @Test
+    void testRenameCurrentContext() {
+        // Create and set context using CLI
+        launcher.launch("context", "create", "old-name", "--bootstrap-servers", "localhost:9092");
+        launcher.launch("context", "use", "old-name");
+
+        // Rename the current context
+        LaunchResult result = launcher.launch("context", "rename", "old-name", "new-name");
+
+        assertEquals(0, result.exitCode());
+        assertEquals("Context \"old-name\" renamed to \"new-name\".", result.getOutput().trim());
+
+        // Verify current context was updated
+        LaunchResult currentResult = launcher.launch("context", "current");
+        assertEquals("new-name", currentResult.getOutput().trim());
+    }
+
+    @Test
+    @Launch(value = {"context", "rename", "nonexistent", "new-name"}, exitCode = 1)
+    void testRenameContextNotFound(LaunchResult result) {
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("does not exist"));
+    }
+
+    @Test
+    void testRenameContextToExistingName() {
+        // Create two contexts
+        launcher.launch("context", "create", "context1", "--bootstrap-servers", "localhost:9092");
+        launcher.launch("context", "create", "context2", "--bootstrap-servers", "localhost:9093");
+
+        // Try to rename context1 to context2
+        LaunchResult result = launcher.launch("context", "rename", "context1", "context2");
+
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("already exists"));
+    }
+
+    @Test
+    void testRenameContextInvalidNewName() {
+        // Create context first
+        launcher.launch("context", "create", "test-context", "--bootstrap-servers", "localhost:9092");
+
+        // Try to rename with invalid name
+        LaunchResult result = launcher.launch("context", "rename", "test-context", "invalid name");
+
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("Invalid context name"));
+    }
 }

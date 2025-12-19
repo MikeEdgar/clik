@@ -110,6 +110,33 @@ public class ContextService {
         }
     }
 
+    public void renameContext(String oldName, String newName) {
+        Path contextsDir = getConfigDirectory().resolve(CONTEXTS_DIR_NAME);
+        Path oldContextDir = contextsDir.resolve(oldName);
+        Path newContextDir = contextsDir.resolve(newName);
+
+        if (!Files.exists(oldContextDir)) {
+            throw new IllegalArgumentException("Context does not exist: " + oldName);
+        }
+
+        if (Files.exists(newContextDir)) {
+            throw new IllegalArgumentException("Context already exists: " + newName);
+        }
+
+        try {
+            // Move directory
+            Files.move(oldContextDir, newContextDir);
+
+            // If this was the current context, update it
+            Optional<String> currentContext = getCurrentContext();
+            if (currentContext.isPresent() && currentContext.get().equals(oldName)) {
+                setCurrentContext(newName);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to rename context: " + oldName, e);
+        }
+    }
+
     public boolean contextExists(String name) {
         Path contextDir = getConfigDirectory().resolve(CONTEXTS_DIR_NAME).resolve(name);
         Path configFile = contextDir.resolve(CONFIG_FILE_NAME);
