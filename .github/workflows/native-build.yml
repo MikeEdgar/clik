@@ -59,6 +59,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-maven-
 
+      # Windows: Start Docker
+      - name: Start Docker (Windows)
+        if: matrix.os == 'windows'
+        shell: powershell
+        run: |
+          Start-Service Docker
+          docker info
+
       # Non-Windows: Build and test natively
       - name: Build and test native image
         if: matrix.os != 'windows'
