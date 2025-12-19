@@ -1,6 +1,7 @@
 package io.streamshub.clik;
 
 import io.streamshub.clik.command.context.ContextCommand;
+import io.streamshub.clik.command.topic.TopicCommand;
 import jakarta.inject.Singleton;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
@@ -16,6 +17,7 @@ import picocli.CommandLine.IVersionProvider;
         description = "Command line interface for Apache Kafka",
         subcommands = {
                 ContextCommand.class,
+                TopicCommand.class,
                 CommandLine.HelpCommand.class,
         }
 )

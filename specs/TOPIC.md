@@ -45,10 +45,9 @@ clik topic create <name> [OPTIONS]
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--partitions <count>` | Number of partitions | 1 |
-| `--replication-factor <count>` | Replication factor | 1 |
-| `--config <key=value>` | Topic configuration (repeatable) | - |
-| `--context <name>` | Use specific context | current context |
+| `-p, --partitions <count>` | Number of partitions | 1 |
+| `-r, --replication-factor <count>` | Replication factor | 1 |
+| `-c, --config <key=value>` | Topic configuration (repeatable) | - |
 
 **Examples:**
 
@@ -65,23 +64,20 @@ clik topic create logs \
   --replication-factor 3 \
   --config retention.ms=86400000 \
   --config compression.type=zstd
-
-# Create topic using specific context
-clik topic create my-topic --context prod
 ```
 
 **Behavior:**
 
-1. Load configuration from current or specified context
+1. Load configuration from current context
 2. Validate topic name (Kafka naming rules)
 3. Check if topic already exists (error if exists)
 4. Create AdminClient with context configuration
 5. Create topic with specified partitions, replication factor, and configs
-6. Print success message with topic details
+6. Print success message
 
 **Output:**
 ```
-Topic "events" created with 6 partitions and replication factor 3.
+Topic "test-topic" created.
 ```
 
 **Error Conditions:**
@@ -90,7 +86,7 @@ Topic "events" created with 6 partitions and replication factor 3.
 - Topic already exists
 - Insufficient brokers for replication factor
 - Invalid configuration keys or values
-- No context configured and no `--bootstrap-servers` provided
+- No current context set
 - Authorization failure
 
 ### Command: `clik topic list`
@@ -108,7 +104,6 @@ clik topic list [OPTIONS]
 |------|-------------|---------|
 | `-o, --output <format>` | Output format: table, yaml, json, name | table |
 | `--internal` | Include internal topics (__consumer_offsets, etc.) | false |
-| `--context <name>` | Use specific context | current context |
 
 **Examples:**
 
@@ -161,44 +156,60 @@ user-activity
 
 **Behavior:**
 
-1. Load configuration from current or specified context
+1. Load configuration from current context
 2. Create AdminClient with context configuration
 3. List topics (optionally including internal topics)
-4. Fetch partition and replication metadata
+4. Fetch partition and replication metadata for all topics
 5. Sort topics by name
 6. Format output according to `--output` flag
 
 ### Command: `clik topic describe`
 
-Display detailed information about one or more topics.
+Display detailed information about a topic, including partition details.
 
 **Syntax:**
 ```bash
-clik topic describe <name> [<name>...] [OPTIONS]
+clik topic describe <name> [OPTIONS]
 ```
 
 **Options:**
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `-o, --output <format>` | Output format: yaml, json, table | yaml |
-| `--partitions` | Show detailed partition information | false |
-| `--context <name>` | Use specific context | current context |
+| `-o, --output <format>` | Output format: table, yaml, json | table |
 
 **Examples:**
 
 ```bash
-# Describe a topic
+# Describe a topic (table format)
 clik topic describe events
 
-# Describe multiple topics
-clik topic describe events logs
-
-# Show detailed partition information
-clik topic describe events --partitions
+# Output as YAML
+clik topic describe events -o yaml
 
 # Output as JSON
 clik topic describe events -o json
+```
+
+**Output (table format):**
+```
+Topic: events
+Partitions: 6
+Replication Factor: 3
+Internal: no
+
+Configuration:
+  retention.ms = 604800000
+  compression.type = zstd
+
+Partition Details:
+PARTITION   LEADER   REPLICAS      ISR
+0           1        [1, 2, 3]     [1, 2, 3]
+1           2        [2, 3, 1]     [2, 3, 1]
+2           3        [3, 1, 2]     [3, 1, 2]
+3           1        [1, 2, 3]     [1, 2, 3]
+4           2        [2, 3, 1]     [2, 3, 1]
+5           3        [3, 1, 2]     [3, 1, 2]
 ```
 
 **Output (YAML format):**
@@ -210,13 +221,7 @@ internal: false
 config:
   retention.ms: "604800000"
   compression.type: "zstd"
-  min.insync.replicas: "2"
-```
-
-**Output (with --partitions):**
-```yaml
-name: events
-partitions:
+partitionDetails:
   - id: 0
     leader: 1
     replicas: [1, 2, 3]
@@ -225,22 +230,16 @@ partitions:
     leader: 2
     replicas: [2, 3, 1]
     isr: [2, 3, 1]
-  # ... remaining partitions
-replicationFactor: 3
-config:
-  retention.ms: "604800000"
-  compression.type: "zstd"
 ```
 
 **Behavior:**
 
-1. Load configuration from current or specified context
+1. Load configuration from current context
 2. Create AdminClient with context configuration
-3. For each topic:
-   - Fetch topic metadata (partitions, replicas)
-   - Fetch topic configuration
-   - Optionally fetch detailed partition info (leaders, ISR)
-4. Format output according to `--output` flag
+3. Fetch topic metadata (partitions, replicas)
+4. Fetch topic configuration (non-default values only)
+5. Fetch detailed partition information (partition ID, leader, replicas, ISR)
+6. Format output according to `--output` flag
 
 ### Command: `clik topic update`
 
@@ -314,7 +313,6 @@ clik topic delete <name> [<name>...] [OPTIONS]
 | Flag | Description |
 |------|-------------|
 | `-f, --force` | Skip confirmation prompt |
-| `--context <name>` | Use specific context |
 
 **Examples:**
 
@@ -327,9 +325,6 @@ clik topic delete topic1 topic2 topic3
 
 # Delete without confirmation
 clik topic delete old-topic --force
-
-# Delete using specific context
-clik topic delete test-topic --context dev
 ```
 
 **Output (with confirmation):**
@@ -704,22 +699,25 @@ clik topic create user-state \
 
 ## Implementation Phases
 
-### Phase 1: Core Topic Operations (MVP)
-- [ ] KafkaClientFactory implementation
-- [ ] TopicService implementation
-- [ ] `clik topic create` command
-- [ ] `clik topic list` command
-- [ ] `clik topic describe` command
-- [ ] `clik topic delete` command
-- [ ] Unit tests for all services
-- [ ] Basic integration tests
-- [ ] Multiple output formats (table, yaml, json, name)
-- [ ] Context integration (--context flag)
+### Phase 1: Core Topic Operations (Completed)
+- [x] KafkaClientFactory implementation
+- [x] TopicService implementation with CRUD operations
+- [x] TopicInfo and PartitionInfo model classes (with @RegisterForReflection)
+- [x] `clik topic create` command
+- [x] `clik topic list` command
+- [x] `clik topic describe` command
+- [x] `clik topic delete` command
+- [x] Unit tests for KafkaClientFactory (4 tests)
+- [x] Unit tests for TopicService (10 tests)
+- [x] Integration tests for topic commands (15 tests in TopicCommandTest)
+- [x] Integration test suite (TopicCommandIT with 15 tests)
+- [x] Multiple output formats (table, yaml, json, name)
+- [x] Current context integration
 
-### Phase 2: Advanced Topic Management
-- [ ] `clik topic update` command
-- [ ] `clik topic partitions` command
-- [ ] Enhanced integration tests with embedded Kafka
+### Phase 2: Advanced Topic Management (Future)
+- [ ] `clik topic update` command for configuration changes
+- [ ] `clik topic partitions` command for adding partitions
+- [ ] `--context` flag to override current context
 - [ ] Better error messages and validation
 - [ ] Performance optimizations for large clusters
 
