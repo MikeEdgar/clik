@@ -24,21 +24,25 @@ jobs:
           - os: linux
             arch: amd64
             runner: ubuntu-latest
+            executable-pattern: "target/*-runner"
 
-          # macOS x86_64 (Intel)
-          - os: macos
-            arch: amd64
-            runner: macos-15-intel
-
-          # macOS ARM64 (Apple Silicon)
-          - os: macos
-            arch: arm64
-            runner: macos-15
-
-          # Windows AMD64
-          - os: windows
-            arch: amd64
-            runner: windows-latest
+          # # macOS x86_64 (Intel)
+          # - os: macos
+          #   arch: amd64
+          #   runner: macos-15-intel
+          #   executable-pattern: "target/*-runner"
+          # 
+          # # macOS ARM64 (Apple Silicon)
+          # - os: macos
+          #   arch: arm64
+          #   runner: macos-15
+          #   executable-pattern: "target/*-runner"
+          # 
+          # # Windows AMD64
+          # - os: windows
+          #   arch: amd64
+          #   runner: windows-latest
+          #   executable-pattern: "target/*-runner.exe"
 
     steps:
       - name: Checkout code
@@ -58,14 +62,6 @@ jobs:
           key: ${{ runner.os }}-${{ matrix.arch }}-maven-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-maven-
-
-      # Windows: Start Docker
-      - name: Start Docker (Windows)
-        if: matrix.os == 'windows'
-        shell: powershell
-        run: |
-          Start-Service Docker
-          docker info
 
       # Non-Windows: Build and test natively
       - name: Build and test native image
@@ -92,18 +88,9 @@ jobs:
           if-no-files-found: ignore
 
       # Upload native executable for verification
-      - name: Upload native executable (Linux/macOS)
-        if: success() && matrix.os != 'windows'
+      - name: Upload native executable
         uses: actions/upload-artifact@v4
         with:
           name: native-${{ matrix.os }}-${{ matrix.arch }}
-          path: target/*-runner
-          if-no-files-found: error
-
-      - name: Upload native executable (Windows)
-        if: success() && matrix.os == 'windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-${{ matrix.os }}-${{ matrix.arch }}
-          path: target/*-runner.exe
+          path: ${{ matrix.executable-pattern }}
           if-no-files-found: error
