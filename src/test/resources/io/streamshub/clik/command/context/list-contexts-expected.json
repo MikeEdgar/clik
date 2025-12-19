@@ -1,0 +1,27 @@
+[
+  {
+    "name": "dev",
+    "current": false,
+    "config": {
+      "common": {
+        "bootstrap.servers": "localhost:9092"
+      },
+      "admin": {},
+      "consumer": {},
+      "producer": {}
+    }
+  },
+  {
+    "name": "prod",
+    "current": false,
+    "config": {
+      "common": {
+        "bootstrap.servers": "prod.kafka:9092",
+        "security.protocol": "SASL_SSL"
+      },
+      "admin": {},
+      "consumer": {},
+      "producer": {}
+    }
+  }
+]

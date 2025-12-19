@@ -51,6 +51,9 @@ public class ListContextsCommand implements Callable<Integer> {
             return 0;
         }
 
+        // Sort contexts by name for consistent output order
+        contexts.sort(String::compareTo);
+
         Optional<String> currentContext = showCurrent ? contextService.getCurrentContext() : Optional.empty();
 
         switch (outputFormat.toLowerCase()) {
@@ -147,13 +150,14 @@ public class ListContextsCommand implements Callable<Integer> {
         List<Map<String, Object>> contextList = new ArrayList<>();
 
         for (String context : contexts) {
-            boolean isCurrent = currentContext.isPresent() && currentContext.get().equals(context);
-
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("name", context);
-            data.put("current", isCurrent);
-
-            contextList.add(data);
+            Optional<ContextConfig> config = contextService.getContext(context);
+            if (config.isPresent()) {
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("name", context);
+                data.put("current", currentContext.isPresent() && currentContext.get().equals(context));
+                data.put("config", config.get());
+                contextList.add(data);
+            }
         }
 
         try {

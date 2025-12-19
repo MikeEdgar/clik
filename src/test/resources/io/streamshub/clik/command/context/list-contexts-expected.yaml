@@ -1,0 +1,17 @@
+- name: "dev"
+  current: false
+  config:
+    common:
+      bootstrap.servers: "localhost:9092"
+    admin: {}
+    consumer: {}
+    producer: {}
+- name: "prod"
+  current: false
+  config:
+    common:
+      security.protocol: "SASL_SSL"
+      bootstrap.servers: "prod.kafka:9092"
+    admin: {}
+    consumer: {}
+    producer: {}

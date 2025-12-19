@@ -1,5 +1,8 @@
 package io.streamshub.clik.command.context;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import io.quarkus.test.junit.main.Launch;
@@ -12,10 +15,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -146,6 +151,64 @@ class ContextCommandTest {
         assertTrue(output.contains("dev"));
         assertTrue(output.contains("prod"));
         assertFalse(output.contains("localhost:9092")); // Should only show names
+    }
+
+    @Test
+    void testListContextsYamlFormat() throws Exception {
+        // Create contexts using CLI
+        launcher.launch("context", "create", "dev", "--bootstrap-servers", "localhost:9092");
+        launcher.launch("context", "create", "prod", "--bootstrap-servers", "prod.kafka:9092",
+                "--security-protocol", "SASL_SSL");
+
+        // List contexts in YAML format
+        LaunchResult result = launcher.launch("context", "list", "-o", "yaml");
+        assertEquals(0, result.exitCode());
+
+        // Parse actual output
+        ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
+        List<Map<String, Object>> actual = yamlMapper.readValue(
+            result.getOutput(),
+            new TypeReference<List<Map<String, Object>>>() {}
+        );
+
+        // Load expected output from fixture
+        try (InputStream is = getClass().getResourceAsStream("list-contexts-expected.yaml")) {
+            List<Map<String, Object>> expected = yamlMapper.readValue(
+                is,
+                new TypeReference<List<Map<String, Object>>>() {}
+            );
+
+            assertEquals(expected, actual);
+        }
+    }
+
+    @Test
+    void testListContextsJsonFormat() throws Exception {
+        // Create contexts using CLI
+        launcher.launch("context", "create", "dev", "--bootstrap-servers", "localhost:9092");
+        launcher.launch("context", "create", "prod", "--bootstrap-servers", "prod.kafka:9092",
+                "--security-protocol", "SASL_SSL");
+
+        // List contexts in JSON format
+        LaunchResult result = launcher.launch("context", "list", "-o", "json");
+        assertEquals(0, result.exitCode());
+
+        // Parse actual output
+        ObjectMapper jsonMapper = new ObjectMapper();
+        List<Map<String, Object>> actual = jsonMapper.readValue(
+            result.getOutput(),
+            new TypeReference<List<Map<String, Object>>>() {}
+        );
+
+        // Load expected output from fixture
+        try (InputStream is = getClass().getResourceAsStream("list-contexts-expected.json")) {
+            List<Map<String, Object>> expected = jsonMapper.readValue(
+                is,
+                new TypeReference<List<Map<String, Object>>>() {}
+            );
+
+            assertEquals(expected, actual);
+        }
     }
 
     @Test

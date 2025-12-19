@@ -989,19 +989,13 @@ consumer:
 - [x] `--property-file` for additional property files
 - [x] File permission management (700 for dirs, 600 for files)
 
-### Phase 2: Kafka Command Integration
-- [ ] Add `--context` flag to base command
-- [ ] Integrate ConfigurationLoader with KafkaClientFactory
-- [ ] Update future Kafka commands (topics, consumer-groups, etc.)
+### Phase 2: Enhanced Context Features
 - [x] Integration tests for context commands
-- [ ] Integration tests for context usage with Kafka commands
-
-### Phase 3: Enhanced Features
 - [ ] Shell completion for context names
 - [ ] Context rename command
 - [ ] Context update command
 
-### Phase 4: Advanced Features (Future)
+### Phase 3: Advanced Features (Future)
 - [ ] Credential helpers/plugins
 - [ ] Environment variable substitution
 - [ ] Context templates
