@@ -111,7 +111,10 @@ Clik implements a kubectl-like context management system for Kafka clusters. See
 
 `application.properties` (`src/main/resources/application.properties`) configures:
 - Quarkus banner disabled
-- Dev services disabled
+- **Kafka Dev Services**: Enabled for dev and test profiles, disabled in production
+  - Uses Strimzi Kafka container via Testcontainers
+  - Automatically starts a Kafka broker on demand during development and testing
+  - No manual Kafka installation required for local development
 - Log levels by profile: WARN (prod/test), INFO (dev)
 - Production logs to stderr (`%prod.quarkus.log.console.stderr=true`)
 - XDG_CONFIG_HOME environment variable support with fallback to `${user.home}/.config`
@@ -172,6 +175,11 @@ public static class TestConfig implements QuarkusTestProfile {
 - Use `result.getOutputStream()` for line-based assertions (Windows-compatible)
 
 #### Important Test Considerations
+- **Kafka Dev Services** automatically provides a Kafka broker for tests
+  - Uses Testcontainers with Strimzi Kafka
+  - First test run will download the container image
+  - Subsequent runs reuse the cached image
+  - No manual Kafka setup required for testing
 - Logs are redirected to stderr in tests (WARN level) to keep stdout clean for command output
 - Use temporary directories for all file-based tests to avoid conflicts
 - Always clean up test contexts after each test to ensure isolation

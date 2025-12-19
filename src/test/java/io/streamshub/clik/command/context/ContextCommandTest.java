@@ -1,40 +1,50 @@
 package io.streamshub.clik.command.context;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import io.quarkus.test.junit.QuarkusTestProfile;
-import io.quarkus.test.junit.TestProfile;
-import io.quarkus.test.junit.main.Launch;
-import io.quarkus.test.junit.main.LaunchResult;
-import io.quarkus.test.junit.main.QuarkusMainLauncher;
-import io.quarkus.test.junit.main.QuarkusMainTest;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
+import io.quarkus.test.junit.main.Launch;
+import io.quarkus.test.junit.main.LaunchResult;
+import io.quarkus.test.junit.main.QuarkusMainLauncher;
+import io.quarkus.test.junit.main.QuarkusMainTest;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusMainTest
 @TestProfile(ContextCommandTest.TestConfig.class)
 class ContextCommandTest {
 
     private static Path tempConfigDir;
+    private static int kafkaBootstrapPort;
+    private static String kafkaBootstrapServers;
 
     public static class TestConfig implements QuarkusTestProfile {
         @Override
         public Map<String, String> getConfigOverrides() {
-            return Map.of("xdg.config.home", tempConfigDir.toString());
+            return Map.of(
+                    "xdg.config.home", tempConfigDir.toString(),
+                    "quarkus.kafka.devservices.port", String.valueOf(kafkaBootstrapPort)
+            );
         }
     }
 
@@ -44,6 +54,13 @@ class ContextCommandTest {
     static void initialize() {
         try {
             tempConfigDir = Files.createTempDirectory("clik-integration-test");
+            try (ServerSocket serverSocket = new ServerSocket(0)) {
+                kafkaBootstrapPort = serverSocket.getLocalPort();
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+
+            kafkaBootstrapServers = "localhost:" + kafkaBootstrapPort;
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -458,5 +475,38 @@ class ContextCommandTest {
 
         assertEquals(1, result.exitCode());
         assertTrue(result.getErrorOutput().contains("Invalid context name"));
+    }
+
+    @Test
+    void testCreateContextWithVerifySuccess() {
+        // Create context with --verify using dev services Kafka
+        LaunchResult result = launcher.launch("context", "create", "verified-context",
+                "--bootstrap-servers", kafkaBootstrapServers, "--verify");
+
+        assertEquals(0, result.exitCode());
+        String output = result.getOutput();
+        assertTrue(output.contains("Verifying connection to Kafka cluster"));
+        assertTrue(output.contains("Connection verified successfully"));
+        assertTrue(output.contains("Context \"verified-context\" created"));
+
+        // Verify context was actually created
+        LaunchResult listResult = launcher.launch("context", "list", "-o", "name");
+        assertTrue(listResult.getOutput().contains("verified-context"));
+    }
+
+    @Test
+    void testCreateContextWithVerifyFailure() {
+        // Create context with --verify using invalid bootstrap servers
+        LaunchResult result = launcher.launch("context", "create", "invalid-context",
+                "--bootstrap-servers", "invalid-host:9092", "--verify");
+
+        assertEquals(1, result.exitCode());
+        String errorOutput = result.getErrorOutput();
+        assertTrue(errorOutput.contains("Connection failed"));
+        assertTrue(errorOutput.contains("Context was created but connection verification failed"));
+
+        // Context should still be created even though verification failed
+        LaunchResult listResult = launcher.launch("context", "list", "-o", "name");
+        assertTrue(listResult.getOutput().contains("invalid-context"));
     }
 }
