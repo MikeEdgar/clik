@@ -75,11 +75,11 @@ class ContextCommandTest {
     @Launch({"context", "create", "test-context", "--bootstrap-servers", "localhost:9092"})
     void testCreateContextWithBootstrapServers(LaunchResult result) {
         assertEquals(0, result.exitCode());
-        assertTrue(result.getOutput().contains("Context \"test-context\" created"));
+        assertEquals("Context \"test-context\" created.", result.getOutput().trim());
 
         // Verify context was created by listing
         LaunchResult listResult = launcher.launch("context", "list", "-o", "name");
-        assertTrue(listResult.getOutput().contains("test-context"));
+        assertEquals("test-context", listResult.getOutput().trim());
     }
 
     @Test
@@ -90,7 +90,7 @@ class ContextCommandTest {
 
         // Verify context was not created
         LaunchResult listResult = launcher.launch("context", "list", "-o", "name");
-        assertFalse(listResult.getOutput().contains("my context"));
+        assertEquals("No contexts found.", listResult.getOutput().trim());
     }
 
     @Test
@@ -116,7 +116,7 @@ class ContextCommandTest {
     @Launch({"context", "list"})
     void testListContextsEmpty(LaunchResult result) {
         assertEquals(0, result.exitCode());
-        assertTrue(result.getOutput().contains("No contexts found"));
+        assertEquals("No contexts found.", result.getOutput().trim());
     }
 
     @Test
@@ -147,10 +147,7 @@ class ContextCommandTest {
         LaunchResult result = launcher.launch("context", "list", "-o", "name");
 
         assertEquals(0, result.exitCode());
-        String output = result.getOutput();
-        assertTrue(output.contains("dev"));
-        assertTrue(output.contains("prod"));
-        assertFalse(output.contains("localhost:9092")); // Should only show names
+        assertEquals(List.of("dev", "prod"), result.getOutputStream().stream().map(String::strip).toList());
     }
 
     @Test
@@ -220,11 +217,11 @@ class ContextCommandTest {
         LaunchResult result = launcher.launch("context", "use", "test-context");
 
         assertEquals(0, result.exitCode());
-        assertTrue(result.getOutput().contains("Switched to context \"test-context\""));
+        assertEquals("Switched to context \"test-context\".", result.getOutput().trim());
 
         // Verify current context was set
         LaunchResult currentResult = launcher.launch("context", "current");
-        assertTrue(currentResult.getOutput().contains("test-context"));
+        assertEquals("test-context", currentResult.getOutput().trim());
     }
 
     @Test
@@ -251,7 +248,7 @@ class ContextCommandTest {
         LaunchResult result = launcher.launch("context", "current");
 
         assertEquals(0, result.exitCode());
-        assertTrue(result.getOutput().contains("test-context"));
+        assertEquals("test-context", result.getOutput().trim());
     }
 
     @Test
@@ -280,11 +277,11 @@ class ContextCommandTest {
         LaunchResult result = launcher.launch("context", "delete", "test-context", "--force");
 
         assertEquals(0, result.exitCode());
-        assertTrue(result.getOutput().contains("Context \"test-context\" deleted"));
+        assertEquals("Context \"test-context\" deleted.", result.getOutput().trim());
 
         // Verify context was deleted
         LaunchResult listResult = launcher.launch("context", "list", "-o", "name");
-        assertFalse(listResult.getOutput().contains("test-context"));
+        assertEquals("No contexts found.", listResult.getOutput().trim());
     }
 
     @Test
@@ -297,7 +294,7 @@ class ContextCommandTest {
         LaunchResult result = launcher.launch("context", "delete", "test-context", "--force");
 
         assertEquals(0, result.exitCode());
-        assertTrue(result.getOutput().contains("Context \"test-context\" deleted"));
+        assertEquals("Context \"test-context\" deleted.", result.getOutput().trim());
 
         // Verify current context was cleared
         LaunchResult currentResult = launcher.launch("context", "current");
@@ -383,7 +380,7 @@ class ContextCommandTest {
                 "--bootstrap-servers", "localhost:9092", "--overwrite");
 
         assertEquals(0, result.exitCode());
-        assertTrue(result.getOutput().contains("Context \"test-context\" created"));
+        assertEquals("Context \"test-context\" created.", result.getOutput().trim());
 
         // Verify the context was overwritten
         LaunchResult showResult = launcher.launch("context", "show", "test-context", "-o", "properties");
