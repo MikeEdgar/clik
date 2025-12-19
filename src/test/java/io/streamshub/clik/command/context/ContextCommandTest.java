@@ -147,8 +147,7 @@ class ContextCommandTest {
         LaunchResult result = launcher.launch("context", "list", "-o", "name");
 
         assertEquals(0, result.exitCode());
-        String output = result.getOutput().trim();
-        assertTrue(output.equals("dev\nprod") || output.equals("prod\ndev")); // Order may vary
+        assertEquals(List.of("dev", "prod"), result.getOutputStream().stream().map(String::strip).toList());
     }
 
     @Test
