@@ -14,10 +14,10 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 
 @CommandLine.Command(
-        name = "update",
-        description = "Update topic configuration"
+        name = "alter",
+        description = "Alter topic configuration"
 )
-public class UpdateTopicCommand implements Callable<Integer> {
+public class AlterTopicCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0",
@@ -63,8 +63,8 @@ public class UpdateTopicCommand implements Callable<Integer> {
         }
 
         try (Admin admin = clientFactory.createAdminClient()) {
-            topicService.updateTopicConfig(admin, name, configMap, deleteConfigs);
-            System.out.println("Topic \"" + name + "\" configuration updated.");
+            topicService.alterTopicConfig(admin, name, configMap, deleteConfigs);
+            System.out.println("Topic \"" + name + "\" configuration altered.");
             return 0;
         } catch (IllegalStateException e) {
             System.err.println("Error: " + e.getMessage());
@@ -78,7 +78,7 @@ public class UpdateTopicCommand implements Callable<Integer> {
                 System.err.println("Run 'clik topic list' to see available topics.");
                 return 1;
             }
-            System.err.println("Error: Failed to update topic configuration: " + e.getMessage());
+            System.err.println("Error: Failed to alter topic configuration: " + e.getMessage());
             return 1;
         }
     }
