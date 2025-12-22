@@ -216,4 +216,17 @@ class TopicServiceTest {
         topics = topicService.listTopics(admin, false);
         assertTrue(topics.isEmpty());
     }
+
+    @Test
+    void testIncreasePartitions() throws Exception {
+        topicService.createTopic(admin, "partition-test", 3, 1, null);
+
+        TopicInfo beforeInfo = topicService.describeTopic(admin, "partition-test");
+        assertEquals(3, beforeInfo.getPartitions());
+
+        topicService.increasePartitions(admin, "partition-test", 6);
+
+        TopicInfo afterInfo = topicService.describeTopic(admin, "partition-test");
+        assertEquals(6, afterInfo.getPartitions());
+    }
 }

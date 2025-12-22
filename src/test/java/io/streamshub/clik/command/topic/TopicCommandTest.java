@@ -1,16 +1,5 @@
 package io.streamshub.clik.command.topic;
 
-import io.quarkus.test.junit.QuarkusTestProfile;
-import io.quarkus.test.junit.TestProfile;
-import io.quarkus.test.junit.main.Launch;
-import io.quarkus.test.junit.main.LaunchResult;
-import io.quarkus.test.junit.main.QuarkusMainLauncher;
-import io.quarkus.test.junit.main.QuarkusMainTest;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.ServerSocket;
@@ -19,7 +8,20 @@ import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
+import io.quarkus.test.junit.main.LaunchResult;
+import io.quarkus.test.junit.main.QuarkusMainLauncher;
+import io.quarkus.test.junit.main.QuarkusMainTest;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusMainTest
 @TestProfile(TopicCommandTest.TestConfig.class)
@@ -346,7 +348,7 @@ class TopicCommandTest {
 
         LaunchResult result = launcher.launch("topic", "alter", "no-options-test");
         assertEquals(1, result.exitCode());
-        assertTrue(result.getErrorOutput().contains("At least one --config or --delete-config option must be specified"));
+        assertTrue(result.getErrorOutput().contains("At least one --config, --delete-config, or --partitions option must be specified"));
     }
 
     @Test
@@ -357,6 +359,65 @@ class TopicCommandTest {
                 "--config", "invalid-format");
         assertEquals(1, result.exitCode());
         assertTrue(result.getErrorOutput().contains("Invalid config format"));
+    }
+
+    @Test
+    void testAlterTopicIncreasePartitions() {
+        launcher.launch("topic", "create", "partition-test", "--partitions", "3");
+
+        LaunchResult result = launcher.launch("topic", "alter", "partition-test", "--partitions", "6");
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("partitions increased from 3 to 6"));
+
+        LaunchResult describeResult = launcher.launch("topic", "describe", "partition-test");
+        assertTrue(describeResult.getOutput().contains("Partitions: 6"));
+    }
+
+    @Test
+    void testAlterTopicDecreasePartitionsError() {
+        launcher.launch("topic", "create", "decrease-test", "--partitions", "5");
+
+        LaunchResult result = launcher.launch("topic", "alter", "decrease-test", "--partitions", "3");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("must be greater than current count"));
+        assertTrue(result.getErrorOutput().contains("does not support decreasing"));
+    }
+
+    @Test
+    void testAlterTopicSamePartitionCountError() {
+        launcher.launch("topic", "create", "same-partition-test", "--partitions", "4");
+
+        LaunchResult result = launcher.launch("topic", "alter", "same-partition-test", "--partitions", "4");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("must be greater than current count"));
+    }
+
+    @Test
+    void testAlterTopicPartitionsAndConfig() {
+        launcher.launch("topic", "create", "combined-test", "--partitions", "2");
+
+        LaunchResult result = launcher.launch("topic", "alter", "combined-test",
+            "--partitions", "5",
+            "--config", "retention.ms=3600000");
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("partitions increased from 2 to 5"));
+        assertTrue(result.getOutput().contains("configuration altered"));
+
+        LaunchResult describeResult = launcher.launch("topic", "describe", "combined-test");
+        String output = describeResult.getOutput();
+        assertTrue(output.contains("Partitions: 5"));
+        assertTrue(output.contains("retention.ms"));
+        assertTrue(output.contains("3600000"));
+    }
+
+    @Test
+    void testAlterTopicPartitionsOnly() {
+        launcher.launch("topic", "create", "partitions-only-test", "--partitions", "1");
+
+        LaunchResult result = launcher.launch("topic", "alter", "partitions-only-test", "--partitions", "8");
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("partitions increased from 1 to 8"));
+        assertFalse(result.getOutput().contains("configuration"));
     }
 
     @Test
