@@ -6,11 +6,13 @@ import jakarta.enterprise.context.ApplicationScoped;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.CreatePartitionsResult;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsResult;
+import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.config.ConfigResource;
@@ -136,6 +138,18 @@ public class TopicService {
             Map<ConfigResource, Collection<AlterConfigOp>> alterConfigs = Collections.singletonMap(resource, ops);
             admin.incrementalAlterConfigs(alterConfigs).all().get();
         }
+    }
+
+    /**
+     * Increase partition count for a topic
+     */
+    public void increasePartitions(Admin admin, String name, int newTotalCount) throws ExecutionException, InterruptedException {
+        Map<String, NewPartitions> newPartitions = Collections.singletonMap(
+            name,
+            NewPartitions.increaseTo(newTotalCount)
+        );
+        CreatePartitionsResult result = admin.createPartitions(newPartitions);
+        result.all().get();
     }
 
     /**
