@@ -147,11 +147,49 @@ class TopicServiceTest {
                 "max.message.bytes", "2000000"
         );
 
-        topicService.updateTopicConfig(admin, "update-topic", newConfigs);
+        topicService.updateTopicConfig(admin, "update-topic", newConfigs, null);
 
         TopicInfo info = topicService.describeTopic(admin, "update-topic");
         assertEquals("3600000", info.getConfig().get("retention.ms"));
         assertEquals("2000000", info.getConfig().get("max.message.bytes"));
+    }
+
+    @Test
+    void testUpdateTopicConfigDelete() throws Exception {
+        Map<String, String> initialConfigs = Map.of(
+                "retention.ms", "3600000",
+                "max.message.bytes", "2000000"
+        );
+        topicService.createTopic(admin, "update-delete-topic", 1, 1, initialConfigs);
+
+        TopicInfo info = topicService.describeTopic(admin, "update-delete-topic");
+        assertEquals("3600000", info.getConfig().get("retention.ms"));
+        assertEquals("2000000", info.getConfig().get("max.message.bytes"));
+
+        // Delete one config
+        topicService.updateTopicConfig(admin, "update-delete-topic", null, List.of("max.message.bytes"));
+
+        info = topicService.describeTopic(admin, "update-delete-topic");
+        assertEquals("3600000", info.getConfig().get("retention.ms"));
+        assertNull(info.getConfig().get("max.message.bytes"));
+    }
+
+    @Test
+    void testUpdateTopicConfigSetAndDelete() throws Exception {
+        Map<String, String> initialConfigs = Map.of(
+                "retention.ms", "3600000",
+                "max.message.bytes", "2000000"
+        );
+        topicService.createTopic(admin, "update-both-topic", 1, 1, initialConfigs);
+
+        // Set a new config and delete an existing one
+        Map<String, String> newConfigs = Map.of("compression.type", "snappy");
+        topicService.updateTopicConfig(admin, "update-both-topic", newConfigs, List.of("max.message.bytes"));
+
+        TopicInfo info = topicService.describeTopic(admin, "update-both-topic");
+        assertEquals("3600000", info.getConfig().get("retention.ms"));
+        assertEquals("snappy", info.getConfig().get("compression.type"));
+        assertNull(info.getConfig().get("max.message.bytes"));
     }
 
     @Test

@@ -109,17 +109,33 @@ public class TopicService {
     /**
      * Update topic configuration
      */
-    public void updateTopicConfig(Admin admin, String name, Map<String, String> configs) throws ExecutionException, InterruptedException {
+    public void updateTopicConfig(Admin admin, String name, Map<String, String> configs, List<String> deleteConfigs) throws ExecutionException, InterruptedException {
         ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, name);
 
-        Collection<AlterConfigOp> ops = configs.entrySet().stream()
-                .map(entry -> new AlterConfigOp(
-                        new ConfigEntry(entry.getKey(), entry.getValue()),
-                        AlterConfigOp.OpType.SET))
-                .toList();
+        List<AlterConfigOp> ops = new ArrayList<>();
 
-        Map<ConfigResource, Collection<AlterConfigOp>> alterConfigs = Collections.singletonMap(resource, ops);
-        admin.incrementalAlterConfigs(alterConfigs).all().get();
+        // Add SET operations for new/updated configs
+        if (configs != null && !configs.isEmpty()) {
+            configs.entrySet().stream()
+                    .map(entry -> new AlterConfigOp(
+                            new ConfigEntry(entry.getKey(), entry.getValue()),
+                            AlterConfigOp.OpType.SET))
+                    .forEach(ops::add);
+        }
+
+        // Add DELETE operations for configs to remove
+        if (deleteConfigs != null && !deleteConfigs.isEmpty()) {
+            deleteConfigs.stream()
+                    .map(key -> new AlterConfigOp(
+                            new ConfigEntry(key, null),
+                            AlterConfigOp.OpType.DELETE))
+                    .forEach(ops::add);
+        }
+
+        if (!ops.isEmpty()) {
+            Map<ConfigResource, Collection<AlterConfigOp>> alterConfigs = Collections.singletonMap(resource, ops);
+            admin.incrementalAlterConfigs(alterConfigs).all().get();
+        }
     }
 
     /**

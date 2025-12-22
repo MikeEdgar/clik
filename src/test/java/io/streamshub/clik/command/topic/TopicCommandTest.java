@@ -264,6 +264,102 @@ class TopicCommandTest {
     }
 
     @Test
+    void testUpdateTopicConfig() {
+        launcher.launch("topic", "create", "update-test", "--config", "retention.ms=86400000");
+
+        LaunchResult result = launcher.launch("topic", "update", "update-test", "--config", "retention.ms=172800000");
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("Topic \"update-test\" configuration updated"));
+
+        // Verify the config was updated
+        LaunchResult describeResult = launcher.launch("topic", "describe", "update-test");
+        assertTrue(describeResult.getOutput().contains("retention.ms"));
+        assertTrue(describeResult.getOutput().contains("172800000"));
+    }
+
+    @Test
+    void testUpdateTopicMultipleConfigs() {
+        launcher.launch("topic", "create", "multi-config-test");
+
+        LaunchResult result = launcher.launch("topic", "update", "multi-config-test",
+                "--config", "retention.ms=86400000",
+                "--config", "compression.type=snappy");
+        assertEquals(0, result.exitCode());
+
+        // Verify both configs were set
+        LaunchResult describeResult = launcher.launch("topic", "describe", "multi-config-test");
+        String output = describeResult.getOutput();
+        assertTrue(output.contains("retention.ms"));
+        assertTrue(output.contains("86400000"));
+        assertTrue(output.contains("compression.type"));
+        assertTrue(output.contains("snappy"));
+    }
+
+    @Test
+    void testUpdateTopicDeleteConfig() {
+        launcher.launch("topic", "create", "delete-config-test",
+                "--config", "retention.ms=86400000",
+                "--config", "compression.type=snappy");
+
+        LaunchResult result = launcher.launch("topic", "update", "delete-config-test",
+                "--delete-config", "compression.type");
+        assertEquals(0, result.exitCode());
+
+        // Verify the config was deleted
+        LaunchResult describeResult = launcher.launch("topic", "describe", "delete-config-test");
+        String output = describeResult.getOutput();
+        assertTrue(output.contains("retention.ms"));
+        assertFalse(output.contains("compression.type"));
+    }
+
+    @Test
+    void testUpdateTopicSetAndDelete() {
+        launcher.launch("topic", "create", "set-and-delete-test",
+                "--config", "retention.ms=86400000",
+                "--config", "max.message.bytes=2000000");
+
+        LaunchResult result = launcher.launch("topic", "update", "set-and-delete-test",
+                "--config", "compression.type=lz4",
+                "--delete-config", "max.message.bytes");
+        assertEquals(0, result.exitCode());
+
+        // Verify changes
+        LaunchResult describeResult = launcher.launch("topic", "describe", "set-and-delete-test");
+        String output = describeResult.getOutput();
+        assertTrue(output.contains("retention.ms"));
+        assertTrue(output.contains("compression.type"));
+        assertTrue(output.contains("lz4"));
+        assertFalse(output.contains("max.message.bytes"));
+    }
+
+    @Test
+    void testUpdateTopicNotFound() {
+        LaunchResult result = launcher.launch("topic", "update", "nonexistent-topic",
+                "--config", "retention.ms=86400000");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("not found"));
+    }
+
+    @Test
+    void testUpdateTopicNoOptions() {
+        launcher.launch("topic", "create", "no-options-test");
+
+        LaunchResult result = launcher.launch("topic", "update", "no-options-test");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("At least one --config or --delete-config option must be specified"));
+    }
+
+    @Test
+    void testUpdateTopicInvalidConfigFormat() {
+        launcher.launch("topic", "create", "invalid-config-test");
+
+        LaunchResult result = launcher.launch("topic", "update", "invalid-config-test",
+                "--config", "invalid-format");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("Invalid config format"));
+    }
+
+    @Test
     void testCreateTopicNoContext() {
         // Delete the context first to ensure no context is set
         launcher.launch("context", "delete", "test-context", "--force");

@@ -9,6 +9,7 @@ import picocli.CommandLine;
                 CreateTopicCommand.class,
                 ListTopicsCommand.class,
                 DescribeTopicCommand.class,
+                UpdateTopicCommand.class,
                 DeleteTopicCommand.class,
                 CommandLine.HelpCommand.class
         }

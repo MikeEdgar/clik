@@ -254,9 +254,8 @@ clik topic update <name> [OPTIONS]
 
 | Flag | Description |
 |------|-------------|
-| `--config <key=value>` | Set configuration (repeatable) |
+| `-c, --config <key=value>` | Set configuration (repeatable) |
 | `--delete-config <key>` | Delete configuration (repeatable) |
-| `--context <name>` | Use specific context |
 
 **Examples:**
 
@@ -285,8 +284,8 @@ Topic "events" configuration updated.
 
 **Behavior:**
 
-1. Load configuration from current or specified context
-2. Validate topic exists
+1. Load configuration from current context
+2. Validate that at least one --config or --delete-config option is provided
 3. Create AdminClient with context configuration
 4. Apply configuration changes (incremental alter configs)
 5. Print success message
@@ -295,8 +294,11 @@ Topic "events" configuration updated.
 
 **Error Conditions:**
 
+- No current context set
 - Topic does not exist
 - Invalid configuration keys or values
+- No --config or --delete-config options provided
+- Invalid config format (not key=value)
 - Authorization failure
 
 ### Command: `clik topic delete`
@@ -706,16 +708,16 @@ clik topic create user-state \
 - [x] `clik topic create` command
 - [x] `clik topic list` command
 - [x] `clik topic describe` command
+- [x] `clik topic update` command for configuration changes
 - [x] `clik topic delete` command
 - [x] Unit tests for KafkaClientFactory (4 tests)
-- [x] Unit tests for TopicService (10 tests)
-- [x] Integration tests for topic commands (15 tests in TopicCommandTest)
-- [x] Integration test suite (TopicCommandIT with 15 tests)
+- [x] Unit tests for TopicService (12 tests)
+- [x] Integration tests for topic commands (22 tests in TopicCommandTest)
+- [x] Integration test suite (TopicCommandIT with 22 tests)
 - [x] Multiple output formats (table, yaml, json, name)
 - [x] Current context integration
 
 ### Phase 2: Advanced Topic Management (Future)
-- [ ] `clik topic update` command for configuration changes
 - [ ] `clik topic partitions` command for adding partitions
 - [ ] `--context` flag to override current context
 - [ ] Better error messages and validation
