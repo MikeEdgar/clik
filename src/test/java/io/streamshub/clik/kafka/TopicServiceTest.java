@@ -139,54 +139,54 @@ class TopicServiceTest {
     }
 
     @Test
-    void testUpdateTopicConfig() throws Exception {
-        topicService.createTopic(admin, "update-topic", 1, 1, null);
+    void testAlterTopicConfig() throws Exception {
+        topicService.createTopic(admin, "alter-topic", 1, 1, null);
 
         Map<String, String> newConfigs = Map.of(
                 "retention.ms", "3600000",
                 "max.message.bytes", "2000000"
         );
 
-        topicService.updateTopicConfig(admin, "update-topic", newConfigs, null);
+        topicService.alterTopicConfig(admin, "alter-topic", newConfigs, null);
 
-        TopicInfo info = topicService.describeTopic(admin, "update-topic");
+        TopicInfo info = topicService.describeTopic(admin, "alter-topic");
         assertEquals("3600000", info.getConfig().get("retention.ms"));
         assertEquals("2000000", info.getConfig().get("max.message.bytes"));
     }
 
     @Test
-    void testUpdateTopicConfigDelete() throws Exception {
+    void testAlterTopicConfigDelete() throws Exception {
         Map<String, String> initialConfigs = Map.of(
                 "retention.ms", "3600000",
                 "max.message.bytes", "2000000"
         );
-        topicService.createTopic(admin, "update-delete-topic", 1, 1, initialConfigs);
+        topicService.createTopic(admin, "alter-delete-topic", 1, 1, initialConfigs);
 
-        TopicInfo info = topicService.describeTopic(admin, "update-delete-topic");
+        TopicInfo info = topicService.describeTopic(admin, "alter-delete-topic");
         assertEquals("3600000", info.getConfig().get("retention.ms"));
         assertEquals("2000000", info.getConfig().get("max.message.bytes"));
 
         // Delete one config
-        topicService.updateTopicConfig(admin, "update-delete-topic", null, List.of("max.message.bytes"));
+        topicService.alterTopicConfig(admin, "alter-delete-topic", null, List.of("max.message.bytes"));
 
-        info = topicService.describeTopic(admin, "update-delete-topic");
+        info = topicService.describeTopic(admin, "alter-delete-topic");
         assertEquals("3600000", info.getConfig().get("retention.ms"));
         assertNull(info.getConfig().get("max.message.bytes"));
     }
 
     @Test
-    void testUpdateTopicConfigSetAndDelete() throws Exception {
+    void testAlterTopicConfigSetAndDelete() throws Exception {
         Map<String, String> initialConfigs = Map.of(
                 "retention.ms", "3600000",
                 "max.message.bytes", "2000000"
         );
-        topicService.createTopic(admin, "update-both-topic", 1, 1, initialConfigs);
+        topicService.createTopic(admin, "alter-both-topic", 1, 1, initialConfigs);
 
         // Set a new config and delete an existing one
         Map<String, String> newConfigs = Map.of("compression.type", "snappy");
-        topicService.updateTopicConfig(admin, "update-both-topic", newConfigs, List.of("max.message.bytes"));
+        topicService.alterTopicConfig(admin, "alter-both-topic", newConfigs, List.of("max.message.bytes"));
 
-        TopicInfo info = topicService.describeTopic(admin, "update-both-topic");
+        TopicInfo info = topicService.describeTopic(admin, "alter-both-topic");
         assertEquals("3600000", info.getConfig().get("retention.ms"));
         assertEquals("snappy", info.getConfig().get("compression.type"));
         assertNull(info.getConfig().get("max.message.bytes"));

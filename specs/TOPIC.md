@@ -25,7 +25,7 @@ This specification defines topic management commands for Clik, enabling users to
 1. **As a developer**, I want to create topics for my application without remembering complex partition/replication settings
 2. **As an operator**, I want to list all topics in a cluster to audit what exists
 3. **As a platform engineer**, I want to view topic configurations to troubleshoot issues
-4. **As a DevOps engineer**, I want to update topic configurations for performance tuning
+4. **As a DevOps engineer**, I want to alter topic configurations for performance tuning
 5. **As a team lead**, I want to delete old/unused topics to clean up the cluster
 
 ## Command Structure
@@ -241,13 +241,13 @@ partitionDetails:
 5. Fetch detailed partition information (partition ID, leader, replicas, ISR)
 6. Format output according to `--output` flag
 
-### Command: `clik topic update`
+### Command: `clik topic alter`
 
-Update topic configuration.
+Alter topic configuration.
 
 **Syntax:**
 ```bash
-clik topic update <name> [OPTIONS]
+clik topic alter <name> [OPTIONS]
 ```
 
 **Options:**
@@ -260,26 +260,26 @@ clik topic update <name> [OPTIONS]
 **Examples:**
 
 ```bash
-# Update topic retention
-clik topic update events --config retention.ms=172800000
+# Alter topic retention
+clik topic alter events --config retention.ms=172800000
 
-# Update multiple configs
-clik topic update events \
+# Alter multiple configs
+clik topic alter events \
   --config retention.ms=172800000 \
   --config compression.type=lz4
 
 # Delete a configuration (revert to default)
-clik topic update events --delete-config compression.type
+clik topic alter events --delete-config compression.type
 
-# Update and delete in one operation
-clik topic update events \
+# Alter and delete in one operation
+clik topic alter events \
   --config min.insync.replicas=2 \
   --delete-config max.message.bytes
 ```
 
 **Output:**
 ```
-Topic "events" configuration updated.
+Topic "events" configuration altered.
 ```
 
 **Behavior:**
@@ -290,7 +290,7 @@ Topic "events" configuration updated.
 4. Apply configuration changes (incremental alter configs)
 5. Print success message
 
-**Note:** Partition count and replication factor cannot be changed via update. Use separate partition/replication commands for those operations.
+**Note:** Partition count and replication factor cannot be changed via alter. Use separate partition/replication commands for those operations.
 
 **Error Conditions:**
 
@@ -454,7 +454,7 @@ io.streamshub.clik/
 │   │   ├── CreateTopicCommand.java
 │   │   ├── ListTopicsCommand.java
 │   │   ├── DescribeTopicCommand.java
-│   │   ├── UpdateTopicCommand.java
+│   │   ├── AlterTopicCommand.java
 │   │   ├── DeleteTopicCommand.java
 │   │   └── PartitionsCommand.java
 ├── kafka/
@@ -530,9 +530,9 @@ public class TopicService {
     public List<TopicInfo> describeTopics(AdminClient admin, List<String> names);
 
     /**
-     * Update topic configuration
+     * Alter topic configuration
      */
-    public void updateTopicConfig(
+    public void alterTopicConfig(
         AdminClient admin,
         String name,
         Map<String, String> configs,
@@ -591,7 +591,7 @@ public class PartitionInfo {
    - List topics (empty, single, multiple)
    - List topics with internal topics
    - Describe topic
-   - Update topic config
+   - Alter topic config
    - Delete topic
    - Add partitions
 
@@ -603,7 +603,7 @@ public class PartitionInfo {
 ### Integration Tests
 
 1. **End-to-End Topic Flow**
-   - Create context → create topic → list → describe → update → delete
+   - Create context → create topic → list → describe → alter → delete
    - Create multiple topics and list
    - Describe multiple topics
    - Add partitions to topic
@@ -612,7 +612,7 @@ public class PartitionInfo {
    - Create topic with invalid name
    - Create duplicate topic
    - Delete non-existent topic
-   - Update non-existent topic
+   - Alter non-existent topic
 
 3. **Output Formats**
    - List topics in all formats (table, yaml, json, name)
@@ -657,7 +657,7 @@ public class PartitionInfo {
 ```
 Topic "events" created with 6 partitions and replication factor 3.
 Topic "events" deleted.
-Topic "events" configuration updated.
+Topic "events" configuration altered.
 Topic "events" partitions increased from 6 to 12.
 ```
 
@@ -708,7 +708,7 @@ clik topic create user-state \
 - [x] `clik topic create` command
 - [x] `clik topic list` command
 - [x] `clik topic describe` command
-- [x] `clik topic update` command for configuration changes
+- [x] `clik topic alter` command for configuration changes
 - [x] `clik topic delete` command
 - [x] Unit tests for KafkaClientFactory (4 tests)
 - [x] Unit tests for TopicService (12 tests)

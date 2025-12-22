@@ -264,24 +264,24 @@ class TopicCommandTest {
     }
 
     @Test
-    void testUpdateTopicConfig() {
-        launcher.launch("topic", "create", "update-test", "--config", "retention.ms=86400000");
+    void testAlterTopicConfig() {
+        launcher.launch("topic", "create", "alter-test", "--config", "retention.ms=86400000");
 
-        LaunchResult result = launcher.launch("topic", "update", "update-test", "--config", "retention.ms=172800000");
+        LaunchResult result = launcher.launch("topic", "alter", "alter-test", "--config", "retention.ms=172800000");
         assertEquals(0, result.exitCode());
-        assertTrue(result.getOutput().contains("Topic \"update-test\" configuration updated"));
+        assertTrue(result.getOutput().contains("Topic \"alter-test\" configuration altered"));
 
-        // Verify the config was updated
-        LaunchResult describeResult = launcher.launch("topic", "describe", "update-test");
+        // Verify the config was altered
+        LaunchResult describeResult = launcher.launch("topic", "describe", "alter-test");
         assertTrue(describeResult.getOutput().contains("retention.ms"));
         assertTrue(describeResult.getOutput().contains("172800000"));
     }
 
     @Test
-    void testUpdateTopicMultipleConfigs() {
+    void testAlterTopicMultipleConfigs() {
         launcher.launch("topic", "create", "multi-config-test");
 
-        LaunchResult result = launcher.launch("topic", "update", "multi-config-test",
+        LaunchResult result = launcher.launch("topic", "alter", "multi-config-test",
                 "--config", "retention.ms=86400000",
                 "--config", "compression.type=snappy");
         assertEquals(0, result.exitCode());
@@ -296,12 +296,12 @@ class TopicCommandTest {
     }
 
     @Test
-    void testUpdateTopicDeleteConfig() {
+    void testAlterTopicDeleteConfig() {
         launcher.launch("topic", "create", "delete-config-test",
                 "--config", "retention.ms=86400000",
                 "--config", "compression.type=snappy");
 
-        LaunchResult result = launcher.launch("topic", "update", "delete-config-test",
+        LaunchResult result = launcher.launch("topic", "alter", "delete-config-test",
                 "--delete-config", "compression.type");
         assertEquals(0, result.exitCode());
 
@@ -313,12 +313,12 @@ class TopicCommandTest {
     }
 
     @Test
-    void testUpdateTopicSetAndDelete() {
+    void testAlterTopicSetAndDelete() {
         launcher.launch("topic", "create", "set-and-delete-test",
                 "--config", "retention.ms=86400000",
                 "--config", "max.message.bytes=2000000");
 
-        LaunchResult result = launcher.launch("topic", "update", "set-and-delete-test",
+        LaunchResult result = launcher.launch("topic", "alter", "set-and-delete-test",
                 "--config", "compression.type=lz4",
                 "--delete-config", "max.message.bytes");
         assertEquals(0, result.exitCode());
@@ -333,27 +333,27 @@ class TopicCommandTest {
     }
 
     @Test
-    void testUpdateTopicNotFound() {
-        LaunchResult result = launcher.launch("topic", "update", "nonexistent-topic",
+    void testAlterTopicNotFound() {
+        LaunchResult result = launcher.launch("topic", "alter", "nonexistent-topic",
                 "--config", "retention.ms=86400000");
         assertEquals(1, result.exitCode());
         assertTrue(result.getErrorOutput().contains("not found"));
     }
 
     @Test
-    void testUpdateTopicNoOptions() {
+    void testAlterTopicNoOptions() {
         launcher.launch("topic", "create", "no-options-test");
 
-        LaunchResult result = launcher.launch("topic", "update", "no-options-test");
+        LaunchResult result = launcher.launch("topic", "alter", "no-options-test");
         assertEquals(1, result.exitCode());
         assertTrue(result.getErrorOutput().contains("At least one --config or --delete-config option must be specified"));
     }
 
     @Test
-    void testUpdateTopicInvalidConfigFormat() {
+    void testAlterTopicInvalidConfigFormat() {
         launcher.launch("topic", "create", "invalid-config-test");
 
-        LaunchResult result = launcher.launch("topic", "update", "invalid-config-test",
+        LaunchResult result = launcher.launch("topic", "alter", "invalid-config-test",
                 "--config", "invalid-format");
         assertEquals(1, result.exitCode());
         assertTrue(result.getErrorOutput().contains("Invalid config format"));

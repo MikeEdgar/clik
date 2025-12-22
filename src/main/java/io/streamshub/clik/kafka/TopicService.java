@@ -107,9 +107,9 @@ public class TopicService {
     }
 
     /**
-     * Update topic configuration
+     * Alter topic configuration
      */
-    public void updateTopicConfig(Admin admin, String name, Map<String, String> configs, List<String> deleteConfigs) throws ExecutionException, InterruptedException {
+    public void alterTopicConfig(Admin admin, String name, Map<String, String> configs, List<String> deleteConfigs) throws ExecutionException, InterruptedException {
         ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, name);
 
         List<AlterConfigOp> ops = new ArrayList<>();
