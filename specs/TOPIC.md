@@ -243,7 +243,7 @@ partitionDetails:
 
 ### Command: `clik topic alter`
 
-Alter topic configuration.
+Alter topic configuration and partitions.
 
 **Syntax:**
 ```bash
@@ -256,6 +256,7 @@ clik topic alter <name> [OPTIONS]
 |------|-------------|
 | `-c, --config <key=value>` | Set configuration (repeatable) |
 | `--delete-config <key>` | Delete configuration (repeatable) |
+| `--partitions <count>` | New partition count (can only increase) |
 
 **Examples:**
 
@@ -275,30 +276,51 @@ clik topic alter events --delete-config compression.type
 clik topic alter events \
   --config min.insync.replicas=2 \
   --delete-config max.message.bytes
+
+# Increase partition count
+clik topic alter events --partitions 12
+
+# Increase partitions and alter config together
+clik topic alter events \
+  --partitions 12 \
+  --config retention.ms=172800000
 ```
 
 **Output:**
 ```
+# Configuration only
 Topic "events" configuration altered.
+
+# Partitions only
+Topic "events" partitions increased from 6 to 12.
+
+# Both operations
+Topic "events" partitions increased from 6 to 12 and configuration altered.
 ```
 
 **Behavior:**
 
 1. Load configuration from current context
-2. Validate that at least one --config or --delete-config option is provided
-3. Create AdminClient with context configuration
-4. Apply configuration changes (incremental alter configs)
-5. Print success message
+2. Validate that at least one --config, --delete-config, or --partitions option is provided
+3. If --partitions specified:
+   - Describe topic to get current partition count
+   - Validate new count is greater than current count
+   - Return error if validation fails
+4. Create AdminClient with context configuration
+5. Apply configuration changes if specified (incremental alter configs)
+6. Increase partitions if specified (createPartitions API)
+7. Print success message indicating which operations were performed
 
-**Note:** Partition count and replication factor cannot be changed via alter. Use separate partition/replication commands for those operations.
+**Note:** Partitions can only be increased, never decreased. Kafka does not support reducing partition count. Replication factor cannot be changed via alter.
 
 **Error Conditions:**
 
 - No current context set
 - Topic does not exist
 - Invalid configuration keys or values
-- No --config or --delete-config options provided
+- No --config, --delete-config, or --partitions options provided
 - Invalid config format (not key=value)
+- New partition count is less than or equal to current count
 - Authorization failure
 
 ### Command: `clik topic delete`
@@ -356,64 +378,16 @@ Topic "old-topic" deleted.
 - Topic deletion disabled (delete.topic.enable=false)
 - User declines confirmation
 
-### Command: `clik topic partitions`
+### Command: `clik topic partitions` (Future Enhancement)
 
-Manage topic partitions.
+**Status:** Not implemented. Partition management is currently handled via `clik topic alter --partitions <count>`.
 
-**Syntax:**
-```bash
-# Add partitions to a topic
-clik topic partitions <name> --add <count> [OPTIONS]
+A dedicated `clik topic partitions` command may be added in the future to provide additional partition-specific features such as:
+- Displaying current partition count: `clik topic partitions <name>`
+- Detailed partition information and replica distribution
+- Partition reassignment capabilities
 
-# Show current partition count
-clik topic partitions <name>
-```
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `--add <count>` | Add partitions (new total count) |
-| `--context <name>` | Use specific context |
-
-**Examples:**
-
-```bash
-# Show current partition count
-clik topic partitions events
-
-# Increase partitions to 12 (from current count)
-clik topic partitions events --add 12
-```
-
-**Output (show):**
-```
-Topic "events" has 6 partitions.
-```
-
-**Output (add):**
-```
-Topic "events" partitions increased from 6 to 12.
-```
-
-**Behavior:**
-
-1. Load configuration from current or specified context
-2. Create AdminClient with context configuration
-3. Fetch current partition count
-4. If `--add` specified:
-   - Validate new count is greater than current
-   - Create new partitions
-   - Print success message
-5. Otherwise, print current count
-
-**Note:** Partitions can only be added, never removed. Kafka does not support reducing partition count.
-
-**Error Conditions:**
-
-- Topic does not exist
-- New partition count is less than or equal to current count
-- Authorization failure
+For now, use `clik topic alter --partitions <count>` to increase partition counts, and `clik topic describe` to view current partition details.
 
 ## Integration with Context Management
 
@@ -709,19 +683,20 @@ clik topic create user-state \
 - [x] `clik topic list` command
 - [x] `clik topic describe` command
 - [x] `clik topic alter` command for configuration changes
+- [x] `clik topic alter` command for partition increases (--partitions option)
 - [x] `clik topic delete` command
 - [x] Unit tests for KafkaClientFactory (4 tests)
-- [x] Unit tests for TopicService (12 tests)
-- [x] Integration tests for topic commands (22 tests in TopicCommandTest)
-- [x] Integration test suite (TopicCommandIT with 22 tests)
+- [x] Unit tests for TopicService (13 tests)
+- [x] Integration tests for topic commands (27 tests in TopicCommandTest)
+- [x] Integration test suite (TopicCommandIT with 27 tests)
 - [x] Multiple output formats (table, yaml, json, name)
 - [x] Current context integration
 
 ### Phase 2: Advanced Topic Management (Future)
-- [ ] `clik topic partitions` command for adding partitions
 - [ ] `--context` flag to override current context
 - [ ] Better error messages and validation
 - [ ] Performance optimizations for large clusters
+- [ ] Dedicated `clik topic partitions` command for partition-specific features
 
 ### Phase 3: Advanced Features (Future)
 - [ ] Topic templates/presets
