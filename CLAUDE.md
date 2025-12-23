@@ -66,19 +66,23 @@ java -jar target/quarkus-app/quarkus-run.jar
 The codebase follows a standard Maven project layout:
 - `src/main/java/io/streamshub/clik/` - Main application code
   - `command/context/` - Context management commands
+  - `command/topic/` - Topic management commands
+  - `command/group/` - Consumer group management commands
   - `config/` - Configuration services (ContextService, ConfigurationLoader, ContextValidator)
+  - `kafka/` - Kafka services (KafkaClientFactory, TopicService, GroupService)
+  - `kafka/model/` - Data models (TopicInfo, GroupInfo, etc.)
   - `version/` - Application version provider
 - `src/main/resources/` - Configuration files and resources
 - `src/test/java/` - Test code
 - `src/test/resources/` - Test fixtures and resources
-- `specs/` - Feature specifications (CONTEXT.md)
+- `specs/` - Feature specifications (CONTEXT.md, TOPIC.md, GROUP.md)
 
 ### Main Entry Point
 
 `Clik.java` (`src/main/java/io/streamshub/clik/Clik.java`) is the top-level Picocli command annotated with `@TopCommand`. It defines:
 - The CLI application name: "clik"
 - Built-in help and version options
-- Subcommands structure (context management commands)
+- Subcommands structure (context, topic, and group management commands)
 - Version provider that pulls version from `quarkus.application.version` config property
 
 ### Implemented Features
@@ -106,6 +110,51 @@ Clik implements a kubectl-like context management system for Kafka clusters. See
 - `ContextService` - CRUD operations for contexts, manages context directories and files
 - `ConfigurationLoader` - Loads and merges configurations, supports YAML and properties formats
 - `ContextValidator` - Validates context names and configurations
+
+#### Topic Management
+
+Clik implements comprehensive Kafka topic management operations. See `specs/TOPIC.md` for the full specification.
+
+**Implemented Commands:**
+- `clik topic create <name>` - Create a new topic with custom partitions, replication, and configuration
+- `clik topic list` - List all topics (supports table, yaml, json, name formats)
+- `clik topic describe <name>` - Display detailed topic information including partition details
+- `clik topic alter <name>` - Alter topic configuration and partition count
+- `clik topic delete <name>` - Delete one or more topics (with confirmation prompt)
+
+**Key Features:**
+- Multiple output formats (table, yaml, json, name)
+- Partition and replication factor configuration
+- Topic-level configuration management (set/delete configs)
+- Partition count increases (cannot decrease - Kafka limitation)
+- Internal topic filtering
+- Integration with context management
+
+**Key Services:**
+- `KafkaClientFactory` - Creates Kafka AdminClient from context configuration
+- `TopicService` - CRUD operations for topics, configuration management, partition operations
+- `TopicInfo` / `PartitionInfo` - Data models with @RegisterForReflection for native builds
+
+#### Group Management
+
+Clik implements Kafka consumer group monitoring and management. See `specs/GROUP.md` for the full specification.
+
+**Implemented Commands:**
+- `clik group list` - List all consumer groups with state and member count
+- `clik group describe <groupId>` - Display detailed group information including member assignments and lag
+
+**Key Features:**
+- Support for all Kafka 4.1 group types: consumer, classic, share, streams
+- Consumer lag monitoring and calculation
+- Partition assignment visualization
+- Multiple output formats (table, yaml, json, name)
+- Group type filtering
+- Member and coordinator information
+- Integration with context management
+
+**Key Services:**
+- `GroupService` - Operations for listing and describing groups, lag calculation
+- `GroupInfo` / `GroupMemberInfo` / `CoordinatorInfo` / `OffsetLagInfo` - Data models with @RegisterForReflection
 
 ### Configuration
 
@@ -193,23 +242,70 @@ When building native images with GraalVM:
 
 ## Roadmap
 
-See `specs/CONTEXT.md` for detailed implementation phases. Current status:
+Current implementation status across all feature areas:
+
+### Context Management (✅ COMPLETED)
+
+See `specs/CONTEXT.md` for detailed specification.
 
 **Phase 1: Core Context Management (✅ COMPLETED)**
 - All basic context commands implemented and tested
 - XDG Base Directory specification compliance
 - Multiple output formats (table, yaml, json, name, properties)
-- Comprehensive test coverage (63 tests passing)
+- Comprehensive test coverage (29 integration tests in ContextCommandTest, ContextCommandIT)
 
-**Phase 2: Enhanced Context Features (IN PROGRESS)**
+**Phase 2: Enhanced Context Features (✅ COMPLETED)**
 - Integration tests completed
 - Context rename command completed
-- Shell completion for context names (pending)
-- Context update command (pending)
 
-**Phase 3: Advanced Features (FUTURE)**
+**Future Enhancements:**
+- Shell completion for context names
+- Context update command
 - Credential helpers/plugins
 - Environment variable substitution
-- Context templates
-- Context export/import
-- Context namespaces/projects
+- Context templates and namespaces
+
+### Topic Management (✅ COMPLETED)
+
+See `specs/TOPIC.md` for detailed specification.
+
+**Phase 1: Core Topic Operations (✅ COMPLETED)**
+- All CRUD operations implemented: create, list, describe, alter, delete
+- Configuration management (set/delete topic configs)
+- Partition count increases
+- Multiple output formats (table, yaml, json, name)
+- Integration with context management
+- Comprehensive test coverage (27 integration tests in TopicCommandTest, TopicCommandIT)
+- Unit tests for services (13 tests in TopicServiceTest, 4 tests in KafkaClientFactoryTest)
+
+**Future Enhancements:**
+- Topic templates/presets
+- Bulk operations from file
+- Topic cloning/copying
+- Topic metrics/statistics
+
+### Group Management (✅ COMPLETED)
+
+See `specs/GROUP.md` for detailed specification.
+
+**Phase 1: Core Group Operations (✅ COMPLETED)**
+- List and describe operations implemented
+- Support for all Kafka 4.1 group types (consumer, classic, share, streams)
+- Consumer lag monitoring and calculation
+- Multiple output formats (table, yaml, json, name)
+- Integration with context management
+- Comprehensive test coverage (13 integration tests in GroupCommandTest, GroupCommandIT)
+- Unit tests for services (8 tests in GroupServiceTest)
+
+**Future Enhancements:**
+- Consumer group deletion
+- Offset reset operations
+- Consumer group quota management
+- Real-time lag monitoring
+
+### Overall Test Coverage
+
+**Total Tests: 134 passing**
+- Unit tests: 59 tests (ContextService, ConfigurationLoader, ContextValidator, TopicService, GroupService, KafkaClientFactory)
+- Integration tests: 75 tests (ContextCommandTest + TopicCommandTest + GroupCommandTest + native IT variants)
+- All tests passing in both JVM and native modes
