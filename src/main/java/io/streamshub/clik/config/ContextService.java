@@ -29,6 +29,10 @@ public class ContextService {
     private final ObjectMapper yamlMapper;
     private final String xdgConfigHome;
 
+    public static Path getConfigDirectory(Path baseDir) {
+        return baseDir.resolve(CONFIG_DIR_NAME);
+    }
+
     public ContextService(
             @ConfigProperty(name = "xdg.config.home", defaultValue = "${user.home}/.config")
             String xdgConfigHome) {
@@ -40,8 +44,7 @@ public class ContextService {
     }
 
     public Path getConfigDirectory() {
-        Path baseDir = Paths.get(xdgConfigHome);
-        return baseDir.resolve(CONFIG_DIR_NAME);
+        return getConfigDirectory(Paths.get(xdgConfigHome));
     }
 
     public void createContext(String name, ContextConfig config, boolean overwrite) {

@@ -1,22 +1,28 @@
 package io.streamshub.clik.config;
 
-import io.quarkus.test.junit.QuarkusTest;
-import io.streamshub.clik.kafka.KafkaClientType;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Properties;
+
 import jakarta.inject.Inject;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Comparator;
-import java.util.Properties;
+import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
+import io.streamshub.clik.kafka.KafkaClientType;
+import io.streamshub.clik.test.ClikTestBase;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
-class ConfigurationLoaderTest {
+@TestProfile(ClikTestBase.Profile.class)
+class ConfigurationLoaderTest extends ClikTestBase {
 
     @Inject
     ConfigurationLoader configLoader;
@@ -25,22 +31,14 @@ class ConfigurationLoaderTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        tempDir = Files.createTempDirectory("clik-test");
+        tempDir = Files.createDirectory(xdgConfigHome().resolve("clik-test"));
     }
 
+    @Override
     @AfterEach
-    void tearDown() throws IOException {
-        if (tempDir != null && Files.exists(tempDir)) {
-            Files.walk(tempDir)
-                    .sorted(Comparator.reverseOrder())
-                    .forEach(path -> {
-                        try {
-                            Files.delete(path);
-                        } catch (IOException e) {
-                            // Ignore
-                        }
-                    });
-        }
+    protected void tearDown() {
+        delete(tempDir);
+        super.tearDown();
     }
 
     @Test

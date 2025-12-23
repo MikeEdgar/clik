@@ -1,10 +1,11 @@
 package io.streamshub.clik.command.group;
 
-import io.quarkus.test.junit.QuarkusTestProfile;
-import io.quarkus.test.junit.TestProfile;
-import io.quarkus.test.junit.main.LaunchResult;
-import io.quarkus.test.junit.main.QuarkusMainLauncher;
-import io.quarkus.test.junit.main.QuarkusMainTest;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Properties;
 
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -16,76 +17,38 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.ServerSocket;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Properties;
+import io.quarkus.test.junit.TestProfile;
+import io.quarkus.test.junit.main.LaunchResult;
+import io.quarkus.test.junit.main.QuarkusMainLauncher;
+import io.quarkus.test.junit.main.QuarkusMainTest;
+import io.streamshub.clik.test.ClikTestBase;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusMainTest
-@TestProfile(GroupCommandTest.TestConfig.class)
-class GroupCommandTest {
-
-    private static Path tempConfigDir;
-    private static int kafkaBootstrapPort;
-    private static String kafkaBootstrapServers;
-
-    public static class TestConfig implements QuarkusTestProfile {
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            return Map.of(
-                    "xdg.config.home", tempConfigDir.toString(),
-                    "quarkus.kafka.devservices.port", String.valueOf(kafkaBootstrapPort)
-            );
-        }
-    }
+@TestProfile(ClikTestBase.Profile.class)
+class GroupCommandTest extends ClikTestBase {
 
     QuarkusMainLauncher launcher;
     List<KafkaConsumer<String, String>> consumers = new ArrayList<>();
-
-    @BeforeAll
-    static void initialize() {
-        try {
-            tempConfigDir = Files.createTempDirectory("clik-group-test");
-            try (ServerSocket serverSocket = new ServerSocket(0)) {
-                kafkaBootstrapPort = serverSocket.getLocalPort();
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-
-            kafkaBootstrapServers = "localhost:" + kafkaBootstrapPort;
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
 
     @BeforeEach
     void setUp(QuarkusMainLauncher launcher) {
         this.launcher = launcher;
 
         // Create and set a test context
-        launcher.launch("context", "create", "test-context", "--bootstrap-servers", kafkaBootstrapServers);
+        launcher.launch("context", "create", "test-context", "--bootstrap-servers", kafkaBootstrapServers());
         launcher.launch("context", "use", "test-context");
     }
 
+    @Override
     @AfterEach
-    void tearDown() throws IOException {
+    protected void tearDown() {
         // Close all consumers
         for (KafkaConsumer<String, String> consumer : consumers) {
             try {
@@ -106,19 +69,7 @@ class GroupCommandTest {
             }
         }
 
-        // Clean up config directory
-        Path configDir = tempConfigDir.resolve("clik");
-        if (Files.exists(configDir)) {
-            Files.walk(configDir)
-                    .sorted(Comparator.reverseOrder())
-                    .forEach(path -> {
-                        try {
-                            Files.delete(path);
-                        } catch (IOException e) {
-                            // Ignore
-                        }
-                    });
-        }
+        super.tearDown();
     }
 
     @Test
@@ -349,7 +300,7 @@ class GroupCommandTest {
 
     private KafkaConsumer<String, String> createConsumerGroup(String groupId, String topic, String groupProtocol) {
         Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers);
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
@@ -378,7 +329,7 @@ class GroupCommandTest {
      */
     private void produceMessages(String topic, int count) throws Exception {
         Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers);
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 

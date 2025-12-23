@@ -1,17 +1,9 @@
 package io.streamshub.clik.command.context;
 
-import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.net.ServerSocket;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -19,73 +11,26 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
-import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import io.quarkus.test.junit.main.Launch;
 import io.quarkus.test.junit.main.LaunchResult;
 import io.quarkus.test.junit.main.QuarkusMainLauncher;
 import io.quarkus.test.junit.main.QuarkusMainTest;
+import io.streamshub.clik.test.ClikTestBase;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusMainTest
-@TestProfile(ContextCommandTest.TestConfig.class)
-class ContextCommandTest {
-
-    private static Path tempConfigDir;
-    private static int kafkaBootstrapPort;
-    private static String kafkaBootstrapServers;
-
-    public static class TestConfig implements QuarkusTestProfile {
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            return Map.of(
-                    "xdg.config.home", tempConfigDir.toString(),
-                    "quarkus.kafka.devservices.port", String.valueOf(kafkaBootstrapPort)
-            );
-        }
-    }
+@TestProfile(ClikTestBase.Profile.class)
+class ContextCommandTest extends ClikTestBase {
 
     QuarkusMainLauncher launcher;
-
-    @BeforeAll
-    static void initialize() {
-        try {
-            tempConfigDir = Files.createTempDirectory("clik-integration-test");
-            try (ServerSocket serverSocket = new ServerSocket(0)) {
-                kafkaBootstrapPort = serverSocket.getLocalPort();
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-
-            kafkaBootstrapServers = "localhost:" + kafkaBootstrapPort;
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
 
     @BeforeEach
     void setUp(QuarkusMainLauncher launcher) {
         this.launcher = launcher;
-    }
-
-    @AfterEach
-    void tearDown() throws IOException {
-        // Clean up config directory
-        Path configDir = tempConfigDir.resolve("clik");
-        if (Files.exists(configDir)) {
-            Files.walk(configDir)
-                    .sorted(Comparator.reverseOrder())
-                    .forEach(path -> {
-                        try {
-                            Files.delete(path);
-                        } catch (IOException e) {
-                            // Ignore
-                        }
-                    });
-        }
     }
 
     @Test
@@ -481,7 +426,7 @@ class ContextCommandTest {
     void testCreateContextWithVerifySuccess() {
         // Create context with --verify using dev services Kafka
         LaunchResult result = launcher.launch("context", "create", "verified-context",
-                "--bootstrap-servers", kafkaBootstrapServers, "--verify");
+                "--bootstrap-servers", kafkaBootstrapServers(), "--verify");
 
         assertEquals(0, result.exitCode());
         String output = result.getOutput();

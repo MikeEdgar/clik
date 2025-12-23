@@ -1,40 +1,27 @@
 package io.streamshub.clik.kafka;
 
-import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.QuarkusTestProfile;
-import io.quarkus.test.junit.TestProfile;
-import io.streamshub.clik.config.ContextConfig;
-import io.streamshub.clik.config.ContextService;
+import java.util.List;
+
 import jakarta.inject.Inject;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
+import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
+import io.streamshub.clik.config.ContextConfig;
+import io.streamshub.clik.config.ContextService;
+import io.streamshub.clik.test.ClikTestBase;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
-@TestProfile(KafkaClientFactoryTest.TestConfig.class)
-class KafkaClientFactoryTest {
-
-    public static class TestConfig implements QuarkusTestProfile {
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            try {
-                Path tempDir = Files.createTempDirectory("clik-test");
-                return Map.of("xdg.config.home", tempDir.toString());
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }
-    }
+@TestProfile(ClikTestBase.Profile.class)
+class KafkaClientFactoryTest extends ClikTestBase {
 
     @Inject
     KafkaClientFactory clientFactory;
@@ -52,8 +39,9 @@ class KafkaClientFactoryTest {
         contextService.createContext("test-context", config, false);
     }
 
+    @Override
     @AfterEach
-    void tearDown() throws IOException {
+    protected void tearDown() {
         // Clean up all contexts after each test
         List<String> contexts = contextService.listContexts();
         for (String context : contexts) {
@@ -64,19 +52,7 @@ class KafkaClientFactoryTest {
             }
         }
 
-        // Clean up config directory
-        Path configDir = contextService.getConfigDirectory();
-        if (Files.exists(configDir)) {
-            Files.walk(configDir)
-                    .sorted(Comparator.reverseOrder())
-                    .forEach(path -> {
-                        try {
-                            Files.delete(path);
-                        } catch (IOException e) {
-                            // Ignore
-                        }
-                    });
-        }
+        super.tearDown();
     }
 
     @Test
