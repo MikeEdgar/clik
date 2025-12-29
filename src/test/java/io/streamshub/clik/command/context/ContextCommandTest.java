@@ -16,21 +16,25 @@ import io.quarkus.test.junit.main.Launch;
 import io.quarkus.test.junit.main.LaunchResult;
 import io.quarkus.test.junit.main.QuarkusMainLauncher;
 import io.quarkus.test.junit.main.QuarkusMainTest;
-import io.streamshub.clik.test.ClikTestBase;
+import io.streamshub.clik.config.ContextConfig;
+import io.streamshub.clik.config.ContextService;
+import io.streamshub.clik.test.ClikMainTestBase;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusMainTest
-@TestProfile(ClikTestBase.Profile.class)
-class ContextCommandTest extends ClikTestBase {
+@TestProfile(ClikMainTestBase.Profile.class)
+class ContextCommandTest extends ClikMainTestBase {
 
     QuarkusMainLauncher launcher;
+    ContextService contextService;
 
     @BeforeEach
     void setUp(QuarkusMainLauncher launcher) {
         this.launcher = launcher;
+        this.contextService = new ContextService(xdgConfigHome().toString());
     }
 
     @Test
@@ -40,8 +44,7 @@ class ContextCommandTest extends ClikTestBase {
         assertEquals("Context \"test-context\" created.", result.getOutput().trim());
 
         // Verify context was created by listing
-        LaunchResult listResult = launcher.launch("context", "list", "-o", "name");
-        assertEquals("test-context", listResult.getOutput().trim());
+        assertEquals(List.of("test-context"), contextService.listContexts());
     }
 
     @Test
@@ -51,8 +54,7 @@ class ContextCommandTest extends ClikTestBase {
         assertTrue(result.getErrorOutput().contains("Invalid context name"));
 
         // Verify context was not created
-        LaunchResult listResult = launcher.launch("context", "list", "-o", "name");
-        assertEquals("No contexts found.", listResult.getOutput().trim());
+        assertTrue(contextService.listContexts().isEmpty());
     }
 
     @Test
@@ -65,13 +67,16 @@ class ContextCommandTest extends ClikTestBase {
         assertEquals(0, result.exitCode());
 
         // Verify configuration by showing the context
-        LaunchResult showResult = launcher.launch("context", "show", "test-context", "-o", "properties");
-        String output = showResult.getOutput();
-        assertTrue(output.contains("bootstrap.servers=localhost:9092"));
-        assertTrue(output.contains("security.protocol=SASL_SSL"));
-        assertTrue(output.contains("sasl.mechanism=SCRAM-SHA-512"));
-        assertTrue(output.contains("consumer.group.id=test-group"));
-        assertTrue(output.contains("producer.acks=all"));
+        var context = contextService.loadContext("test-context");
+        assertNotNull(context);
+        assertEquals(Map.of(
+                "bootstrap.servers", "localhost:9092",
+                "security.protocol", "SASL_SSL",
+                "sasl.mechanism", "SCRAM-SHA-512"
+            ), context.getCommon());
+        assertTrue(context.getAdmin().isEmpty());
+        assertEquals(Map.of("group.id", "test-group"), context.getConsumer());
+        assertEquals(Map.of("acks", "all"), context.getProducer());
     }
 
     @Test
@@ -83,10 +88,14 @@ class ContextCommandTest extends ClikTestBase {
 
     @Test
     void testListContextsTable() {
-        // Create contexts using CLI
-        launcher.launch("context", "create", "dev", "--bootstrap-servers", "localhost:9092");
-        launcher.launch("context", "create", "prod", "--bootstrap-servers", "prod.kafka:9092",
-                "--security-protocol", "SASL_SSL");
+        // Create contexts using the service
+        contextService.createContext("dev", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .build(), false);
+        contextService.createContext("prod", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "prod.kafka:9092")
+                .addCommon("security.protocol", "SASL_SSL")
+                .build(), false);
 
         // List contexts
         LaunchResult result = launcher.launch("context", "list");
@@ -101,9 +110,13 @@ class ContextCommandTest extends ClikTestBase {
 
     @Test
     void testListContextsNameFormat() {
-        // Create contexts using CLI
-        launcher.launch("context", "create", "dev", "--bootstrap-servers", "localhost:9092");
-        launcher.launch("context", "create", "prod", "--bootstrap-servers", "prod.kafka:9092");
+        // Create contexts using the service
+        contextService.createContext("dev", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .build(), false);
+        contextService.createContext("prod", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "prod.kafka:9092")
+                .build(), false);
 
         // List contexts in name format
         LaunchResult result = launcher.launch("context", "list", "-o", "name");
@@ -114,10 +127,14 @@ class ContextCommandTest extends ClikTestBase {
 
     @Test
     void testListContextsYamlFormat() throws Exception {
-        // Create contexts using CLI
-        launcher.launch("context", "create", "dev", "--bootstrap-servers", "localhost:9092");
-        launcher.launch("context", "create", "prod", "--bootstrap-servers", "prod.kafka:9092",
-                "--security-protocol", "SASL_SSL");
+        // Create contexts using the service
+        contextService.createContext("dev", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .build(), false);
+        contextService.createContext("prod", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "prod.kafka:9092")
+                .addCommon("security.protocol", "SASL_SSL")
+                .build(), false);
 
         // List contexts in YAML format
         LaunchResult result = launcher.launch("context", "list", "-o", "yaml");
@@ -143,10 +160,14 @@ class ContextCommandTest extends ClikTestBase {
 
     @Test
     void testListContextsJsonFormat() throws Exception {
-        // Create contexts using CLI
-        launcher.launch("context", "create", "dev", "--bootstrap-servers", "localhost:9092");
-        launcher.launch("context", "create", "prod", "--bootstrap-servers", "prod.kafka:9092",
-                "--security-protocol", "SASL_SSL");
+        // Create contexts using the service
+        contextService.createContext("dev", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .build(), false);
+        contextService.createContext("prod", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "prod.kafka:9092")
+                .addCommon("security.protocol", "SASL_SSL")
+                .build(), false);
 
         // List contexts in JSON format
         LaunchResult result = launcher.launch("context", "list", "-o", "json");
@@ -172,8 +193,10 @@ class ContextCommandTest extends ClikTestBase {
 
     @Test
     void testUseContext() {
-        // Create context using CLI
-        launcher.launch("context", "create", "test-context", "--bootstrap-servers", "localhost:9092");
+        // Create context using the service
+        contextService.createContext("test-context", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .build(), false);
 
         // Use the context
         LaunchResult result = launcher.launch("context", "use", "test-context");
@@ -182,8 +205,7 @@ class ContextCommandTest extends ClikTestBase {
         assertEquals("Switched to context \"test-context\".", result.getOutput().trim());
 
         // Verify current context was set
-        LaunchResult currentResult = launcher.launch("context", "current");
-        assertEquals("test-context", currentResult.getOutput().trim());
+        assertEquals("test-context", contextService.getCurrentContext().orElse(null));
     }
 
     @Test
@@ -202,9 +224,11 @@ class ContextCommandTest extends ClikTestBase {
 
     @Test
     void testCurrentContext() {
-        // Create and set context using CLI
-        launcher.launch("context", "create", "test-context", "--bootstrap-servers", "localhost:9092");
-        launcher.launch("context", "use", "test-context");
+        // Create and set context using the service
+        contextService.createContext("test-context", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .build(), false);
+        contextService.setCurrentContext("test-context");
 
         // Get current context
         LaunchResult result = launcher.launch("context", "current");
@@ -215,10 +239,12 @@ class ContextCommandTest extends ClikTestBase {
 
     @Test
     void testCurrentContextWithConfig() {
-        // Create and set context using CLI
-        launcher.launch("context", "create", "test-context", "--bootstrap-servers", "localhost:9092",
-                "--security-protocol", "PLAINTEXT");
-        launcher.launch("context", "use", "test-context");
+        // Create and set context using the service
+        contextService.createContext("test-context", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .addCommon("security.protocol", "PLAINTEXT")
+                .build(), false);
+        contextService.setCurrentContext("test-context");
 
         // Get current context with config
         LaunchResult result = launcher.launch("context", "current", "--show-config");
@@ -232,8 +258,10 @@ class ContextCommandTest extends ClikTestBase {
 
     @Test
     void testDeleteContext() {
-        // Create context using CLI
-        launcher.launch("context", "create", "test-context", "--bootstrap-servers", "localhost:9092");
+        // Create context using the service
+        contextService.createContext("test-context", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .build(), false);
 
         // Delete the context
         LaunchResult result = launcher.launch("context", "delete", "test-context", "--force");
@@ -242,15 +270,16 @@ class ContextCommandTest extends ClikTestBase {
         assertEquals("Context \"test-context\" deleted.", result.getOutput().trim());
 
         // Verify context was deleted
-        LaunchResult listResult = launcher.launch("context", "list", "-o", "name");
-        assertEquals("No contexts found.", listResult.getOutput().trim());
+        assertTrue(contextService.listContexts().isEmpty());
     }
 
     @Test
     void testDeleteCurrentContextClearsIt() {
-        // Create and set context using CLI
-        launcher.launch("context", "create", "test-context", "--bootstrap-servers", "localhost:9092");
-        launcher.launch("context", "use", "test-context");
+        // Create and set context using the service
+        contextService.createContext("test-context", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .build(), false);
+        contextService.setCurrentContext("test-context");
 
         // Delete the current context
         LaunchResult result = launcher.launch("context", "delete", "test-context", "--force");
@@ -259,9 +288,7 @@ class ContextCommandTest extends ClikTestBase {
         assertEquals("Context \"test-context\" deleted.", result.getOutput().trim());
 
         // Verify current context was cleared
-        LaunchResult currentResult = launcher.launch("context", "current");
-        assertEquals(1, currentResult.exitCode());
-        assertTrue(currentResult.getErrorOutput().contains("No current context set"));
+        assertTrue(contextService.getCurrentContext().isEmpty());
     }
 
     @Test
@@ -273,10 +300,12 @@ class ContextCommandTest extends ClikTestBase {
 
     @Test
     void testShowContext() {
-        // Create context using CLI
-        launcher.launch("context", "create", "test-context", "--bootstrap-servers", "localhost:9092",
-                "--property", "consumer.group.id=test-group",
-                "--property", "producer.acks=all");
+        // Create context using the service
+        contextService.createContext("test-context", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .addConsumer("group.id", "test-group")
+                .addProducer("acks", "all")
+                .build(), false);
 
         // Show the context
         LaunchResult result = launcher.launch("context", "show", "test-context");
@@ -298,9 +327,11 @@ class ContextCommandTest extends ClikTestBase {
 
     @Test
     void testShowContextPropertiesFormat() {
-        // Create context using CLI
-        launcher.launch("context", "create", "test-context", "--bootstrap-servers", "localhost:9092",
-                "--property", "consumer.group.id=test-group");
+        // Create context using the service
+        contextService.createContext("test-context", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .addConsumer("group.id", "test-group")
+                .build(), false);
 
         // Show context in properties format
         LaunchResult result = launcher.launch("context", "show", "test-context", "-o", "properties");
@@ -313,8 +344,10 @@ class ContextCommandTest extends ClikTestBase {
 
     @Test
     void testShowContextJsonFormat() {
-        // Create context using CLI
-        launcher.launch("context", "create", "test-context", "--bootstrap-servers", "localhost:9092");
+        // Create context using the service
+        contextService.createContext("test-context", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .build(), false);
 
         // Show context in JSON format
         LaunchResult result = launcher.launch("context", "show", "test-context", "-o", "json");
@@ -334,8 +367,10 @@ class ContextCommandTest extends ClikTestBase {
 
     @Test
     void testCreateContextWithOverwrite() {
-        // Create first context using CLI
-        launcher.launch("context", "create", "test-context", "--bootstrap-servers", "localhost:9091");
+        // Create first context using the service
+        contextService.createContext("test-context", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9091")
+                .build(), false);
 
         // Overwrite with new bootstrap servers
         LaunchResult result = launcher.launch("context", "create", "test-context",
@@ -345,15 +380,16 @@ class ContextCommandTest extends ClikTestBase {
         assertEquals("Context \"test-context\" created.", result.getOutput().trim());
 
         // Verify the context was overwritten
-        LaunchResult showResult = launcher.launch("context", "show", "test-context", "-o", "properties");
-        assertTrue(showResult.getOutput().contains("bootstrap.servers=localhost:9092"));
-        assertFalse(showResult.getOutput().contains("localhost:9091"));
+        var context = contextService.loadContext("test-context");
+        assertEquals(context.getCommon().get("bootstrap.servers"), "localhost:9092");
     }
 
     @Test
     void testRenameContext() {
-        // Create context using CLI
-        launcher.launch("context", "create", "old-name", "--bootstrap-servers", "localhost:9092");
+        // Create context using the service
+        contextService.createContext("old-name", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .build(), false);
 
         // Rename the context
         LaunchResult result = launcher.launch("context", "rename", "old-name", "new-name");
@@ -361,23 +397,21 @@ class ContextCommandTest extends ClikTestBase {
         assertEquals(0, result.exitCode());
         assertEquals("Context \"old-name\" renamed to \"new-name\".", result.getOutput().trim());
 
-        // Verify old context no longer exists
-        LaunchResult listResult = launcher.launch("context", "list", "-o", "name");
-        assertFalse(listResult.getOutput().contains("old-name"));
-
-        // Verify new context exists
-        assertTrue(listResult.getOutput().contains("new-name"));
+        // Verify only new context exists
+        assertEquals(List.of("new-name"), contextService.listContexts());
 
         // Verify configuration was preserved
-        LaunchResult showResult = launcher.launch("context", "show", "new-name", "-o", "properties");
-        assertTrue(showResult.getOutput().contains("bootstrap.servers=localhost:9092"));
+        var context = contextService.loadContext("new-name");
+        assertEquals("localhost:9092", context.getCommon().get("bootstrap.servers"));
     }
 
     @Test
     void testRenameCurrentContext() {
-        // Create and set context using CLI
-        launcher.launch("context", "create", "old-name", "--bootstrap-servers", "localhost:9092");
-        launcher.launch("context", "use", "old-name");
+        // Create and set context using the service
+        contextService.createContext("old-name", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .build(), false);
+        contextService.setCurrentContext("old-name");
 
         // Rename the current context
         LaunchResult result = launcher.launch("context", "rename", "old-name", "new-name");
@@ -386,8 +420,7 @@ class ContextCommandTest extends ClikTestBase {
         assertEquals("Context \"old-name\" renamed to \"new-name\".", result.getOutput().trim());
 
         // Verify current context was updated
-        LaunchResult currentResult = launcher.launch("context", "current");
-        assertEquals("new-name", currentResult.getOutput().trim());
+        assertEquals("new-name", contextService.getCurrentContext().orElse(null));
     }
 
     @Test
@@ -400,8 +433,12 @@ class ContextCommandTest extends ClikTestBase {
     @Test
     void testRenameContextToExistingName() {
         // Create two contexts
-        launcher.launch("context", "create", "context1", "--bootstrap-servers", "localhost:9092");
-        launcher.launch("context", "create", "context2", "--bootstrap-servers", "localhost:9093");
+        contextService.createContext("context1", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .build(), false);
+        contextService.createContext("context2", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9093")
+                .build(), false);
 
         // Try to rename context1 to context2
         LaunchResult result = launcher.launch("context", "rename", "context1", "context2");
@@ -413,7 +450,9 @@ class ContextCommandTest extends ClikTestBase {
     @Test
     void testRenameContextInvalidNewName() {
         // Create context first
-        launcher.launch("context", "create", "test-context", "--bootstrap-servers", "localhost:9092");
+        contextService.createContext("test-context", ContextConfig.builder()
+                .addCommon("bootstrap.servers", "localhost:9092")
+                .build(), false);
 
         // Try to rename with invalid name
         LaunchResult result = launcher.launch("context", "rename", "test-context", "invalid name");
@@ -435,8 +474,7 @@ class ContextCommandTest extends ClikTestBase {
         assertTrue(output.contains("Context \"verified-context\" created"));
 
         // Verify context was actually created
-        LaunchResult listResult = launcher.launch("context", "list", "-o", "name");
-        assertTrue(listResult.getOutput().contains("verified-context"));
+        assertEquals(List.of("verified-context"), contextService.listContexts());
     }
 
     @Test
@@ -451,7 +489,6 @@ class ContextCommandTest extends ClikTestBase {
         assertTrue(errorOutput.contains("Context was created but connection verification failed"));
 
         // Context should still be created even though verification failed
-        LaunchResult listResult = launcher.launch("context", "list", "-o", "name");
-        assertTrue(listResult.getOutput().contains("invalid-context"));
+        assertEquals(List.of("invalid-context"), contextService.listContexts());
     }
 }

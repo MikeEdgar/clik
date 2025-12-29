@@ -1,6 +1,9 @@
 package io.streamshub.clik.command.topic;
 
-import org.junit.jupiter.api.AfterEach;
+import java.util.Collections;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -8,66 +11,71 @@ import io.quarkus.test.junit.TestProfile;
 import io.quarkus.test.junit.main.LaunchResult;
 import io.quarkus.test.junit.main.QuarkusMainLauncher;
 import io.quarkus.test.junit.main.QuarkusMainTest;
-import io.streamshub.clik.test.ClikTestBase;
+import io.streamshub.clik.config.ContextConfig;
+import io.streamshub.clik.config.ContextService;
+import io.streamshub.clik.kafka.TopicService;
+import io.streamshub.clik.test.ClikMainTestBase;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusMainTest
-@TestProfile(ClikTestBase.Profile.class)
-class TopicCommandTest extends ClikTestBase {
+@TestProfile(ClikMainTestBase.Profile.class)
+class TopicCommandTest extends ClikMainTestBase {
+
+    private static AtomicBoolean initialized = new AtomicBoolean(false);
 
     QuarkusMainLauncher launcher;
+    ContextService contextService;
+    TopicService topicService;
 
     @BeforeEach
     void setUp(QuarkusMainLauncher launcher) {
         this.launcher = launcher;
 
-        // Create and set a test context
-        launcher.launch("context", "create", "test-context", "--bootstrap-servers", kafkaBootstrapServers());
-        launcher.launch("context", "use", "test-context");
-    }
-
-    @Override
-    @AfterEach
-    protected void tearDown() {
-        // Clean up all topics
-        LaunchResult listResult = launcher.launch("topic", "list", "-o", "name");
-        if (listResult.exitCode() == 0 && !listResult.getOutput().contains("No topics found")) {
-            for (String topic : listResult.getOutputStream().stream().map(String::strip).toList()) {
-                if (!topic.isEmpty()) {
-                    launcher.launch("topic", "delete", topic, "--force");
-                }
-            }
+        if (initialized.compareAndSet(false, true)) {
+            // Run the application to trigger the startup of the devservices Kafka instance
+            launcher.launch();
         }
 
-        super.tearDown();
+        this.contextService = new ContextService(xdgConfigHome().toString());
+        this.topicService = new TopicService();
+
+        // Create and set a test context
+        contextService.createContext("test-context", ContextConfig.builder()
+                .addCommon("bootstrap.servers", kafkaBootstrapServers())
+                .build(), false);
+        contextService.setCurrentContext("test-context");
     }
 
     @Test
-    void testCreateTopic() {
+    void testCreateTopic() throws Exception {
         LaunchResult result = launcher.launch("topic", "create", "test-topic");
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Topic \"test-topic\" created"));
 
         // Verify topic was created
-        LaunchResult listResult = launcher.launch("topic", "list", "-o", "name");
-        assertTrue(listResult.getOutput().contains("test-topic"));
+        var topicInfo = topicService.describeTopic(admin(), "test-topic");
+        assertNotNull(topicInfo);
+        assertEquals("test-topic", topicInfo.getName());
     }
 
     @Test
-    void testCreateTopicWithPartitions() {
+    void testCreateTopicWithPartitions() throws Exception {
         LaunchResult result = launcher.launch("topic", "create", "test-topic", "--partitions", "5");
         assertEquals(0, result.exitCode());
 
         // Verify partition count
-        LaunchResult describeResult = launcher.launch("topic", "describe", "test-topic");
-        assertTrue(describeResult.getOutput().contains("Partitions: 5"));
+        var topicInfo = topicService.describeTopic(admin(), "test-topic");
+        assertNotNull(topicInfo);
+        assertEquals(5, topicInfo.getPartitions());
+        assertEquals(5, topicInfo.getPartitionDetails().size());
     }
 
     @Test
-    void testCreateTopicWithConfig() {
+    void testCreateTopicWithConfig() throws Exception {
         LaunchResult result = launcher.launch("topic", "create", "test-topic", "--config", "retention.ms=3600000");
         assertEquals(0, result.exitCode(), () -> {
             return """
@@ -76,14 +84,14 @@ class TopicCommandTest extends ClikTestBase {
         });
 
         // Verify config
-        LaunchResult describeResult = launcher.launch("topic", "describe", "test-topic");
-        assertTrue(describeResult.getOutput().contains("retention.ms"));
-        assertTrue(describeResult.getOutput().contains("3600000"));
+        var topicInfo = topicService.describeTopic(admin(), "test-topic");
+        assertNotNull(topicInfo);
+        assertEquals("3600000", topicInfo.getConfig().get("retention.ms"));
     }
 
     @Test
-    void testCreateTopicAlreadyExists() {
-        launcher.launch("topic", "create", "duplicate-topic");
+    void testCreateTopicAlreadyExists() throws Exception {
+        topicService.createTopic(admin(), "duplicate-topic", 1, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "create", "duplicate-topic");
         assertEquals(1, result.exitCode());
@@ -98,9 +106,9 @@ class TopicCommandTest extends ClikTestBase {
     }
 
     @Test
-    void testListTopicsTable() {
-        launcher.launch("topic", "create", "topic1", "--partitions", "3");
-        launcher.launch("topic", "create", "topic2", "--partitions", "5");
+    void testListTopicsTable() throws Exception {
+        topicService.createTopic(admin(), "topic1", 3, 1, Collections.emptyMap());
+        topicService.createTopic(admin(), "topic2", 5, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "list");
         assertEquals(0, result.exitCode());
@@ -112,10 +120,10 @@ class TopicCommandTest extends ClikTestBase {
     }
 
     @Test
-    void testListTopicsNameFormat() {
-        launcher.launch("topic", "create", "alpha");
-        launcher.launch("topic", "create", "beta");
-        launcher.launch("topic", "create", "gamma");
+    void testListTopicsNameFormat() throws Exception {
+        topicService.createTopic(admin(), "alpha", 1, 1, Collections.emptyMap());
+        topicService.createTopic(admin(), "beta", 1, 1, Collections.emptyMap());
+        topicService.createTopic(admin(), "gamma", 1, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "list", "-o", "name");
         assertEquals(0, result.exitCode());
@@ -126,8 +134,8 @@ class TopicCommandTest extends ClikTestBase {
     }
 
     @Test
-    void testListTopicsJsonFormat() {
-        launcher.launch("topic", "create", "json-topic", "--partitions", "2");
+    void testListTopicsJsonFormat() throws Exception {
+        topicService.createTopic(admin(), "json-topic", 2, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "list", "-o", "json");
         assertEquals(0, result.exitCode());
@@ -139,8 +147,8 @@ class TopicCommandTest extends ClikTestBase {
     }
 
     @Test
-    void testListTopicsYamlFormat() {
-        launcher.launch("topic", "create", "yaml-topic", "--partitions", "3");
+    void testListTopicsYamlFormat() throws Exception {
+        topicService.createTopic(admin(), "yaml-topic", 3, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "list", "-o", "yaml");
         assertEquals(0, result.exitCode());
@@ -152,8 +160,8 @@ class TopicCommandTest extends ClikTestBase {
     }
 
     @Test
-    void testDescribeTopic() {
-        launcher.launch("topic", "create", "describe-test", "--partitions", "4", "--replication-factor", "1");
+    void testDescribeTopic() throws Exception {
+        topicService.createTopic(admin(), "describe-test", 4, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "describe", "describe-test");
         assertEquals(0, result.exitCode());
@@ -172,8 +180,8 @@ class TopicCommandTest extends ClikTestBase {
     }
 
     @Test
-    void testDescribeTopicJsonFormat() {
-        launcher.launch("topic", "create", "json-describe");
+    void testDescribeTopicJsonFormat() throws Exception {
+        topicService.createTopic(admin(), "json-describe", 1, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "describe", "json-describe", "-o", "json");
         assertEquals(0, result.exitCode());
@@ -185,53 +193,52 @@ class TopicCommandTest extends ClikTestBase {
     }
 
     @Test
-    void testDeleteTopic() {
-        launcher.launch("topic", "create", "delete-test");
+    void testDeleteTopic() throws Exception {
+        topicService.createTopic(admin(), "delete-test", 1, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "delete", "delete-test", "--force");
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Topic \"delete-test\" deleted"));
 
         // Verify topic was deleted
-        LaunchResult listResult = launcher.launch("topic", "list", "-o", "name");
-        assertFalse(listResult.getOutput().contains("delete-test"));
+        var topics = topicService.listTopics(admin(), false);
+        assertFalse(topics.contains("delete-test"));
     }
 
     @Test
-    void testDeleteMultipleTopics() {
-        launcher.launch("topic", "create", "delete1");
-        launcher.launch("topic", "create", "delete2");
-        launcher.launch("topic", "create", "delete3");
+    void testDeleteMultipleTopics() throws Exception {
+        topicService.createTopic(admin(), "delete1", 1, 1, Collections.emptyMap());
+        topicService.createTopic(admin(), "delete2", 1, 1, Collections.emptyMap());
+        topicService.createTopic(admin(), "delete3", 1, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "delete", "delete1", "delete2", "delete3", "--force");
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("3 topics deleted"));
 
         // Verify topics were deleted
-        LaunchResult listResult = launcher.launch("topic", "list", "-o", "name");
-        String output = listResult.getOutput();
-        assertFalse(output.contains("delete1"));
-        assertFalse(output.contains("delete2"));
-        assertFalse(output.contains("delete3"));
+        var topics = topicService.listTopics(admin(), false);
+        assertFalse(topics.contains("delete1"));
+        assertFalse(topics.contains("delete2"));
+        assertFalse(topics.contains("delete3"));
     }
 
     @Test
-    void testAlterTopicConfig() {
-        launcher.launch("topic", "create", "alter-test", "--config", "retention.ms=86400000");
+    void testAlterTopicConfig() throws Exception {
+        topicService.createTopic(admin(), "alter-test", 1, 1, Map.of("retention.ms", "86400000"));
 
         LaunchResult result = launcher.launch("topic", "alter", "alter-test", "--config", "retention.ms=172800000");
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Topic \"alter-test\" configuration altered"));
 
         // Verify the config was altered
-        LaunchResult describeResult = launcher.launch("topic", "describe", "alter-test");
-        assertTrue(describeResult.getOutput().contains("retention.ms"));
-        assertTrue(describeResult.getOutput().contains("172800000"));
+        var topicInfo = topicService.describeTopic(admin(), "alter-test");
+        assertNotNull(topicInfo);
+        assertEquals("172800000", topicInfo.getConfig().get("retention.ms"));
     }
 
     @Test
-    void testAlterTopicMultipleConfigs() {
-        launcher.launch("topic", "create", "multi-config-test");
+    void testAlterTopicMultipleConfigs() throws Exception {
+        topicService.createTopic(admin(), "multi-config-test", 1, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "alter", "multi-config-test",
                 "--config", "retention.ms=86400000",
@@ -239,36 +246,32 @@ class TopicCommandTest extends ClikTestBase {
         assertEquals(0, result.exitCode());
 
         // Verify both configs were set
-        LaunchResult describeResult = launcher.launch("topic", "describe", "multi-config-test");
-        String output = describeResult.getOutput();
-        assertTrue(output.contains("retention.ms"));
-        assertTrue(output.contains("86400000"));
-        assertTrue(output.contains("compression.type"));
-        assertTrue(output.contains("snappy"));
+        var topicInfo = topicService.describeTopic(admin(), "multi-config-test");
+        assertNotNull(topicInfo);
+        assertEquals("86400000", topicInfo.getConfig().get("retention.ms"));
+        assertEquals("snappy", topicInfo.getConfig().get("compression.type"));
     }
 
     @Test
-    void testAlterTopicDeleteConfig() {
-        launcher.launch("topic", "create", "delete-config-test",
-                "--config", "retention.ms=86400000",
-                "--config", "compression.type=snappy");
+    void testAlterTopicDeleteConfig() throws Exception {
+        topicService.createTopic(admin(), "delete-config-test", 1, 1,
+                Map.of("retention.ms", "86400000", "compression.type", "snappy"));
 
         LaunchResult result = launcher.launch("topic", "alter", "delete-config-test",
                 "--delete-config", "compression.type");
         assertEquals(0, result.exitCode());
 
         // Verify the config was deleted
-        LaunchResult describeResult = launcher.launch("topic", "describe", "delete-config-test");
-        String output = describeResult.getOutput();
-        assertTrue(output.contains("retention.ms"));
-        assertFalse(output.contains("compression.type"));
+        var topicInfo = topicService.describeTopic(admin(), "delete-config-test");
+        assertNotNull(topicInfo);
+        assertTrue(topicInfo.getConfig().containsKey("retention.ms"));
+        assertFalse(topicInfo.getConfig().containsKey("compression.type"));
     }
 
     @Test
-    void testAlterTopicSetAndDelete() {
-        launcher.launch("topic", "create", "set-and-delete-test",
-                "--config", "retention.ms=86400000",
-                "--config", "max.message.bytes=2000000");
+    void testAlterTopicSetAndDelete() throws Exception {
+        topicService.createTopic(admin(), "set-and-delete-test", 1, 1,
+                Map.of("retention.ms", "86400000", "max.message.bytes", "2000000"));
 
         LaunchResult result = launcher.launch("topic", "alter", "set-and-delete-test",
                 "--config", "compression.type=lz4",
@@ -276,12 +279,11 @@ class TopicCommandTest extends ClikTestBase {
         assertEquals(0, result.exitCode());
 
         // Verify changes
-        LaunchResult describeResult = launcher.launch("topic", "describe", "set-and-delete-test");
-        String output = describeResult.getOutput();
-        assertTrue(output.contains("retention.ms"));
-        assertTrue(output.contains("compression.type"));
-        assertTrue(output.contains("lz4"));
-        assertFalse(output.contains("max.message.bytes"));
+        var topicInfo = topicService.describeTopic(admin(), "set-and-delete-test");
+        assertNotNull(topicInfo);
+        assertTrue(topicInfo.getConfig().containsKey("retention.ms"));
+        assertEquals("lz4", topicInfo.getConfig().get("compression.type"));
+        assertFalse(topicInfo.getConfig().containsKey("max.message.bytes"));
     }
 
     @Test
@@ -293,8 +295,8 @@ class TopicCommandTest extends ClikTestBase {
     }
 
     @Test
-    void testAlterTopicNoOptions() {
-        launcher.launch("topic", "create", "no-options-test");
+    void testAlterTopicNoOptions() throws Exception {
+        topicService.createTopic(admin(), "no-options-test", 1, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "alter", "no-options-test");
         assertEquals(1, result.exitCode());
@@ -302,8 +304,8 @@ class TopicCommandTest extends ClikTestBase {
     }
 
     @Test
-    void testAlterTopicInvalidConfigFormat() {
-        launcher.launch("topic", "create", "invalid-config-test");
+    void testAlterTopicInvalidConfigFormat() throws Exception {
+        topicService.createTopic(admin(), "invalid-config-test", 1, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "alter", "invalid-config-test",
                 "--config", "invalid-format");
@@ -312,20 +314,22 @@ class TopicCommandTest extends ClikTestBase {
     }
 
     @Test
-    void testAlterTopicIncreasePartitions() {
-        launcher.launch("topic", "create", "partition-test", "--partitions", "3");
+    void testAlterTopicIncreasePartitions() throws Exception {
+        topicService.createTopic(admin(), "partition-test", 3, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "alter", "partition-test", "--partitions", "6");
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("partitions increased from 3 to 6"));
 
-        LaunchResult describeResult = launcher.launch("topic", "describe", "partition-test");
-        assertTrue(describeResult.getOutput().contains("Partitions: 6"));
+        // Verify partition count was increased
+        var topicInfo = topicService.describeTopic(admin(), "partition-test");
+        assertNotNull(topicInfo);
+        assertEquals(6, topicInfo.getPartitions());
     }
 
     @Test
-    void testAlterTopicDecreasePartitionsError() {
-        launcher.launch("topic", "create", "decrease-test", "--partitions", "5");
+    void testAlterTopicDecreasePartitionsError() throws Exception {
+        topicService.createTopic(admin(), "decrease-test", 5, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "alter", "decrease-test", "--partitions", "3");
         assertEquals(1, result.exitCode());
@@ -334,8 +338,8 @@ class TopicCommandTest extends ClikTestBase {
     }
 
     @Test
-    void testAlterTopicSamePartitionCountError() {
-        launcher.launch("topic", "create", "same-partition-test", "--partitions", "4");
+    void testAlterTopicSamePartitionCountError() throws Exception {
+        topicService.createTopic(admin(), "same-partition-test", 4, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "alter", "same-partition-test", "--partitions", "4");
         assertEquals(1, result.exitCode());
@@ -343,8 +347,8 @@ class TopicCommandTest extends ClikTestBase {
     }
 
     @Test
-    void testAlterTopicPartitionsAndConfig() {
-        launcher.launch("topic", "create", "combined-test", "--partitions", "2");
+    void testAlterTopicPartitionsAndConfig() throws Exception {
+        topicService.createTopic(admin(), "combined-test", 2, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "alter", "combined-test",
             "--partitions", "5",
@@ -353,16 +357,16 @@ class TopicCommandTest extends ClikTestBase {
         assertTrue(result.getOutput().contains("partitions increased from 2 to 5"));
         assertTrue(result.getOutput().contains("configuration altered"));
 
-        LaunchResult describeResult = launcher.launch("topic", "describe", "combined-test");
-        String output = describeResult.getOutput();
-        assertTrue(output.contains("Partitions: 5"));
-        assertTrue(output.contains("retention.ms"));
-        assertTrue(output.contains("3600000"));
+        // Verify both partition count and config were changed
+        var topicInfo = topicService.describeTopic(admin(), "combined-test");
+        assertNotNull(topicInfo);
+        assertEquals(5, topicInfo.getPartitions());
+        assertEquals("3600000", topicInfo.getConfig().get("retention.ms"));
     }
 
     @Test
-    void testAlterTopicPartitionsOnly() {
-        launcher.launch("topic", "create", "partitions-only-test", "--partitions", "1");
+    void testAlterTopicPartitionsOnly() throws Exception {
+        topicService.createTopic(admin(), "partitions-only-test", 1, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "alter", "partitions-only-test", "--partitions", "8");
         assertEquals(0, result.exitCode());
@@ -373,7 +377,7 @@ class TopicCommandTest extends ClikTestBase {
     @Test
     void testCreateTopicNoContext() {
         // Delete the context first to ensure no context is set
-        launcher.launch("context", "delete", "test-context", "--force");
+        contextService.deleteContext("test-context");
 
         LaunchResult result = launcher.launch("topic", "create", "no-context-topic");
         assertEquals(1, result.exitCode());

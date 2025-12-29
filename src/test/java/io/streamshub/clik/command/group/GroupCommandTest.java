@@ -24,15 +24,15 @@ import io.quarkus.test.junit.TestProfile;
 import io.quarkus.test.junit.main.LaunchResult;
 import io.quarkus.test.junit.main.QuarkusMainLauncher;
 import io.quarkus.test.junit.main.QuarkusMainTest;
-import io.streamshub.clik.test.ClikTestBase;
+import io.streamshub.clik.test.ClikMainTestBase;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusMainTest
-@TestProfile(ClikTestBase.Profile.class)
-class GroupCommandTest extends ClikTestBase {
+@TestProfile(ClikMainTestBase.Profile.class)
+class GroupCommandTest extends ClikMainTestBase {
 
     QuarkusMainLauncher launcher;
     List<KafkaConsumer<String, String>> consumers = new ArrayList<>();

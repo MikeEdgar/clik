@@ -5,13 +5,11 @@ import java.io.UncheckedIOException;
 import java.net.ServerSocket;
 import java.nio.file.Files;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 import io.quarkus.test.junit.QuarkusTestProfile;
 
-public abstract class ClikTestBase extends CommonTestBase {
+public abstract class ClikMainTestBase extends CommonTestBase {
 
     public static class Profile implements QuarkusTestProfile {
         public Profile() {
@@ -23,37 +21,21 @@ public abstract class ClikTestBase extends CommonTestBase {
                 }
 
                 kafkaBootstrapServers = "localhost:" + randomPort;
-            }
-        }
 
-        @Override
-        public List<TestResourceEntry> testResources() {
-            return List.of(new TestResourceEntry(XdgConfigHomeManager.class));
+                try {
+                    xdgConfigHome = Files.createTempDirectory("clik-test");
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            }
         }
 
         @Override
         public Map<String, String> getConfigOverrides() {
-            Map<String, String> overrides = new HashMap<>(1);
+            Map<String, String> overrides = new HashMap<>(2);
+            overrides.put("xdg.config.home", String.valueOf(xdgConfigHome));
             overrides.put("quarkus.kafka.devservices.port", String.valueOf(randomPort));
             return overrides;
-        }
-    }
-
-    public static class XdgConfigHomeManager implements QuarkusTestResourceLifecycleManager {
-        @Override
-        public Map<String, String> start() {
-            try {
-                xdgConfigHome = Files.createTempDirectory("clik-test");
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-
-            return Map.of("xdg.config.home", String.valueOf(xdgConfigHome));
-        }
-
-        @Override
-        public void stop() {
-            delete(xdgConfigHome);
         }
     }
 }
