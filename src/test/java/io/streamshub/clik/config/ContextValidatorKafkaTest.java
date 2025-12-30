@@ -1,30 +1,32 @@
 package io.streamshub.clik.config;
 
-import io.quarkus.test.junit.QuarkusTest;
 import jakarta.inject.Inject;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
+
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.TestProfile;
+import io.streamshub.clik.test.ClikTestBase;
+
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Tests for ContextValidator that require a running Kafka instance.
  * Uses Kafka Dev Services which automatically starts a Kafka broker for tests.
  */
 @QuarkusTest
-class ContextValidatorKafkaTest {
+@TestProfile(ClikTestBase.Profile.class)
+class ContextValidatorKafkaTest extends ClikTestBase {
 
     @Inject
     ContextValidator validator;
-
-    @ConfigProperty(name = "kafka.bootstrap.servers")
-    String kafkaBootstrapServers;
 
     @Test
     void testVerifyConnectionSuccess() {
         // Create a context config with the dev services Kafka bootstrap servers
         ContextConfig config = ContextConfig.builder()
-                .addCommon("bootstrap.servers", kafkaBootstrapServers)
+                .addCommon("bootstrap.servers", kafkaBootstrapServers())
                 .build();
 
         // Verify connection should succeed with dev services Kafka

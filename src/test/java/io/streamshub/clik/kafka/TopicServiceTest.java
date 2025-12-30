@@ -6,7 +6,6 @@ import java.util.Set;
 
 import jakarta.inject.Inject;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
@@ -27,14 +26,6 @@ class TopicServiceTest extends ClikTestBase {
 
     @Inject
     TopicService topicService;
-
-    @ConfigProperty(name = "kafka.bootstrap.servers")
-    String kafkaBootstrapServers;
-
-    @Override
-    protected String kafkaBootstrapServers() {
-        return kafkaBootstrapServers;
-    }
 
     @Test
     void testCreateTopic() throws Exception {

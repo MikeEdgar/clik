@@ -8,12 +8,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
 import io.quarkus.test.common.QuarkusTestResourceLifecycleManager;
 import io.quarkus.test.junit.QuarkusTestProfile;
 
 public abstract class ClikTestBase extends CommonTestBase {
 
     public static class Profile implements QuarkusTestProfile {
+
+        private static final List<TestResourceEntry> RESOURCES =
+                List.of(new TestResourceEntry(XdgConfigHomeManager.class));
+
         public Profile() {
             if (initialized.compareAndSet(false, true)) {
                 try (ServerSocket serverSocket = new ServerSocket(0)) {
@@ -22,13 +28,13 @@ public abstract class ClikTestBase extends CommonTestBase {
                     throw new UncheckedIOException(e);
                 }
 
-                kafkaBootstrapServers = "localhost:" + randomPort;
+                CommonTestBase.kafkaBootstrapServers = "localhost:" + randomPort;
             }
         }
 
         @Override
         public List<TestResourceEntry> testResources() {
-            return List.of(new TestResourceEntry(XdgConfigHomeManager.class));
+            return RESOURCES;
         }
 
         @Override
@@ -55,5 +61,13 @@ public abstract class ClikTestBase extends CommonTestBase {
         public void stop() {
             delete(xdgConfigHome);
         }
+    }
+
+    @ConfigProperty(name = "kafka.bootstrap.servers")
+    String kafkaBootstrapServers;
+
+    @Override
+    protected String kafkaBootstrapServers() {
+        return kafkaBootstrapServers;
     }
 }

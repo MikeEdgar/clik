@@ -1,22 +1,16 @@
 package io.streamshub.clik.command.group;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.apache.kafka.clients.consumer.CloseOptions;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.GroupProtocol;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -24,6 +18,9 @@ import io.quarkus.test.junit.TestProfile;
 import io.quarkus.test.junit.main.LaunchResult;
 import io.quarkus.test.junit.main.QuarkusMainLauncher;
 import io.quarkus.test.junit.main.QuarkusMainTest;
+import io.streamshub.clik.config.ContextConfig;
+import io.streamshub.clik.config.ContextService;
+import io.streamshub.clik.kafka.TopicService;
 import io.streamshub.clik.test.ClikMainTestBase;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -34,42 +31,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @TestProfile(ClikMainTestBase.Profile.class)
 class GroupCommandTest extends ClikMainTestBase {
 
+    private static AtomicBoolean initialized = new AtomicBoolean(false);
+
     QuarkusMainLauncher launcher;
-    List<KafkaConsumer<String, String>> consumers = new ArrayList<>();
+    ContextService contextService;
+    TopicService topicService;
 
     @BeforeEach
     void setUp(QuarkusMainLauncher launcher) {
         this.launcher = launcher;
 
+        if (initialized.compareAndSet(false, true)) {
+            // Run the application to trigger the startup of the devservices Kafka instance
+            launcher.launch();
+        }
+
+        this.contextService = new ContextService(xdgConfigHome().toString());
+        this.topicService = new TopicService();
+
         // Create and set a test context
-        launcher.launch("context", "create", "test-context", "--bootstrap-servers", kafkaBootstrapServers());
-        launcher.launch("context", "use", "test-context");
-    }
-
-    @Override
-    @AfterEach
-    protected void tearDown() {
-        // Close all consumers
-        for (KafkaConsumer<String, String> consumer : consumers) {
-            try {
-                consumer.close(CloseOptions.timeout(Duration.ofSeconds(5)));
-            } catch (Exception e) {
-                // Ignore cleanup errors
-            }
-        }
-        consumers.clear();
-
-        // Clean up all topics
-        LaunchResult listResult = launcher.launch("topic", "list", "-o", "name");
-        if (listResult.exitCode() == 0 && !listResult.getOutput().contains("No topics found")) {
-            for (String topic : listResult.getOutputStream().stream().map(String::strip).toList()) {
-                if (!topic.isEmpty()) {
-                    launcher.launch("topic", "delete", topic, "--force");
-                }
-            }
-        }
-
-        super.tearDown();
+        contextService.createContext("test-context", ContextConfig.builder()
+                .addCommon("bootstrap.servers", kafkaBootstrapServers())
+                .build(), false);
+        contextService.setCurrentContext("test-context");
     }
 
     @Test
@@ -83,12 +67,12 @@ class GroupCommandTest extends ClikMainTestBase {
     @Test
     void testListGroupsTable() throws Exception {
         // Create test topic and consumer groups
-        launcher.launch("topic", "create", "group-test-topic", "--partitions", "3");
-        createConsumerGroup("test-group-1", "group-test-topic");
-        createConsumerGroup("test-group-2", "group-test-topic");
+        topicService.createTopic(admin(), "group-test-topic", 3, 1, Collections.emptyMap());
 
-        // Wait for groups to stabilize
-        Thread.sleep(2000);
+        CompletableFuture.allOf(
+                createConsumerGroup("test-group-1", "group-test-topic"),
+                createConsumerGroup("test-group-2", "group-test-topic")
+        ).join();
 
         LaunchResult result = launcher.launch("group", "list");
         assertEquals(0, result.exitCode());
@@ -104,13 +88,13 @@ class GroupCommandTest extends ClikMainTestBase {
     @Test
     void testListGroupsNameFormat() throws Exception {
         // Create test topic and consumer groups
-        launcher.launch("topic", "create", "name-test-topic", "--partitions", "2");
-        createConsumerGroup("alpha-group", "name-test-topic");
-        createConsumerGroup("beta-group", "name-test-topic");
-        createConsumerGroup("gamma-group", "name-test-topic");
+        topicService.createTopic(admin(), "name-test-topic", 2, 1, Collections.emptyMap());
 
-        // Wait longer for groups to stabilize and be visible
-        Thread.sleep(4000);
+        CompletableFuture.allOf(
+                createConsumerGroup("alpha-group", "name-test-topic"),
+                createConsumerGroup("beta-group", "name-test-topic"),
+                createConsumerGroup("gamma-group", "name-test-topic")
+        ).join();
 
         LaunchResult result = launcher.launch("group", "list", "-o", "name");
         assertEquals(0, result.exitCode(), "Command should succeed");
@@ -123,10 +107,8 @@ class GroupCommandTest extends ClikMainTestBase {
     @Test
     void testListGroupsJsonFormat() throws Exception {
         // Create test topic and consumer group
-        launcher.launch("topic", "create", "json-group-topic", "--partitions", "2");
-        createConsumerGroup("json-group", "json-group-topic");
-
-        Thread.sleep(2000);
+        topicService.createTopic(admin(), "json-group-topic", 2, 1, Collections.emptyMap());
+        createConsumerGroup("json-group", "json-group-topic").join();
 
         LaunchResult result = launcher.launch("group", "list", "-o", "json");
         assertEquals(0, result.exitCode());
@@ -141,10 +123,8 @@ class GroupCommandTest extends ClikMainTestBase {
     @Test
     void testListGroupsYamlFormat() throws Exception {
         // Create test topic and consumer group
-        launcher.launch("topic", "create", "yaml-group-topic", "--partitions", "2");
-        createConsumerGroup("yaml-group", "yaml-group-topic");
-
-        Thread.sleep(2000);
+        topicService.createTopic(admin(), "yaml-group-topic", 2, 1, Collections.emptyMap());
+        createConsumerGroup("yaml-group", "yaml-group-topic").join();
 
         LaunchResult result = launcher.launch("group", "list", "-o", "yaml");
         assertEquals(0, result.exitCode());
@@ -159,10 +139,8 @@ class GroupCommandTest extends ClikMainTestBase {
     @Test
     void testListGroupsFilterByType() throws Exception {
         // Create test topic and consumer group
-        launcher.launch("topic", "create", "filter-topic", "--partitions", "2");
-        createConsumerGroup("consumer-group-1", "filter-topic", "classic");
-
-        Thread.sleep(2000);
+        topicService.createTopic(admin(), "filter-topic", 2, 1, Collections.emptyMap());
+        createConsumerGroup("consumer-group-1", "filter-topic", "classic").join();
 
         // Filter by consumer type
         LaunchResult consumerResult = launcher.launch("group", "list", "--type", "classic");
@@ -178,10 +156,8 @@ class GroupCommandTest extends ClikMainTestBase {
     @Test
     void testDescribeGroup() throws Exception {
         // Create test topic and consumer group
-        launcher.launch("topic", "create", "describe-topic", "--partitions", "3");
-        createConsumerGroup("describe-group", "describe-topic");
-
-        Thread.sleep(2000);
+        topicService.createTopic(admin(), "describe-topic", 3, 1, Collections.emptyMap());
+        createConsumerGroup("describe-group", "describe-topic").join();
 
         LaunchResult result = launcher.launch("group", "describe", "describe-group");
         assertEquals(0, result.exitCode());
@@ -194,12 +170,13 @@ class GroupCommandTest extends ClikMainTestBase {
     @Test
     void testDescribeGroupWithMembers() throws Exception {
         // Create test topic and multiple consumers
-        launcher.launch("topic", "create", "members-topic", "--partitions", "6");
-        createConsumerGroup("multi-member-group", "members-topic");
-        createConsumerGroup("multi-member-group", "members-topic");
-        createConsumerGroup("multi-member-group", "members-topic");
+        topicService.createTopic(admin(), "members-topic", 6, 1, Collections.emptyMap());
 
-        Thread.sleep(3000); // Wait for rebalance
+        CompletableFuture.allOf(
+                createConsumerGroup("multi-member-group", "members-topic"),
+                createConsumerGroup("multi-member-group", "members-topic"),
+                createConsumerGroup("multi-member-group", "members-topic")
+        ).join();
 
         LaunchResult result = launcher.launch("group", "describe", "multi-member-group");
         assertEquals(0, result.exitCode());
@@ -221,10 +198,8 @@ class GroupCommandTest extends ClikMainTestBase {
     @Test
     void testDescribeGroupJsonFormat() throws Exception {
         // Create test topic and consumer group
-        launcher.launch("topic", "create", "json-describe-topic", "--partitions", "2");
-        createConsumerGroup("json-describe-group", "json-describe-topic");
-
-        Thread.sleep(2000);
+        topicService.createTopic(admin(), "json-describe-topic", 2, 1, Collections.emptyMap());
+        createConsumerGroup("json-describe-group", "json-describe-topic").join();
 
         LaunchResult result = launcher.launch("group", "describe", "json-describe-group", "-o", "json");
         assertEquals(0, result.exitCode());
@@ -238,10 +213,8 @@ class GroupCommandTest extends ClikMainTestBase {
     @Test
     void testDescribeGroupYamlFormat() throws Exception {
         // Create test topic and consumer group
-        launcher.launch("topic", "create", "yaml-describe-topic", "--partitions", "2");
-        createConsumerGroup("yaml-describe-group", "yaml-describe-topic");
-
-        Thread.sleep(2000);
+        topicService.createTopic(admin(), "yaml-describe-topic", 2, 1, Collections.emptyMap());
+        createConsumerGroup("yaml-describe-group", "yaml-describe-topic").join();
 
         LaunchResult result = launcher.launch("group", "describe", "yaml-describe-group", "-o", "yaml");
         assertEquals(0, result.exitCode());
@@ -255,7 +228,7 @@ class GroupCommandTest extends ClikMainTestBase {
     @Test
     void testDescribeGroupNoContext() {
         // Delete the context first to ensure no context is set
-        launcher.launch("context", "delete", "test-context", "--force");
+        contextService.deleteContext("test-context");
 
         LaunchResult result = launcher.launch("group", "describe", "some-group");
         assertEquals(1, result.exitCode());
@@ -265,19 +238,18 @@ class GroupCommandTest extends ClikMainTestBase {
     @Test
     void testDescribeGroupWithOffsets() throws Exception {
         // Create test topic
-        launcher.launch("topic", "create", "offset-test-topic", "--partitions", "2");
+        topicService.createTopic(admin(), "offset-test-topic", 2, 1, Collections.emptyMap());
 
         // Produce some messages
         produceMessages("offset-test-topic", 50);
 
         // Create consumer and consume messages
-        KafkaConsumer<String, String> consumer = createConsumerGroup("offset-test-group", "offset-test-topic");
+        Consumer<String, String> consumer = createConsumerGroup("offset-test-group", "offset-test-topic")
+                .join();
 
         // Poll and commit offsets
         consumer.poll(Duration.ofSeconds(5));
         consumer.commitSync();
-
-        Thread.sleep(2000);
 
         LaunchResult result = launcher.launch("group", "describe", "offset-test-group");
         assertEquals(0, result.exitCode());
@@ -289,39 +261,6 @@ class GroupCommandTest extends ClikMainTestBase {
         assertTrue(output.contains("CURRENT OFFSET"));
         assertTrue(output.contains("LOG END OFFSET"));
         assertTrue(output.contains("LAG"));
-    }
-
-    /**
-     * Helper method to create a consumer group
-     */
-    private KafkaConsumer<String, String> createConsumerGroup(String groupId, String topic) {
-        return createConsumerGroup(groupId, topic, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT));
-    }
-
-    private KafkaConsumer<String, String> createConsumerGroup(String groupId, String topic, String groupProtocol) {
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
-        // Set very long session timeout to keep group alive during tests
-        props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "60000"); // 60 seconds
-        props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "20000"); // 20 seconds
-        props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "120000"); // 120 seconds
-
-        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props);
-        consumer.subscribe(Collections.singletonList(topic));
-
-        // Poll multiple times to ensure group join completes
-        for (int i = 0; i < 3; i++) {
-            consumer.poll(Duration.ofMillis(500));
-        }
-
-        consumers.add(consumer);
-        return consumer;
     }
 
     /**
