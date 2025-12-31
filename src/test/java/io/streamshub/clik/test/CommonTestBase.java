@@ -5,6 +5,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -33,6 +34,7 @@ import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 
@@ -43,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 abstract class CommonTestBase {
 
+    private static final Logger LOGGER = Logger.getLogger(CommonTestBase.class);
     static AtomicBoolean initialized = new AtomicBoolean(false);
     static Path xdgConfigHome;
     static int randomPort;
@@ -219,6 +222,7 @@ abstract class CommonTestBase {
         props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "120000"); // 120 seconds
         Consumer<String, String> consumer = new KafkaConsumer<>(props);
         consumers.add(consumer);
+        Instant beginTime = Instant.now();
 
         return CompletableFuture.supplyAsync(() -> {
             consumer.subscribe(Collections.singleton(topic));
@@ -228,6 +232,10 @@ abstract class CommonTestBase {
                 return isMember(groupId, consumer.groupMetadata().memberId());
             });
 
+            LOGGER.infof("Client %s took %s to become a member of group %s",
+                    consumer.groupMetadata().memberId(),
+                    Duration.between(beginTime, Instant.now()),
+                    groupId);
             return consumer;
         });
     }
