@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @TestProfile(ClikMainTestBase.Profile.class)
 class GroupCommandTest extends ClikMainTestBase {
 
-    private static AtomicBoolean initialized = new AtomicBoolean(false);
+    private AtomicBoolean initialized = new AtomicBoolean(false);
 
     QuarkusMainLauncher launcher;
     ContextService contextService;

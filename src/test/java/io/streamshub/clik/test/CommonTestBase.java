@@ -37,12 +37,15 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.TestInstance.Lifecycle;
 
 import io.streamshub.clik.config.ContextService;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@TestInstance(Lifecycle.PER_CLASS)
 abstract class CommonTestBase {
 
     private static final Logger LOGGER = Logger.getLogger(CommonTestBase.class);
@@ -167,6 +170,7 @@ abstract class CommonTestBase {
                 deleteTopics();
             } finally {
                 admin.close();
+                admin = null;
             }
         }
 
