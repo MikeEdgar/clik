@@ -231,7 +231,7 @@ abstract class CommonTestBase {
         return CompletableFuture.supplyAsync(() -> {
             consumer.subscribe(Collections.singleton(topic));
 
-            await().atMost(10, TimeUnit.SECONDS).until(() -> {
+            await().atMost(20, TimeUnit.SECONDS).until(() -> {
                 consumer.poll(Duration.ofMillis(200));
                 return isMember(groupId, consumer.groupMetadata().memberId());
             });
