@@ -12,9 +12,9 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
@@ -216,6 +216,7 @@ abstract class CommonTestBase {
     }
 
     protected CompletableFuture<Consumer<String, String>> createConsumerGroup(String groupId, String topic, String groupProtocol) {
+        String clientId = "test-client-" + UUID.randomUUID().toString();
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
@@ -224,6 +225,7 @@ abstract class CommonTestBase {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
+        props.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
 
         if (GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT).equals(groupProtocol)) {
             // Set very long session timeout to keep group alive during tests
@@ -241,7 +243,7 @@ abstract class CommonTestBase {
 
             await().atMost(20, TimeUnit.SECONDS).until(() -> {
                 consumer.poll(Duration.ofMillis(200));
-                return isMember(groupId, consumer.groupMetadata().memberId(), beginTime);
+                return isMember(groupId, clientId, beginTime);
             });
 
             LOGGER.infof("Client %s took %s to become a member of group %s",
@@ -252,7 +254,7 @@ abstract class CommonTestBase {
         });
     }
 
-    private boolean isMember(String groupId, String memberId, Instant beginTime) {
+    private boolean isMember(String groupId, String clientId, Instant beginTime) {
         try {
             var group = admin().describeConsumerGroups(Set.of(groupId))
                     .all()
@@ -271,13 +273,13 @@ abstract class CommonTestBase {
                     yield false;
                 }
                 default -> {
-                    if (allMembers.contains(memberId)) {
+                    if (allMembers.stream().anyMatch(memberId -> memberId.contains(clientId))) {
                         yield true;
                     }
 
                     if (Duration.between(beginTime, Instant.now()).compareTo(Duration.ofSeconds(3)) > 0) {
-                        LOGGER.debugf("Group %s (state: %s) does not include member '%s'. Known members: %s",
-                                groupId, group.groupState(), memberId, allMembers);
+                        LOGGER.debugf("Group %s (state: %s) does not include clientId '%s'. Known members: %s",
+                                groupId, group.groupState(), clientId, allMembers);
                     }
 
                     yield false;
