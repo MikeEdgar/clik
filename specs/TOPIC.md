@@ -336,7 +336,7 @@ clik topic delete <name> [<name>...] [OPTIONS]
 
 | Flag | Description |
 |------|-------------|
-| `-f, --force` | Skip confirmation prompt |
+| `-y, --yes` | Automatically confirm deletion without prompting |
 
 **Examples:**
 
@@ -348,7 +348,7 @@ clik topic delete old-topic
 clik topic delete topic1 topic2 topic3
 
 # Delete without confirmation
-clik topic delete old-topic --force
+clik topic delete old-topic --yes
 ```
 
 **Output (with confirmation):**
@@ -366,7 +366,7 @@ Topic "old-topic" deleted.
 
 1. Load configuration from current or specified context
 2. Validate topics exist
-3. Prompt for confirmation (unless `--force`)
+3. Prompt for confirmation (unless `--yes`)
 4. Create AdminClient with context configuration
 5. Delete topics
 6. Print success message for each topic

@@ -344,7 +344,7 @@ clik context delete <name> [OPTIONS]
 
 | Flag | Description |
 |------|-------------|
-| `-f, --force` | Skip confirmation prompt |
+| `-y, --yes` | Automatically confirm deletion without prompting |
 
 **Examples:**
 
@@ -353,14 +353,14 @@ clik context delete <name> [OPTIONS]
 clik context delete old-cluster
 
 # Delete context without confirmation
-clik context delete old-cluster --force
+clik context delete old-cluster --yes
 ```
 
 **Behavior:**
 
 1. Validate context exists
 2. Check if context is currently active
-3. Prompt for confirmation (unless `--force`)
+3. Prompt for confirmation (unless `--yes`)
 4. Delete context directory: `$XDG_CONFIG_HOME/clik/contexts/<name>/`
 5. If deleting current context, clear `current-context` in root config
 6. Print confirmation message

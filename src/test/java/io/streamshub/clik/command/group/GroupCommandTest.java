@@ -276,7 +276,7 @@ class GroupCommandTest extends ClikMainTestBase {
         // Close the consumer so the group becomes empty/eligible for deletion
         close(consumer);
 
-        LaunchResult result = launcher.launch("group", "delete", "delete-test-group", "--force");
+        LaunchResult result = launcher.launch("group", "delete", "delete-test-group", "--yes");
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Group \"delete-test-group\" deleted"));
 
@@ -299,7 +299,7 @@ class GroupCommandTest extends ClikMainTestBase {
         close(consumer2.join());
         close(consumer3.join());
 
-        LaunchResult result = launcher.launch("group", "delete", "delete1", "delete2", "delete3", "--force");
+        LaunchResult result = launcher.launch("group", "delete", "delete1", "delete2", "delete3", "--yes");
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("3 groups deleted"));
 
@@ -312,7 +312,7 @@ class GroupCommandTest extends ClikMainTestBase {
 
     @Test
     void testDeleteGroupNotFound() {
-        LaunchResult result = launcher.launch("group", "delete", "nonexistent-group", "--force");
+        LaunchResult result = launcher.launch("group", "delete", "nonexistent-group", "--yes");
         assertEquals(1, result.exitCode());
         assertTrue(result.getErrorOutput().contains("Failed to delete group(s)"));
     }
@@ -322,7 +322,7 @@ class GroupCommandTest extends ClikMainTestBase {
         // Delete the context first to ensure no context is set
         contextService.deleteContext("test-context");
 
-        LaunchResult result = launcher.launch("group", "delete", "some-group", "--force");
+        LaunchResult result = launcher.launch("group", "delete", "some-group", "--yes");
         assertEquals(1, result.exitCode());
         assertTrue(result.getErrorOutput().contains("No current context set"));
     }

@@ -258,7 +258,7 @@ clik group delete <groupId> [<groupId>...] [OPTIONS]
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `-f, --force` | Skip confirmation prompt | false |
+| `-y, --yes` | Automatically confirm deletion without prompting | false |
 
 **Examples:**
 
@@ -267,10 +267,10 @@ clik group delete <groupId> [<groupId>...] [OPTIONS]
 clik group delete my-consumer-group
 
 # Delete a single group without confirmation
-clik group delete my-consumer-group --force
+clik group delete my-consumer-group --yes
 
 # Delete multiple groups
-clik group delete group1 group2 group3 --force
+clik group delete group1 group2 group3 --yes
 ```
 
 **Output:**
@@ -287,7 +287,7 @@ Group "my-consumer-group" deleted.
 
 1. Load configuration from current context
 2. Create AdminClient with context configuration
-3. If `--force` is not specified, prompt for confirmation
+3. If `--yes` is not specified, prompt for confirmation
 4. Delete the specified consumer group(s) using `admin.deleteConsumerGroups()`
 5. Display success message
 

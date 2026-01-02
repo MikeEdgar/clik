@@ -24,10 +24,10 @@ public class DeleteGroupCommand implements Callable<Integer> {
     List<String> groupIds;
 
     @CommandLine.Option(
-            names = {"-f", "--force"},
-            description = "Skip confirmation prompt"
+            names = {"-y", "--yes"},
+            description = "Automatically confirm deletion without prompting"
     )
-    boolean force;
+    boolean autoConfirm;
 
     @Inject
     KafkaClientFactory clientFactory;
@@ -37,8 +37,8 @@ public class DeleteGroupCommand implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        // Prompt for confirmation unless --force
-        if (!force) {
+        // Prompt for confirmation unless --yes
+        if (!autoConfirm) {
             String groupList = groupIds.size() == 1
                     ? "group \"" + groupIds.get(0) + "\""
                     : groupIds.size() + " groups";

@@ -264,7 +264,7 @@ class ContextCommandTest extends ClikMainTestBase {
                 .build(), false);
 
         // Delete the context
-        LaunchResult result = launcher.launch("context", "delete", "test-context", "--force");
+        LaunchResult result = launcher.launch("context", "delete", "test-context", "--yes");
 
         assertEquals(0, result.exitCode());
         assertEquals("Context \"test-context\" deleted.", result.getOutput().trim());
@@ -282,7 +282,7 @@ class ContextCommandTest extends ClikMainTestBase {
         contextService.setCurrentContext("test-context");
 
         // Delete the current context
-        LaunchResult result = launcher.launch("context", "delete", "test-context", "--force");
+        LaunchResult result = launcher.launch("context", "delete", "test-context", "--yes");
 
         assertEquals(0, result.exitCode());
         assertEquals("Context \"test-context\" deleted.", result.getOutput().trim());
@@ -292,7 +292,7 @@ class ContextCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    @Launch(value = {"context", "delete", "nonexistent", "--force"}, exitCode = 1)
+    @Launch(value = {"context", "delete", "nonexistent", "--yes"}, exitCode = 1)
     void testDeleteContextNotFound(LaunchResult result) {
         assertEquals(1, result.exitCode());
         assertTrue(result.getErrorOutput().contains("does not exist"));
