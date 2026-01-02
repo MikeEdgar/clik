@@ -85,6 +85,7 @@ jobs:
           path: |
             target/surefire-reports/
             target/failsafe-reports/
+            target/test.log
           if-no-files-found: ignore
 
       # Upload native executable for verification

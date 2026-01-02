@@ -37,6 +37,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
 
@@ -146,9 +147,15 @@ abstract class CommonTestBase {
         }
     }
 
+    @BeforeAll
+    void initialize() {
+        LOGGER.infof("***** Before tests in %s", getClass().getName());
+    }
+
     @AfterAll
-    static void complete() {
+    void complete() {
         delete(xdgConfigHome);
+        LOGGER.infof("***** After tests in %s", getClass().getName());
     }
 
     @AfterEach
