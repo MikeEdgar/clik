@@ -20,6 +20,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -27,13 +29,16 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.MemberDescription;
+import org.apache.kafka.clients.admin.MemberToRemove;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.GroupType;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.jboss.logging.Logger;
@@ -108,44 +113,89 @@ abstract class CommonTestBase {
         }
     }
 
-    private Map<String, GroupType> allGroups(Admin admin) {
+    private Map<String, GroupListing> allGroups(Admin admin) {
         return admin.listGroups()
                 .all()
                 .toCompletionStage()
                 .toCompletableFuture()
                 .join()
                 .stream()
-                .collect(Collectors.toMap(GroupListing::groupId, listing -> listing.type().orElse(GroupType.CLASSIC)));
+                .collect(Collectors.toMap(GroupListing::groupId, Function.identity()));
+    }
+
+    private void removeLingeringMembers(Map<String, GroupListing> allGroups) {
+        var nonEmptyGroups = allGroups.values()
+                .stream()
+                .filter(listing -> !listing.groupState().map(GroupState.EMPTY::equals).orElse(true))
+                .map(GroupListing::groupId)
+                .toList();
+
+        var memberRemoval = admin.describeConsumerGroups(nonEmptyGroups)
+            .all()
+            .toCompletionStage()
+            .toCompletableFuture()
+            .join()
+            .values()
+            .stream()
+            .map(group -> {
+                var key = group.groupId();
+                var value = group.members().stream()
+                    .map(member -> member.groupInstanceId().orElse(""))
+                    .filter(Predicate.not(String::isEmpty))
+                    .map(MemberToRemove::new)
+                    .toList();
+                return Map.entry(key, new RemoveMembersFromConsumerGroupOptions(value));
+            })
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        memberRemoval.forEach(admin::removeMembersFromConsumerGroup);
+    }
+
+    private void deleteConsumerGroups(Map<String, GroupListing> allGroups) throws Exception {
+        admin.deleteConsumerGroups(allGroups.keySet())
+            .deletedGroups()
+            .entrySet()
+            .stream()
+            .map(e -> {
+                return e.getValue().toCompletionStage().handle((nothing, error) -> {
+                    if (error == null ||
+                            error instanceof GroupIdNotFoundException ||
+                            error instanceof GroupNotEmptyException) {
+                        return (Void) null;
+                    }
+
+                    throw new CompletionException(error);
+                }).toCompletableFuture();
+            })
+            .reduce(CompletableFuture::allOf)
+            .orElseGet(() -> CompletableFuture.completedFuture(null))
+            .get(10, TimeUnit.SECONDS);
     }
 
     public void deleteConsumerGroups() {
         try {
-            Map<String, GroupType> allGroups = allGroups(admin);
+            Map<String, GroupListing> allGroups = allGroups(admin);
 
             while (!allGroups.isEmpty()) {
-                admin.deleteConsumerGroups(allGroups.keySet())
-                    .deletedGroups()
-                    .entrySet()
-                    .stream()
-                    .map(e -> {
-                        return e.getValue().toCompletionStage().handle((nothing, error) -> {
-                            if (error == null || error instanceof GroupIdNotFoundException) {
-                                return (Void) null;
-                            }
-
-                            throw new CompletionException(error);
-                        }).toCompletableFuture();
-                    })
-                    .reduce(CompletableFuture::allOf)
-                    .orElseGet(() -> CompletableFuture.completedFuture(null))
-                    .get(10, TimeUnit.SECONDS);
-
+                removeLingeringMembers(allGroups);
+                deleteConsumerGroups(allGroups);
                 allGroups = allGroups(admin);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (Exception e) {
             fail(e);
+        }
+    }
+
+    protected <K, V> void close(Consumer<K, V> consumer) {
+        try {
+            String groupId = consumer.groupMetadata().groupId();
+            var removal = new MemberToRemove(consumer.groupMetadata().groupInstanceId().orElseThrow());
+            consumer.close(CloseOptions.timeout(Duration.ofSeconds(5)));
+            admin.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions(List.of(removal)));
+        } catch (Exception e) {
+            // Ignore cleanup errors
         }
     }
 
@@ -164,11 +214,7 @@ abstract class CommonTestBase {
     protected void tearDown() {
         // Close all consumers
         for (Consumer<String, String> consumer : consumers) {
-            try {
-                consumer.close(CloseOptions.timeout(Duration.ofSeconds(5)));
-            } catch (Exception e) {
-                // Ignore cleanup errors
-            }
+            close(consumer);
         }
 
         consumers.clear();
@@ -247,8 +293,8 @@ abstract class CommonTestBase {
                 return isMember(groupId, clientId, beginTime);
             });
 
-            LOGGER.infof("Client %s took %s to become a member of group %s",
-                    consumer.groupMetadata().memberId(),
+            LOGGER.infof("Client instance %s took %s to become a member of group %s",
+                    clientId,
                     Duration.between(beginTime, Instant.now()),
                     groupId);
             return consumer;

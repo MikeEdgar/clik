@@ -274,7 +274,7 @@ class GroupCommandTest extends ClikMainTestBase {
         Consumer<String, String> consumer = createConsumerGroup("delete-test-group", "delete-test-topic").join();
 
         // Close the consumer so the group becomes empty/eligible for deletion
-        consumer.close(org.apache.kafka.clients.consumer.CloseOptions.timeout(Duration.ofSeconds(5)));
+        close(consumer);
 
         LaunchResult result = launcher.launch("group", "delete", "delete-test-group", "--force");
         assertEquals(0, result.exitCode());
@@ -289,15 +289,15 @@ class GroupCommandTest extends ClikMainTestBase {
     void testDeleteMultipleGroups() throws Exception {
         // Create test topic and consumer groups
         topicService.createTopic(admin(), "multi-delete-topic", 2, 1, Collections.emptyMap());
-        CompletableFuture<Consumer<String, String>> consumer1 = createConsumerGroup("delete1", "multi-delete-topic");
-        CompletableFuture<Consumer<String, String>> consumer2 = createConsumerGroup("delete2", "multi-delete-topic");
-        CompletableFuture<Consumer<String, String>> consumer3 = createConsumerGroup("delete3", "multi-delete-topic");
+        var consumer1 = createConsumerGroup("delete1", "multi-delete-topic");
+        var consumer2 = createConsumerGroup("delete2", "multi-delete-topic");
+        var consumer3 = createConsumerGroup("delete3", "multi-delete-topic");
         CompletableFuture.allOf(consumer1, consumer2, consumer3).join();
 
         // Close all consumers so the groups become empty/eligible for deletion
-        consumer1.join().close(org.apache.kafka.clients.consumer.CloseOptions.timeout(Duration.ofSeconds(5)));
-        consumer2.join().close(org.apache.kafka.clients.consumer.CloseOptions.timeout(Duration.ofSeconds(5)));
-        consumer3.join().close(org.apache.kafka.clients.consumer.CloseOptions.timeout(Duration.ofSeconds(5)));
+        close(consumer1.join());
+        close(consumer2.join());
+        close(consumer3.join());
 
         LaunchResult result = launcher.launch("group", "delete", "delete1", "delete2", "delete3", "--force");
         assertEquals(0, result.exitCode());
