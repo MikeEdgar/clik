@@ -8,6 +8,7 @@ import picocli.CommandLine;
         subcommands = {
                 ListGroupsCommand.class,
                 DescribeGroupCommand.class,
+                DeleteGroupCommand.class,
                 CommandLine.HelpCommand.class
         }
 )

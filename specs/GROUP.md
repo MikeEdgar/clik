@@ -243,21 +243,67 @@ offsets:
 - No current context set
 - Authorization failure
 
-### Command: `clik group delete` (Future Enhancement)
+### Command: `clik group delete`
 
-**Status:** Not implemented.
+**Status:** ✅ COMPLETED
 
-Delete one or more consumer groups. This operation will be added in a future release.
+Delete one or more consumer groups.
 
-**Planned Syntax:**
+**Syntax:**
 ```bash
 clik group delete <groupId> [<groupId>...] [OPTIONS]
 ```
 
-**Planned Options:**
-- `-f, --force` - Skip confirmation prompt
+**Options:**
 
-**Note:** For now, use the Kafka Admin Client or kafka-consumer-groups.sh to delete consumer groups.
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-f, --force` | Skip confirmation prompt | false |
+
+**Examples:**
+
+```bash
+# Delete a single group (with confirmation prompt)
+clik group delete my-consumer-group
+
+# Delete a single group without confirmation
+clik group delete my-consumer-group --force
+
+# Delete multiple groups
+clik group delete group1 group2 group3 --force
+```
+
+**Output:**
+
+```
+# Single group
+Group "my-consumer-group" deleted.
+
+# Multiple groups
+3 groups deleted.
+```
+
+**Behavior:**
+
+1. Load configuration from current context
+2. Create AdminClient with context configuration
+3. If `--force` is not specified, prompt for confirmation
+4. Delete the specified consumer group(s) using `admin.deleteConsumerGroups()`
+5. Display success message
+
+**Important Notes:**
+
+- Consumer groups must have no active members to be deleted
+- If a group has active consumers, the operation will fail
+- Deletion is permanent and cannot be undone
+- Internal Kafka groups (prefixed with `__`) cannot be deleted
+
+**Error Conditions:**
+
+- Group does not exist
+- Group has active members
+- No current context set
+- Authorization failure
 
 ### Command: `clik group reset-offsets` (Future Enhancement)
 
@@ -578,8 +624,8 @@ Kafka Streams application groups:
 - [x] Lag calculation for consumer and classic groups
 - [x] GroupIdNotFoundException error handling
 
-### Phase 2: Advanced Group Management (Future)
-- [ ] `clik group delete` command
+### Phase 2: Advanced Group Management (In Progress)
+- [x] `clik group delete` command
 - [ ] `clik group reset-offsets` command with multiple offset reset strategies
 - [ ] Better error messages and validation
 - [ ] Performance optimizations for large clusters
