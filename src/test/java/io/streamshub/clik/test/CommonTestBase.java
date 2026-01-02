@@ -25,6 +25,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.GroupListing;
+import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -240,7 +241,7 @@ abstract class CommonTestBase {
 
             await().atMost(20, TimeUnit.SECONDS).until(() -> {
                 consumer.poll(Duration.ofMillis(200));
-                return isMember(groupId, consumer.groupMetadata().memberId());
+                return isMember(groupId, consumer.groupMetadata().memberId(), beginTime);
             });
 
             LOGGER.infof("Client %s took %s to become a member of group %s",
@@ -251,7 +252,7 @@ abstract class CommonTestBase {
         });
     }
 
-    private boolean isMember(String groupId, String memberId) {
+    private boolean isMember(String groupId, String memberId, Instant beginTime) {
         try {
             var group = admin().describeConsumerGroups(Set.of(groupId))
                     .all()
@@ -259,11 +260,28 @@ abstract class CommonTestBase {
                     .toCompletableFuture()
                     .join()
                     .get(groupId);
+            var allMembers = group.members().stream().map(MemberDescription::consumerId).toList();
 
             return switch(group.groupState()) {
-                case UNKNOWN, DEAD, EMPTY -> false;
-                default -> group.members().stream()
-                    .anyMatch(m -> Objects.equals(memberId, m.consumerId()));
+                case UNKNOWN, DEAD, EMPTY -> {
+                    if (Duration.between(beginTime, Instant.now()).compareTo(Duration.ofSeconds(3)) > 0) {
+                        LOGGER.debugf("State of group %s invalid: %s. Members: %s",
+                                groupId, group.groupState(), allMembers);
+                    }
+                    yield false;
+                }
+                default -> {
+                    if (allMembers.contains(memberId)) {
+                        yield true;
+                    }
+
+                    if (Duration.between(beginTime, Instant.now()).compareTo(Duration.ofSeconds(3)) > 0) {
+                        LOGGER.debugf("Group %s (state: %s) does not include member '%s'. Known members: %s",
+                                groupId, group.groupState(), memberId, allMembers);
+                    }
+
+                    yield false;
+                }
             };
         } catch (CompletionException e) {
             return false;
