@@ -20,10 +20,10 @@ public class DeleteContextCommand implements Callable<Integer> {
     String name;
 
     @CommandLine.Option(
-            names = {"-f", "--force"},
-            description = "Skip confirmation prompt"
+            names = {"-y", "--yes"},
+            description = "Automatically confirm deletion without prompting"
     )
-    boolean force;
+    boolean autoConfirm;
 
     @Inject
     ContextService contextService;
@@ -37,8 +37,8 @@ public class DeleteContextCommand implements Callable<Integer> {
             return 1;
         }
 
-        // Prompt for confirmation unless --force
-        if (!force) {
+        // Prompt for confirmation unless --yes
+        if (!autoConfirm) {
             System.out.print("Delete context \"" + name + "\"? This cannot be undone. [y/N]: ");
             String response;
             try (Scanner scanner = new Scanner(System.in)) {

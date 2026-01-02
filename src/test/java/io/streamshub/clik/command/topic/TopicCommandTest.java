@@ -196,7 +196,7 @@ class TopicCommandTest extends ClikMainTestBase {
     void testDeleteTopic() throws Exception {
         topicService.createTopic(admin(), "delete-test", 1, 1, Collections.emptyMap());
 
-        LaunchResult result = launcher.launch("topic", "delete", "delete-test", "--force");
+        LaunchResult result = launcher.launch("topic", "delete", "delete-test", "--yes");
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Topic \"delete-test\" deleted"));
 
@@ -211,7 +211,7 @@ class TopicCommandTest extends ClikMainTestBase {
         topicService.createTopic(admin(), "delete2", 1, 1, Collections.emptyMap());
         topicService.createTopic(admin(), "delete3", 1, 1, Collections.emptyMap());
 
-        LaunchResult result = launcher.launch("topic", "delete", "delete1", "delete2", "delete3", "--force");
+        LaunchResult result = launcher.launch("topic", "delete", "delete1", "delete2", "delete3", "--yes");
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("3 topics deleted"));
 
