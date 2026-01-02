@@ -12,6 +12,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -225,7 +226,7 @@ abstract class CommonTestBase {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
-        props.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
+        props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, clientId);
 
         if (GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT).equals(groupProtocol)) {
             // Set very long session timeout to keep group alive during tests
@@ -262,7 +263,11 @@ abstract class CommonTestBase {
                     .toCompletableFuture()
                     .join()
                     .get(groupId);
-            var allMembers = group.members().stream().map(MemberDescription::consumerId).toList();
+            var allMembers = group.members().stream()
+                    .map(MemberDescription::groupInstanceId)
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .toList();
 
             return switch(group.groupState()) {
                 case UNKNOWN, DEAD, EMPTY -> {
