@@ -20,10 +20,12 @@ import io.quarkus.test.junit.main.QuarkusMainLauncher;
 import io.quarkus.test.junit.main.QuarkusMainTest;
 import io.streamshub.clik.config.ContextConfig;
 import io.streamshub.clik.config.ContextService;
+import io.streamshub.clik.kafka.GroupService;
 import io.streamshub.clik.kafka.TopicService;
 import io.streamshub.clik.test.ClikMainTestBase;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -36,6 +38,7 @@ class GroupCommandTest extends ClikMainTestBase {
     QuarkusMainLauncher launcher;
     ContextService contextService;
     TopicService topicService;
+    GroupService groupService;
 
     @BeforeEach
     void setUp(QuarkusMainLauncher launcher) {
@@ -48,6 +51,7 @@ class GroupCommandTest extends ClikMainTestBase {
 
         this.contextService = new ContextService(xdgConfigHome().toString());
         this.topicService = new TopicService();
+        this.groupService = new GroupService();
 
         // Create and set a test context
         contextService.createContext("test-context", ContextConfig.builder()
@@ -261,6 +265,66 @@ class GroupCommandTest extends ClikMainTestBase {
         assertTrue(output.contains("CURRENT OFFSET"));
         assertTrue(output.contains("LOG END OFFSET"));
         assertTrue(output.contains("LAG"));
+    }
+
+    @Test
+    void testDeleteGroup() throws Exception {
+        // Create test topic and consumer group
+        topicService.createTopic(admin(), "delete-test-topic", 2, 1, Collections.emptyMap());
+        Consumer<String, String> consumer = createConsumerGroup("delete-test-group", "delete-test-topic").join();
+
+        // Close the consumer so the group becomes empty/eligible for deletion
+        close(consumer);
+
+        LaunchResult result = launcher.launch("group", "delete", "delete-test-group", "--force");
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("Group \"delete-test-group\" deleted"));
+
+        // Verify group was deleted
+        var groups = groupService.listGroups(admin(), null);
+        assertFalse(groups.stream().anyMatch(g -> g.getGroupId().equals("delete-test-group")));
+    }
+
+    @Test
+    void testDeleteMultipleGroups() throws Exception {
+        // Create test topic and consumer groups
+        topicService.createTopic(admin(), "multi-delete-topic", 2, 1, Collections.emptyMap());
+        var consumer1 = createConsumerGroup("delete1", "multi-delete-topic");
+        var consumer2 = createConsumerGroup("delete2", "multi-delete-topic");
+        var consumer3 = createConsumerGroup("delete3", "multi-delete-topic");
+        CompletableFuture.allOf(consumer1, consumer2, consumer3).join();
+
+        // Close all consumers so the groups become empty/eligible for deletion
+        close(consumer1.join());
+        close(consumer2.join());
+        close(consumer3.join());
+
+        LaunchResult result = launcher.launch("group", "delete", "delete1", "delete2", "delete3", "--force");
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("3 groups deleted"));
+
+        // Verify groups were deleted
+        var groups = groupService.listGroups(admin(), null);
+        assertFalse(groups.stream().anyMatch(g -> g.getGroupId().equals("delete1")));
+        assertFalse(groups.stream().anyMatch(g -> g.getGroupId().equals("delete2")));
+        assertFalse(groups.stream().anyMatch(g -> g.getGroupId().equals("delete3")));
+    }
+
+    @Test
+    void testDeleteGroupNotFound() {
+        LaunchResult result = launcher.launch("group", "delete", "nonexistent-group", "--force");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("Failed to delete group(s)"));
+    }
+
+    @Test
+    void testDeleteGroupNoContext() {
+        // Delete the context first to ensure no context is set
+        contextService.deleteContext("test-context");
+
+        LaunchResult result = launcher.launch("group", "delete", "some-group", "--force");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("No current context set"));
     }
 
     /**

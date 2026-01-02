@@ -142,6 +142,7 @@ Clik implements Kafka consumer group monitoring and management. See `specs/GROUP
 **Implemented Commands:**
 - `clik group list` - List all consumer groups with state and member count
 - `clik group describe <groupId>` - Display detailed group information including member assignments and lag
+- `clik group delete <groupId>` - Delete one or more consumer groups
 
 **Key Features:**
 - Support for all Kafka 4.1 group types: consumer, classic, share, streams
@@ -294,18 +295,18 @@ See `specs/GROUP.md` for detailed specification.
 - Consumer lag monitoring and calculation
 - Multiple output formats (table, yaml, json, name)
 - Integration with context management
-- Comprehensive test coverage (13 integration tests in GroupCommandTest, GroupCommandIT)
+- Comprehensive test coverage (17 integration tests in GroupCommandTest, GroupCommandIT)
 - Unit tests for services (8 tests in GroupServiceTest)
 
-**Future Enhancements:**
-- Consumer group deletion
-- Offset reset operations
-- Consumer group quota management
-- Real-time lag monitoring
+**Phase 2: Advanced Group Management (In Progress)**
+- ✅ Consumer group deletion (delete command)
+- Offset reset operations (planned)
+- Consumer group quota management (planned)
+- Real-time lag monitoring (planned)
 
 ### Overall Test Coverage
 
-**Total Tests: 134 passing**
-- Unit tests: 59 tests (ContextService, ConfigurationLoader, ContextValidator, TopicService, GroupService, KafkaClientFactory)
-- Integration tests: 75 tests (ContextCommandTest + TopicCommandTest + GroupCommandTest + native IT variants)
+**Total Tests: 139 passing**
+- Unit tests: 60 tests (ContextService, ConfigurationLoader, ContextValidator, TopicService, GroupService, KafkaClientFactory)
+- Integration tests: 79 tests (ContextCommandTest + TopicCommandTest + GroupCommandTest + native IT variants)
 - All tests passing in both JVM and native modes

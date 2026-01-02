@@ -194,6 +194,23 @@ public class GroupService {
     }
 
     /**
+     * Delete consumer groups
+     *
+     * @param admin Admin client
+     * @param groupIds Collection of group IDs to delete
+     * @throws ExecutionException if the operation fails
+     * @throws InterruptedException if the operation is interrupted
+     */
+    public void deleteGroups(Admin admin, Collection<String> groupIds)
+            throws ExecutionException, InterruptedException {
+        admin.deleteConsumerGroups(groupIds)
+                .all()
+                .toCompletionStage()
+                .toCompletableFuture()
+                .get();
+    }
+
+    /**
      * Determine group type based on description
      */
     private String determineGroupType(GroupType type) {
