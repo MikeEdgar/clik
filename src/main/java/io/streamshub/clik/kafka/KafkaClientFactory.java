@@ -6,6 +6,14 @@ import io.streamshub.clik.config.ContextService;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.util.Optional;
 import java.util.Properties;
@@ -37,5 +45,60 @@ public class KafkaClientFactory {
         ContextConfig config = contextService.loadContext(contextName);
         Properties props = configurationLoader.mergeConfiguration(config, KafkaClientType.ADMIN);
         return Admin.create(props);
+    }
+
+    /**
+     * Create KafkaProducer from current context
+     */
+    public Producer<String, String> createProducer() {
+        Optional<String> currentContext = contextService.getCurrentContext();
+        if (!currentContext.isPresent()) {
+            throw new IllegalStateException("No current context set. Use 'clik context use <name>' to set a context.");
+        }
+        return createProducer(currentContext.get());
+    }
+
+    /**
+     * Create KafkaProducer from specific context
+     */
+    public Producer<String, String> createProducer(String contextName) {
+        ContextConfig config = contextService.loadContext(contextName);
+        Properties props = configurationLoader.mergeConfiguration(config, KafkaClientType.PRODUCER);
+
+        // Set required serializers
+        props.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                StringSerializer.class.getName());
+        props.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                StringSerializer.class.getName());
+
+        return new KafkaProducer<>(props);
+    }
+
+    /**
+     * Create KafkaConsumer from current context
+     */
+    public Consumer<String, String> createConsumer(String groupId) {
+        Optional<String> currentContext = contextService.getCurrentContext();
+        if (!currentContext.isPresent()) {
+            throw new IllegalStateException("No current context set. Use 'clik context use <name>' to set a context.");
+        }
+        return createConsumer(currentContext.get(), groupId);
+    }
+
+    /**
+     * Create KafkaConsumer from specific context
+     */
+    public Consumer<String, String> createConsumer(String contextName, String groupId) {
+        ContextConfig config = contextService.loadContext(contextName);
+        Properties props = configurationLoader.mergeConfiguration(config, KafkaClientType.CONSUMER);
+
+        // Set required deserializers and group.id
+        props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                StringDeserializer.class.getName());
+        props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                StringDeserializer.class.getName());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+
+        return new KafkaConsumer<>(props);
     }
 }
