@@ -2,14 +2,19 @@ package io.streamshub.clik.command.group;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -323,6 +328,266 @@ class GroupCommandTest extends ClikMainTestBase {
         contextService.deleteContext("test-context");
 
         LaunchResult result = launcher.launch("group", "delete", "some-group", "--yes");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("No current context set"));
+    }
+
+    @Test
+    void testAlterGroupToEarliest() throws Exception {
+        // Create topic and produce messages
+        topicService.createTopic(admin(), "alter-earliest-topic", 3, 1, Collections.emptyMap());
+        produceMessages("alter-earliest-topic", 100);
+
+        // Create consumer group and consume messages
+        Consumer<String, String> consumer = createConsumerGroup("alter-earliest-group", "alter-earliest-topic").join();
+        consumer.poll(Duration.ofSeconds(5));
+        consumer.commitSync();
+        close(consumer);
+
+        // Verify offsets are not at earliest
+        var offsetsBefore = groupService.getGroupOffsetMap(admin(), "alter-earliest-group");
+        assertTrue(offsetsBefore.values().stream().anyMatch(o -> o.offset() > 0));
+
+        // Alter offsets to earliest
+        LaunchResult result = launcher.launch("group", "alter", "alter-earliest-group",
+                "--to-earliest", "--yes");
+
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("Altered offsets"));
+        assertTrue(result.getOutput().contains("alter-earliest-group"));
+
+        // Verify offsets were reset to 0
+        var offsetsAfter = groupService.getGroupOffsetMap(admin(), "alter-earliest-group");
+        for (OffsetAndMetadata offset : offsetsAfter.values()) {
+            assertEquals(0, offset.offset());
+        }
+    }
+
+    @Test
+    void testAlterGroupToLatest() throws Exception {
+        // Create topic and produce messages
+        topicService.createTopic(admin(), "alter-latest-topic", 2, 1, Collections.emptyMap());
+        produceMessages("alter-latest-topic", 50);
+
+        // Create consumer group with offsets at 0
+        Consumer<String, String> consumer = createConsumerGroup("alter-latest-group", "alter-latest-topic").join();
+        consumer.poll(Duration.ofMillis(100)); // Don't consume messages
+        consumer.commitSync();
+        close(consumer);
+
+        // Alter offsets to latest
+        LaunchResult result = launcher.launch("group", "alter", "alter-latest-group",
+                "--to-latest", "--yes");
+
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("Altered offsets"));
+
+        // Verify offsets are at end (50 messages / 2 partitions = ~25 per partition)
+        var offsetsAfter = groupService.getGroupOffsetMap(admin(), "alter-latest-group");
+        for (OffsetAndMetadata offset : offsetsAfter.values()) {
+            assertTrue(offset.offset() >= 20);  // Should be around 25
+        }
+    }
+
+    @Test
+    void testAlterGroupToSpecificOffset() throws Exception {
+        // Create topic
+        topicService.createTopic(admin(), "alter-offset-topic", 2, 1, Collections.emptyMap());
+        produceMessages("alter-offset-topic", 100);
+
+        // Create consumer group
+        Consumer<String, String> consumer = createConsumerGroup("alter-offset-group", "alter-offset-topic").join();
+        consumer.poll(Duration.ofMillis(100));
+        consumer.commitSync();
+        close(consumer);
+
+        // Alter specific partition to offset 10
+        LaunchResult result = launcher.launch("group", "alter", "alter-offset-group",
+                "--to-offset", "10:alter-offset-topic:0", "--yes");
+
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("Altered offsets"));
+
+        // Verify only partition 0 was changed to offset 10
+        var offsets = groupService.getGroupOffsetMap(admin(), "alter-offset-group");
+        OffsetAndMetadata partition0 = offsets.get(new TopicPartition("alter-offset-topic", 0));
+        assertNotNull(partition0);
+        assertEquals(10, partition0.offset());
+    }
+
+    @Test
+    void testAlterGroupShiftBy() throws Exception {
+        // Create topic with 3 partitions
+        topicService.createTopic(admin(), "shift-topic", 3, 1, Collections.emptyMap());
+        produceMessages("shift-topic", 100);
+
+        // Create consumer group
+        Consumer<String, String> consumer = createConsumerGroup("shift-group", "shift-topic").join();
+        consumer.poll(Duration.ofSeconds(2));
+        consumer.commitSync();
+        close(consumer);
+
+        // Get current offsets
+        var offsetsBefore = groupService.getGroupOffsetMap(admin(), "shift-group");
+
+        // Shift partition 0 forward by 5, partition 2 back by 3, leave partition 1 unchanged
+        LaunchResult result = launcher.launch("group", "alter", "shift-group",
+                "--shift-by", "5:shift-topic:0",
+                "--shift-by", "-3:shift-topic:2",
+                "--yes");
+
+        assertEquals(0, result.exitCode());
+
+        // Verify only specified partitions were shifted
+        var offsetsAfter = groupService.getGroupOffsetMap(admin(), "shift-group");
+        TopicPartition partition0 = new TopicPartition("shift-topic", 0);
+        TopicPartition partition1 = new TopicPartition("shift-topic", 1);
+        TopicPartition partition2 = new TopicPartition("shift-topic", 2);
+
+        long before0 = offsetsBefore.get(partition0).offset();
+        long after0 = offsetsAfter.get(partition0).offset();
+        assertEquals(before0 + 5, after0, "Partition 0 should be shifted forward by 5");
+
+        long before1 = offsetsBefore.get(partition1).offset();
+        long after1 = offsetsAfter.get(partition1).offset();
+        assertEquals(before1, after1, "Partition 1 should remain unchanged");
+
+        long before2 = offsetsBefore.get(partition2).offset();
+        long after2 = offsetsAfter.get(partition2).offset();
+        assertEquals(before2 - 3, after2, "Partition 2 should be shifted back by 3");
+    }
+
+    @Test
+    void testAlterGroupDeleteOffsets() throws Exception {
+        // Create topic
+        topicService.createTopic(admin(), "delete-offset-topic", 2, 1, Collections.emptyMap());
+        produceMessages("delete-offset-topic", 50);
+
+        // Create consumer group
+        Consumer<String, String> consumer = createConsumerGroup("delete-offset-group", "delete-offset-topic").join();
+        consumer.poll(Duration.ofSeconds(2));
+        consumer.commitSync();
+        close(consumer);
+
+        // Verify offsets exist
+        var offsetsBefore = groupService.getGroupOffsetMap(admin(), "delete-offset-group");
+        assertEquals(2, offsetsBefore.size());
+
+        // Delete offsets for partition 0
+        LaunchResult result = launcher.launch("group", "alter", "delete-offset-group",
+                "--delete", "delete-offset-topic:0", "--yes");
+
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("Deleted offsets"));
+
+        // Verify partition 0 offset was deleted
+        var offsetsAfter = groupService.getGroupOffsetMap(admin(), "delete-offset-group");
+        assertEquals(1, offsetsAfter.size());
+        assertFalse(offsetsAfter.containsKey(new TopicPartition("delete-offset-topic", 0)));
+        assertTrue(offsetsAfter.containsKey(new TopicPartition("delete-offset-topic", 1)));
+    }
+
+    @Test
+    void testAlterGroupWithTopicOnly() throws Exception {
+        // Create two topics
+        topicService.createTopic(admin(), "topic-a", 2, 1, Collections.emptyMap());
+        topicService.createTopic(admin(), "topic-b", 2, 1, Collections.emptyMap());
+        produceMessages("topic-a", 50);
+        produceMessages("topic-b", 50);
+
+        // Create consumer group consuming from both topics
+        Consumer<String, String> consumer = createConsumerGroup("multi-topic-group", "topic-a").join();
+        consumer.subscribe(List.of("topic-a", "topic-b"));
+        consumer.poll(Duration.ofSeconds(3));
+        consumer.commitSync();
+        close(consumer);
+
+        // Reset only topic-a to earliest
+        LaunchResult result = launcher.launch("group", "alter", "multi-topic-group",
+                "--to-earliest", "topic-a", "--yes");
+
+        assertEquals(0, result.exitCode());
+
+        // Verify only topic-a partitions were reset
+        var offsets = groupService.getGroupOffsetMap(admin(), "multi-topic-group");
+        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+            if (entry.getKey().topic().equals("topic-a")) {
+                assertEquals(0, entry.getValue().offset());
+            } else if (entry.getKey().topic().equals("topic-b")) {
+                assertTrue(entry.getValue().offset() > 0);
+            }
+        }
+    }
+
+    @Test
+    void testAlterGroupActiveMembers() throws Exception {
+        // Create topic
+        topicService.createTopic(admin(), "active-topic", 2, 1, Collections.emptyMap());
+
+        // Create consumer group with active consumer (don't close it)
+        Consumer<String, String> consumer = createConsumerGroup("active-group", "active-topic").join();
+
+        // Try to alter offsets - should fail
+        LaunchResult result = launcher.launch("group", "alter", "active-group",
+                "--to-earliest", "--yes");
+
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("has active members"));
+        assertTrue(result.getErrorOutput().contains("Stop all consumers"));
+
+        // Clean up
+        close(consumer);
+    }
+
+    @Test
+    void testAlterGroupNotFound() {
+        LaunchResult result = launcher.launch("group", "alter", "nonexistent-group",
+                "--to-earliest", "--yes");
+
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("not found"));
+    }
+
+    @Test
+    void testAlterGroupNoOffsets() throws Exception {
+        // Create topic and group
+        topicService.createTopic(admin(), "no-offsets-topic", 1, 1, Collections.emptyMap());
+        Consumer<String, String> consumer = createConsumerGroup("no-offsets-group", "no-offsets-topic").join();
+        close(consumer);
+        groupService.deleteGroupOffsets(admin(), "no-offsets-group", Set.of(new TopicPartition("no-offsets-topic", 0)));
+
+        LaunchResult result = launcher.launch("group", "alter", "no-offsets-group",
+                "--to-earliest", "--yes");
+
+        assertEquals(1, result.exitCode());
+        // Group with no offsets returns "has no committed offsets" error
+        assertTrue(result.getErrorOutput().contains("has no committed offsets"));
+    }
+
+    @Test
+    void testAlterGroupNoOptions() throws Exception {
+        // Create topic and group
+        topicService.createTopic(admin(), "no-opts-topic", 1, 1, Collections.emptyMap());
+        Consumer<String, String> consumer = createConsumerGroup("no-opts-group", "no-opts-topic").join();
+        consumer.poll(Duration.ofMillis(100));
+        consumer.commitSync();
+        close(consumer);
+
+        // Try to alter without any options
+        LaunchResult result = launcher.launch("group", "alter", "no-opts-group");
+
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("At least one offset option must be specified"));
+    }
+
+    @Test
+    void testAlterGroupNoContext() {
+        // Delete the context
+        contextService.deleteContext("test-context");
+
+        LaunchResult result = launcher.launch("group", "alter", "some-group",
+                "--to-earliest", "--yes");
+
         assertEquals(1, result.exitCode());
         assertTrue(result.getErrorOutput().contains("No current context set"));
     }

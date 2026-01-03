@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -208,6 +209,77 @@ public class GroupService {
                 .toCompletionStage()
                 .toCompletableFuture()
                 .get();
+    }
+
+    /**
+     * Alter consumer group offsets
+     *
+     * @param admin Admin client
+     * @param groupId Group ID
+     * @param offsets Map of topic partitions to new offsets
+     * @throws ExecutionException if the operation fails
+     * @throws InterruptedException if the operation is interrupted
+     */
+    public void alterGroupOffsets(Admin admin, String groupId,
+            Map<TopicPartition, OffsetAndMetadata> offsets)
+            throws ExecutionException, InterruptedException {
+        admin.alterConsumerGroupOffsets(groupId, offsets)
+                .all()
+                .toCompletionStage()
+                .toCompletableFuture()
+                .get();
+    }
+
+    /**
+     * Delete consumer group offsets
+     *
+     * @param admin Admin client
+     * @param groupId Group ID
+     * @param partitions Set of topic partitions to delete
+     * @throws ExecutionException if the operation fails
+     * @throws InterruptedException if the operation is interrupted
+     */
+    public void deleteGroupOffsets(Admin admin, String groupId,
+            Set<TopicPartition> partitions)
+            throws ExecutionException, InterruptedException {
+        admin.deleteConsumerGroupOffsets(groupId, partitions)
+                .all()
+                .toCompletionStage()
+                .toCompletableFuture()
+                .get();
+    }
+
+    /**
+     * Get all topic partitions tracked by a consumer group
+     *
+     * @param admin Admin client
+     * @param groupId Group ID
+     * @return Set of topic partitions with committed offsets
+     * @throws ExecutionException if the operation fails
+     * @throws InterruptedException if the operation is interrupted
+     */
+    public Map<TopicPartition, OffsetAndMetadata> getGroupOffsetMap(Admin admin, String groupId)
+            throws ExecutionException, InterruptedException {
+        return admin.listConsumerGroupOffsets(groupId)
+                .partitionsToOffsetAndMetadata()
+                .get();
+    }
+
+    /**
+     * Check if group has active members
+     *
+     * @param admin Admin client
+     * @param groupId Group ID
+     * @return true if group has active members
+     * @throws ExecutionException if the operation fails
+     * @throws InterruptedException if the operation is interrupted
+     */
+    public boolean hasActiveMembers(Admin admin, String groupId)
+            throws ExecutionException, InterruptedException {
+        Map<String, ConsumerGroupDescription> descriptions = admin.describeConsumerGroups(
+                Collections.singleton(groupId)).all().get();
+        ConsumerGroupDescription desc = descriptions.get(groupId);
+        return desc != null && !desc.members().isEmpty();
     }
 
     /**

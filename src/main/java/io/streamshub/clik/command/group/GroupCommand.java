@@ -9,6 +9,7 @@ import picocli.CommandLine;
                 ListGroupsCommand.class,
                 DescribeGroupCommand.class,
                 DeleteGroupCommand.class,
+                AlterGroupCommand.class,
                 CommandLine.HelpCommand.class
         }
 )
