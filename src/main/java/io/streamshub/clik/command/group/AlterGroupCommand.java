@@ -5,12 +5,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.Stack;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
@@ -25,7 +27,9 @@ import org.apache.kafka.common.TopicPartition;
 import io.streamshub.clik.kafka.GroupService;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import picocli.CommandLine;
+import picocli.CommandLine.Model.ArgSpec;
 import picocli.CommandLine.Model.CommandSpec;
+import picocli.CommandLine.Model.OptionSpec;
 
 @CommandLine.Command(
         name = "alter",
@@ -44,25 +48,27 @@ public class AlterGroupCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"--to-earliest"},
-            description = "Reset to earliest offset (optionally specify topic[:partition])"
+            description = "Reset to earliest offset (optionally specify topic[:partition])",
+            preprocessor = AllTopicsOptionProcessor.class
     )
     List<String> toEarliest = new ArrayList<>();
 
     @CommandLine.Option(
             names = {"--to-latest"},
-            description = "Reset to latest offset (optionally specify topic[:partition])"
+            description = "Reset to latest offset (optionally specify topic[:partition])",
+            preprocessor = AllTopicsOptionProcessor.class
     )
     List<String> toLatest = new ArrayList<>();
 
     @CommandLine.Option(
             names = {"--to-offset"},
-            description = "Set to specific offset (format: offset:topic[:partition])"
+            description = "Set to specific offset (format: offset:topic:partition)"
     )
     List<String> toOffset = new ArrayList<>();
 
     @CommandLine.Option(
             names = {"--shift-by"},
-            description = "Shift offset by N (format: offset:topic[:partition])"
+            description = "Shift offset by N (format: offset:topic:partition)"
     )
     List<String> shiftBy = new ArrayList<>();
 
@@ -104,6 +110,41 @@ public class AlterGroupCommand implements Callable<Integer> {
         return commandSpec.commandLine().getErr();
     }
 
+    static class AllTopicsOptionProcessor implements CommandLine.IParameterPreprocessor {
+        @Override
+        public boolean preprocess(Stack<String> args,
+                CommandSpec commandSpec,
+                ArgSpec argSpec,
+                Map<String, Object> info) {
+            /*
+             * When no parameter has been attached to the option (e.g. via '='), check if the
+             * next argument is a an optional topic name or some other known option.
+             *
+             */
+            if (noParameterPresent(info) && nextArgIsOption(args, commandSpec)) {
+                args.push(""); // act as if the user specified an empty topic name
+            }
+            return false; // picocli's internal parsing is resumed for this option
+        }
+
+        private boolean noParameterPresent(Map<String, Object> info) {
+            return " ".equals(info.get("separator"));
+        }
+
+        private boolean nextArgIsOption(Stack<String> args, CommandSpec commandSpec) {
+            if (args.isEmpty()) {
+                return true;
+            }
+
+            return commandSpec.args().stream()
+                    .filter(OptionSpec.class::isInstance)
+                    .map(OptionSpec.class::cast)
+                    .map(OptionSpec::names)
+                    .flatMap(Arrays::stream)
+                    .anyMatch(args.peek()::equals);
+        }
+    }
+
     @Override
     public Integer call() {
         // Validate at least one option is specified
@@ -114,8 +155,8 @@ public class AlterGroupCommand implements Callable<Integer> {
             err().println("Available options:");
             err().println("  --to-earliest [topic[:partition]]    Reset to earliest offset");
             err().println("  --to-latest [topic[:partition]]      Reset to latest offset");
-            err().println("  --to-offset offset:topic[:partition] Set to specific offset");
-            err().println("  --shift-by offset:topic[:partition]  Shift offset by N");
+            err().println("  --to-offset offset:topic:partition   Set to specific offset");
+            err().println("  --shift-by offset:topic:partition    Shift offset by N");
             err().println("  --to-datetime datetime[:topic[:partition]]  Reset to timestamp");
             err().println("  --by-duration duration[:topic[:partition]]  Shift by duration");
             err().println("  --delete [topic[:partition]]         Delete offsets");
@@ -273,7 +314,7 @@ public class AlterGroupCommand implements Callable<Integer> {
      */
     private void processToOffset(Map<TopicPartition, OffsetAndMetadata> offsetsToAlter, Set<TopicPartition> groupPartitions) {
         for (String spec : toOffset) {
-            Map.Entry<Long, Set<TopicPartition>> parsed = parseOffsetSpec(spec, groupPartitions);
+            Map.Entry<Long, Set<TopicPartition>> parsed = parseOffsetSpec(spec, groupPartitions, false);
             long offset = parsed.getKey();
             for (TopicPartition tp : parsed.getValue()) {
                 offsetsToAlter.put(tp, new OffsetAndMetadata(offset));
@@ -287,7 +328,7 @@ public class AlterGroupCommand implements Callable<Integer> {
      */
     private boolean processShiftBy(Map<TopicPartition, OffsetAndMetadata> offsetsToAlter, Set<TopicPartition> groupPartitions, Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
         for (String spec : shiftBy) {
-            Map.Entry<Long, Set<TopicPartition>> parsed = parseOffsetSpec(spec, groupPartitions);
+            Map.Entry<Long, Set<TopicPartition>> parsed = parseOffsetSpec(spec, groupPartitions, true);
             long shift = parsed.getKey();
             for (TopicPartition tp : parsed.getValue()) {
                 long currentOffset = currentOffsets.get(tp).offset();
@@ -390,22 +431,25 @@ public class AlterGroupCommand implements Callable<Integer> {
     }
 
     /**
-     * Parse offset specification (offset:topic[:partition])
+     * Parse offset specification (offset:topic:partition)
+     * @param spec The offset specification string
+     * @param groupPartitions Available partitions in the group
+     * @param allowNegative Whether to allow negative offset values (for shift-by)
      */
-    private Map.Entry<Long, Set<TopicPartition>> parseOffsetSpec(String spec, Set<TopicPartition> groupPartitions) {
-        String[] parts = spec.split(":", 2);
-        if (parts.length < 2) {
+    private Map.Entry<Long, Set<TopicPartition>> parseOffsetSpec(String spec, Set<TopicPartition> groupPartitions, boolean allowNegative) {
+        String[] parts = spec.split(":", 3);
+        if (parts.length < 3) {
             throw new IllegalArgumentException(
-                    "Invalid format: expected 'offset:topic[:partition]', got: " + spec);
+                    "Invalid format: expected 'offset:topic:partition', got: " + spec);
         }
 
         try {
             long offset = Long.parseLong(parts[0]);
-            if (offset < 0) {
+            if (!allowNegative && offset < 0) {
                 throw new IllegalArgumentException("Offset must be non-negative: " + offset);
             }
 
-            Set<TopicPartition> partitions = parseTopicPartitionSpec(parts[1], groupPartitions);
+            Set<TopicPartition> partitions = parseTopicPartitionSpec(parts[1] + ':' + parts[2], groupPartitions);
             return Map.entry(offset, partitions);
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid offset number: " + parts[0]);

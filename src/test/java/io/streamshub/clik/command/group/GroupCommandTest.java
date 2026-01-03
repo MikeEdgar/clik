@@ -350,7 +350,7 @@ class GroupCommandTest extends ClikMainTestBase {
 
         // Alter offsets to earliest
         LaunchResult result = launcher.launch("group", "alter", "alter-earliest-group",
-                "--to-earliest", "", "--yes");
+                "--to-earliest", "--yes");
 
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Altered offsets"));
@@ -377,7 +377,7 @@ class GroupCommandTest extends ClikMainTestBase {
 
         // Alter offsets to latest
         LaunchResult result = launcher.launch("group", "alter", "alter-latest-group",
-                "--to-latest", "", "--yes");
+                "--to-latest", "--yes");
 
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Altered offsets"));
@@ -417,11 +417,11 @@ class GroupCommandTest extends ClikMainTestBase {
 
     @Test
     void testAlterGroupShiftBy() throws Exception {
-        // Create topic
-        topicService.createTopic(admin(), "shift-topic", 2, 1, Collections.emptyMap());
+        // Create topic with 3 partitions
+        topicService.createTopic(admin(), "shift-topic", 3, 1, Collections.emptyMap());
         produceMessages("shift-topic", 100);
 
-        // Create consumer group at offset 20
+        // Create consumer group
         Consumer<String, String> consumer = createConsumerGroup("shift-group", "shift-topic").join();
         consumer.poll(Duration.ofSeconds(2));
         consumer.commitSync();
@@ -430,19 +430,31 @@ class GroupCommandTest extends ClikMainTestBase {
         // Get current offsets
         var offsetsBefore = groupService.getGroupOffsetMap(admin(), "shift-group");
 
-        // Shift forward by 5
+        // Shift partition 0 forward by 5, partition 2 back by 3, leave partition 1 unchanged
         LaunchResult result = launcher.launch("group", "alter", "shift-group",
-                "--shift-by", "5:", "--yes");
+                "--shift-by", "5:shift-topic:0",
+                "--shift-by", "-3:shift-topic:2",
+                "--yes");
 
         assertEquals(0, result.exitCode());
 
-        // Verify offsets increased by 5
+        // Verify only specified partitions were shifted
         var offsetsAfter = groupService.getGroupOffsetMap(admin(), "shift-group");
-        for (TopicPartition tp : offsetsBefore.keySet()) {
-            long before = offsetsBefore.get(tp).offset();
-            long after = offsetsAfter.get(tp).offset();
-            assertEquals(before + 5, after);
-        }
+        TopicPartition partition0 = new TopicPartition("shift-topic", 0);
+        TopicPartition partition1 = new TopicPartition("shift-topic", 1);
+        TopicPartition partition2 = new TopicPartition("shift-topic", 2);
+
+        long before0 = offsetsBefore.get(partition0).offset();
+        long after0 = offsetsAfter.get(partition0).offset();
+        assertEquals(before0 + 5, after0, "Partition 0 should be shifted forward by 5");
+
+        long before1 = offsetsBefore.get(partition1).offset();
+        long after1 = offsetsAfter.get(partition1).offset();
+        assertEquals(before1, after1, "Partition 1 should remain unchanged");
+
+        long before2 = offsetsBefore.get(partition2).offset();
+        long after2 = offsetsAfter.get(partition2).offset();
+        assertEquals(before2 - 3, after2, "Partition 2 should be shifted back by 3");
     }
 
     @Test
@@ -517,7 +529,7 @@ class GroupCommandTest extends ClikMainTestBase {
 
         // Try to alter offsets - should fail
         LaunchResult result = launcher.launch("group", "alter", "active-group",
-                "--to-earliest", "", "--yes");
+                "--to-earliest", "--yes");
 
         assertEquals(1, result.exitCode());
         assertTrue(result.getErrorOutput().contains("has active members"));
@@ -530,7 +542,7 @@ class GroupCommandTest extends ClikMainTestBase {
     @Test
     void testAlterGroupNotFound() {
         LaunchResult result = launcher.launch("group", "alter", "nonexistent-group",
-                "--to-earliest", "", "--yes");
+                "--to-earliest", "--yes");
 
         assertEquals(1, result.exitCode());
         assertTrue(result.getErrorOutput().contains("not found"));
@@ -545,7 +557,7 @@ class GroupCommandTest extends ClikMainTestBase {
         groupService.deleteGroupOffsets(admin(), "no-offsets-group", Set.of(new TopicPartition("no-offsets-topic", 0)));
 
         LaunchResult result = launcher.launch("group", "alter", "no-offsets-group",
-                "--to-earliest", "", "--yes");
+                "--to-earliest", "--yes");
 
         assertEquals(1, result.exitCode());
         // Group with no offsets returns "has no committed offsets" error
@@ -574,7 +586,7 @@ class GroupCommandTest extends ClikMainTestBase {
         contextService.deleteContext("test-context");
 
         LaunchResult result = launcher.launch("group", "alter", "some-group",
-                "--to-earliest", "", "--yes");
+                "--to-earliest", "--yes");
 
         assertEquals(1, result.exitCode());
         assertTrue(result.getErrorOutput().contains("No current context set"));

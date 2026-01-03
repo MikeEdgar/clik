@@ -322,8 +322,8 @@ clik group alter <groupId> [OPTIONS]
 |------|-------------|---------|
 | `--to-earliest [topic[:partition]]` | Reset to earliest available offset | - |
 | `--to-latest [topic[:partition]]` | Reset to latest offset (skip all messages) | - |
-| `--to-offset <offset>:topic[:partition]` | Set to specific offset | - |
-| `--shift-by <offset>:topic[:partition]` | Shift current offset by N (positive or negative) | - |
+| `--to-offset <offset>:topic:partition` | Set to specific offset | - |
+| `--shift-by <offset>:topic:partition` | Shift current offset by N (positive or negative) | - |
 | `--to-datetime <timestamp>[:topic[:partition]]` | Reset to first offset at or after ISO-8601 timestamp | - |
 | `--by-duration <duration>[:topic[:partition]]` | Shift back by ISO-8601 duration (e.g., PT1H for 1 hour) | - |
 | `--delete [topic[:partition]]` | Delete offsets from group | - |
@@ -331,10 +331,24 @@ clik group alter <groupId> [OPTIONS]
 
 **Topic:Partition Syntax:**
 
-The command supports flexible topic:partition specifications:
-- **Omit both**: Apply to all partitions in the group (e.g., `--to-earliest ""`)
+The command supports different topic:partition specifications depending on the option:
+
+**For `--to-earliest`, `--to-latest`, `--to-datetime`, `--by-duration`, `--delete`:**
+- **Omit parameter**: Apply to all partitions in the group (e.g., `--to-earliest` or `--to-earliest ""`)
 - **Topic only**: Apply to all partitions of the topic (e.g., `--to-earliest mytopic`)
 - **Topic:partition**: Apply to specific partition (e.g., `--to-earliest mytopic:0`)
+
+**For `--to-offset` and `--shift-by`:**
+- **Required format**: `offset:topic:partition` (all three components required)
+- Example: `--to-offset 1000:mytopic:0`
+
+**Note:** For `--to-earliest` and `--to-latest`, the topic:partition parameter is completely optional. If omitted, the command automatically applies to all partitions in the group:
+
+```bash
+# These are equivalent:
+clik group alter my-group --to-earliest "" --yes
+clik group alter my-group --to-earliest --yes
+```
 
 **Examples:**
 
@@ -354,11 +368,11 @@ clik group alter my-group --to-latest "" --yes
 # Set specific partition to offset 1000
 clik group alter my-group --to-offset 1000:mytopic:0 --yes
 
-# Shift all offsets forward by 100
-clik group alter my-group --shift-by 100: --yes
+# Shift partition 0 forward by 100
+clik group alter my-group --shift-by 100:mytopic:0 --yes
 
-# Shift specific topic back by 50
-clik group alter my-group --shift-by -50:mytopic --yes
+# Shift partition 0 back by 50
+clik group alter my-group --shift-by -50:mytopic:0 --yes
 
 # Reset to specific timestamp (ISO-8601 format)
 clik group alter my-group --to-datetime 2026-01-01T00:00:00Z: --yes
