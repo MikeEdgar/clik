@@ -107,7 +107,7 @@ public class ListContextsCommand implements Callable<Integer> {
             ));
         }
 
-        String table = AsciiTable.getTable(AsciiTable.FANCY_ASCII, rows, List.of(
+        String table = AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, List.of(
                 new Column().header("CURRENT").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.CENTER).with(r -> r.current),
                 new Column().header("NAME").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.LEFT).with(r -> r.name),
                 new Column().header("BOOTSTRAP SERVERS").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.LEFT).with(r -> r.bootstrapServers),
