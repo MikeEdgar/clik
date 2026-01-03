@@ -276,17 +276,10 @@ public class GroupService {
      */
     public boolean hasActiveMembers(Admin admin, String groupId)
             throws ExecutionException, InterruptedException {
-        try {
-            Map<String, ConsumerGroupDescription> descriptions = admin.describeConsumerGroups(
-                    Collections.singleton(groupId)).all().get();
-            ConsumerGroupDescription desc = descriptions.get(groupId);
-            return desc != null && !desc.members().isEmpty();
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof org.apache.kafka.common.errors.GroupIdNotFoundException) {
-                return false;
-            }
-            throw e;
-        }
+        Map<String, ConsumerGroupDescription> descriptions = admin.describeConsumerGroups(
+                Collections.singleton(groupId)).all().get();
+        ConsumerGroupDescription desc = descriptions.get(groupId);
+        return desc != null && !desc.members().isEmpty();
     }
 
     /**

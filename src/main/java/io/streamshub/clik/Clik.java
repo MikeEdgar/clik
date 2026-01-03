@@ -26,6 +26,10 @@ import picocli.CommandLine.IVersionProvider;
 public class Clik {
     public static final String NAME = "clik";
 
+    private Clik() {
+        // No instances
+    }
+
     @Singleton
     public static class Version implements IVersionProvider {
         @ConfigProperty(name = "quarkus.application.version")

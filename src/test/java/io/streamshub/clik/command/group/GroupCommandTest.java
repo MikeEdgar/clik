@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -532,9 +533,23 @@ class GroupCommandTest extends ClikMainTestBase {
                 "--to-earliest", "", "--yes");
 
         assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("not found"));
+    }
+
+    @Test
+    void testAlterGroupNoOffsets() throws Exception {
+        // Create topic and group
+        topicService.createTopic(admin(), "no-offsets-topic", 1, 1, Collections.emptyMap());
+        Consumer<String, String> consumer = createConsumerGroup("no-offsets-group", "no-offsets-topic").join();
+        close(consumer);
+        groupService.deleteGroupOffsets(admin(), "no-offsets-group", Set.of(new TopicPartition("no-offsets-topic", 0)));
+
+        LaunchResult result = launcher.launch("group", "alter", "no-offsets-group",
+                "--to-earliest", "", "--yes");
+
+        assertEquals(1, result.exitCode());
         // Group with no offsets returns "has no committed offsets" error
-        assertTrue(result.getErrorOutput().contains("has no committed offsets") ||
-                   result.getErrorOutput().contains("not found"));
+        assertTrue(result.getErrorOutput().contains("has no committed offsets"));
     }
 
     @Test
