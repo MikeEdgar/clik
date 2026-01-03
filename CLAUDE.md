@@ -249,6 +249,59 @@ When building native images with GraalVM:
 - Reflection, resources, and dynamic features may require registration
 - Quarkus handles most Kafka client native image configuration automatically
 
+### Git Commit Conventions
+
+#### Commit Message Format
+
+Standard commit messages should follow this structure:
+
+```
+<Short summary line>
+
+<Detailed explanation of changes, including context and reasoning>
+
+<Optional: Examples of usage or key changes>
+
+Assisted-by: Claude Code (<model-version>) <noreply@anthropic.com>
+Signed-off-by: <committer-name> <committer-email>
+Co-authored-by: Claude <model-version> <noreply@anthropic.com>
+```
+
+**Important Guidelines:**
+- **Summary line**: Concise description (50-72 characters preferred)
+- **Body**: Detailed explanation of what changed and why
+- **Omit test results**: Do not include test counts or pass/fail results in commit messages
+- **Attribution format**: Always include the three attribution lines at the end with appropriate substitutions:
+  - `<model-version>`: Current Claude model (e.g., "Sonnet 4.5", "Opus 4")
+  - `<committer-name>`: Full name of the person creating the commit
+  - `<committer-email>`: Email address of the committer
+
+**Example:**
+
+```
+Implement group alter command for offset management
+
+Add comprehensive `clik group alter` command that supports modifying
+and deleting consumer group offsets with flexible topic:partition syntax.
+
+Features:
+- Six offset strategies: --to-earliest, --to-latest, --to-offset,
+  --shift-by, --to-datetime, --by-duration
+- Offset deletion via --delete flag
+- Flexible topic:partition targeting (all/topic/specific partition)
+- Confirmation prompt with --yes override
+- Active member validation (prevents accidental changes)
+
+Examples:
+  clik group alter my-group --to-earliest ""
+  clik group alter my-group --to-latest mytopic
+  clik group alter my-group --shift-by -50:mytopic
+
+Assisted-by: Claude Code (Sonnet 4.5) <noreply@anthropic.com>
+Signed-off-by: Michael Edgar <medgar@redhat.com>
+Co-authored-by: Claude Sonnet 4.5 <noreply@anthropic.com>
+```
+
 ## Roadmap
 
 Current implementation status across all feature areas:
