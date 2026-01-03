@@ -143,6 +143,7 @@ Clik implements Kafka consumer group monitoring and management. See `specs/GROUP
 - `clik group list` - List all consumer groups with state and member count
 - `clik group describe <groupId>` - Display detailed group information including member assignments and lag
 - `clik group delete <groupId>` - Delete one or more consumer groups
+- `clik group alter <groupId>` - Alter consumer group offsets or delete offsets from the group
 
 **Key Features:**
 - Support for all Kafka 4.1 group types: consumer, classic, share, streams
@@ -151,10 +152,17 @@ Clik implements Kafka consumer group monitoring and management. See `specs/GROUP
 - Multiple output formats (table, yaml, json, name)
 - Group type filtering
 - Member and coordinator information
+- **Offset management** with multiple strategies:
+  - Reset to earliest/latest
+  - Set to specific offset
+  - Shift by relative amount
+  - Reset to timestamp or duration
+  - Delete offsets from group
+- Flexible topic:partition syntax for offset targeting
 - Integration with context management
 
 **Key Services:**
-- `GroupService` - Operations for listing and describing groups, lag calculation
+- `GroupService` - Operations for listing, describing, deleting groups, offset management, and lag calculation
 - `GroupInfo` / `GroupMemberInfo` / `CoordinatorInfo` / `OffsetLagInfo` - Data models with @RegisterForReflection
 
 ### Configuration
@@ -295,18 +303,28 @@ See `specs/GROUP.md` for detailed specification.
 - Consumer lag monitoring and calculation
 - Multiple output formats (table, yaml, json, name)
 - Integration with context management
-- Comprehensive test coverage (17 integration tests in GroupCommandTest, GroupCommandIT)
-- Unit tests for services (8 tests in GroupServiceTest)
+- Comprehensive test coverage (27 integration tests in GroupCommandTest, GroupCommandIT)
+- Unit tests for services (9 tests in GroupServiceTest)
 
-**Phase 2: Advanced Group Management (In Progress)**
+**Phase 2: Advanced Group Management (✅ COMPLETED)**
 - ✅ Consumer group deletion (delete command)
-- Offset reset operations (planned)
-- Consumer group quota management (planned)
-- Real-time lag monitoring (planned)
+- ✅ Offset management (alter command with multiple strategies)
+  - Reset to earliest/latest offsets
+  - Set specific offsets
+  - Shift offsets by relative amount
+  - Reset to timestamp or duration
+  - Delete offsets from group
+  - Topic:partition targeting syntax
+
+**Future Enhancements:**
+- Consumer group quota management
+- Real-time lag monitoring
+- Group rebalancing controls
+- Consumer group export/import
 
 ### Overall Test Coverage
 
-**Total Tests: 139 passing**
+**Total Tests: 149 passing**
 - Unit tests: 60 tests (ContextService, ConfigurationLoader, ContextValidator, TopicService, GroupService, KafkaClientFactory)
-- Integration tests: 79 tests (ContextCommandTest + TopicCommandTest + GroupCommandTest + native IT variants)
+- Integration tests: 89 tests (29 ContextCommandTest + 27 TopicCommandTest + 27 GroupCommandTest + native IT variants)
 - All tests passing in both JVM and native modes

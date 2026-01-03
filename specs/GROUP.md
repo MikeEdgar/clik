@@ -305,21 +305,139 @@ Group "my-consumer-group" deleted.
 - No current context set
 - Authorization failure
 
-### Command: `clik group reset-offsets` (Future Enhancement)
+### Command: `clik group alter`
 
-**Status:** Not implemented.
+**Status:** ✅ COMPLETED
 
-Reset consumer group offsets to a specific position. This operation will be added in a future release.
+Alter consumer group offsets using multiple strategies or delete offsets from the group.
 
-**Planned Options:**
-- `--topic <topic>` - Topic to reset
-- `--to-earliest` - Reset to earliest offset
-- `--to-latest` - Reset to latest offset
-- `--to-offset <offset>` - Reset to specific offset
-- `--to-datetime <timestamp>` - Reset to timestamp
-- `--dry-run` - Show what would be reset without applying changes
+**Syntax:**
+```bash
+clik group alter <groupId> [OPTIONS]
+```
 
-**Note:** For now, use kafka-consumer-groups.sh for offset reset operations.
+**Options:**
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--to-earliest [topic[:partition]]` | Reset to earliest available offset | - |
+| `--to-latest [topic[:partition]]` | Reset to latest offset (skip all messages) | - |
+| `--to-offset <offset>:topic[:partition]` | Set to specific offset | - |
+| `--shift-by <offset>:topic[:partition]` | Shift current offset by N (positive or negative) | - |
+| `--to-datetime <timestamp>[:topic[:partition]]` | Reset to first offset at or after ISO-8601 timestamp | - |
+| `--by-duration <duration>[:topic[:partition]]` | Shift back by ISO-8601 duration (e.g., PT1H for 1 hour) | - |
+| `--delete [topic[:partition]]` | Delete offsets from group | - |
+| `-y, --yes` | Automatically confirm alteration without prompting | false |
+
+**Topic:Partition Syntax:**
+
+The command supports flexible topic:partition specifications:
+- **Omit both**: Apply to all partitions in the group (e.g., `--to-earliest ""`)
+- **Topic only**: Apply to all partitions of the topic (e.g., `--to-earliest mytopic`)
+- **Topic:partition**: Apply to specific partition (e.g., `--to-earliest mytopic:0`)
+
+**Examples:**
+
+```bash
+# Reset all partitions to earliest offset
+clik group alter my-group --to-earliest "" --yes
+
+# Reset specific topic to earliest
+clik group alter my-group --to-earliest mytopic
+
+# Reset specific partition to earliest
+clik group alter my-group --to-earliest mytopic:0 --yes
+
+# Reset all to latest offset (skip existing messages)
+clik group alter my-group --to-latest "" --yes
+
+# Set specific partition to offset 1000
+clik group alter my-group --to-offset 1000:mytopic:0 --yes
+
+# Shift all offsets forward by 100
+clik group alter my-group --shift-by 100: --yes
+
+# Shift specific topic back by 50
+clik group alter my-group --shift-by -50:mytopic --yes
+
+# Reset to specific timestamp (ISO-8601 format)
+clik group alter my-group --to-datetime 2026-01-01T00:00:00Z: --yes
+
+# Reset specific topic to 1 hour ago
+clik group alter my-group --by-duration PT1H:mytopic --yes
+
+# Delete offsets for specific partition
+clik group alter my-group --delete mytopic:0 --yes
+
+# Delete all offsets for a topic
+clik group alter my-group --delete mytopic --yes
+
+# Multiple operations (reset one topic, delete another)
+clik group alter my-group \
+  --to-earliest topic-a \
+  --delete topic-b:0 \
+  --yes
+```
+
+**Output:**
+
+```
+# Single operation
+Altered offsets for 3 partition(s) in group "my-group".
+
+# Delete operation
+Deleted offsets for 2 partition(s) from group "my-group".
+
+# Combined operations
+Altered offsets for 3 partition(s) and deleted offsets for 2 partition(s) in group "my-group".
+```
+
+**Behavior:**
+
+1. Load configuration from current context
+2. Validate that group exists
+3. Check that group has no active members (operation fails if members are active)
+4. Retrieve current group offsets
+5. Prompt for confirmation (unless `--yes` specified)
+6. Parse topic:partition specifications
+7. Resolve target offsets based on strategy
+8. Apply offset changes or deletions via Kafka Admin API
+9. Display success message with partition counts
+
+**Important Notes:**
+
+- **Active members required**: Consumer group must have no active members to alter offsets
+- **Confirmation prompt**: Command prompts for confirmation by default (use `--yes` to skip)
+- **Irreversible**: Offset alterations cannot be undone (backup current offsets if needed)
+- **Strategies can't be mixed on same partition**: Don't use multiple strategies on the same partition
+- **Timestamp strategy**: Uses `--to-datetime` for absolute timestamps, `--by-duration` for relative
+- **Negative shifts**: `--shift-by` accepts negative values to shift backwards
+
+**Error Conditions:**
+
+- Group does not exist
+- Group has active members (must stop all consumers first)
+- No current context set
+- No options specified
+- Invalid topic:partition syntax
+- Partition not found in group offsets
+- Invalid offset value (negative)
+- Invalid ISO-8601 timestamp or duration format
+- Authorization failure
+
+**ISO-8601 Format Examples:**
+
+**Timestamps (--to-datetime):**
+- `2026-01-01T00:00:00Z` - Midnight January 1, 2026 UTC
+- `2026-01-15T14:30:00-05:00` - January 15, 2026 at 2:30 PM EST
+- `2026-03-01T12:00:00.000Z` - With milliseconds
+
+**Durations (--by-duration):**
+- `PT1H` - 1 hour ago
+- `PT30M` - 30 minutes ago
+- `PT2H30M` - 2 hours and 30 minutes ago
+- `P1D` - 1 day ago
+- `P1DT12H` - 1 day and 12 hours ago
 
 ## Integration with Context Management
 
@@ -624,11 +742,14 @@ Kafka Streams application groups:
 - [x] Lag calculation for consumer and classic groups
 - [x] GroupIdNotFoundException error handling
 
-### Phase 2: Advanced Group Management (In Progress)
+### Phase 2: Advanced Group Management (✅ COMPLETED)
 - [x] `clik group delete` command
-- [ ] `clik group reset-offsets` command with multiple offset reset strategies
-- [ ] Better error messages and validation
-- [ ] Performance optimizations for large clusters
+- [x] `clik group alter` command with multiple offset strategies (replaces reset-offsets)
+  - Supports --to-earliest, --to-latest, --to-offset, --shift-by, --to-datetime, --by-duration
+  - Topic:partition syntax for flexible targeting
+  - Offset deletion support via --delete flag
+  - Confirmation prompts with --yes override
+  - Active member validation
 
 ### Phase 3: Advanced Features (Future)
 - [ ] Consumer group quota management
