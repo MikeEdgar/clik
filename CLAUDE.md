@@ -68,14 +68,16 @@ The codebase follows a standard Maven project layout:
   - `command/context/` - Context management commands
   - `command/topic/` - Topic management commands
   - `command/group/` - Consumer group management commands
+  - `command/produce/` - Message producer command
+  - `command/consume/` - Message consumer command
   - `config/` - Configuration services (ContextService, ConfigurationLoader, ContextValidator)
   - `kafka/` - Kafka services (KafkaClientFactory, TopicService, GroupService)
-  - `kafka/model/` - Data models (TopicInfo, GroupInfo, etc.)
+  - `kafka/model/` - Data models (TopicInfo, GroupInfo, ConsumedMessage, etc.)
   - `version/` - Application version provider
 - `src/main/resources/` - Configuration files and resources
 - `src/test/java/` - Test code
 - `src/test/resources/` - Test fixtures and resources
-- `specs/` - Feature specifications (CONTEXT.md, TOPIC.md, GROUP.md)
+- `specs/` - Feature specifications (CONTEXT.md, TOPIC.md, GROUP.md, PRODUCE_CONSUME.md)
 
 ### Main Entry Point
 
@@ -164,6 +166,82 @@ Clik implements Kafka consumer group monitoring and management. See `specs/GROUP
 **Key Services:**
 - `GroupService` - Operations for listing, describing, deleting groups, offset management, and lag calculation
 - `GroupInfo` / `GroupMemberInfo` / `CoordinatorInfo` / `OffsetLagInfo` - Data models with @RegisterForReflection
+
+#### Producer and Consumer Commands
+
+Clik implements message production and consumption commands for Kafka topics. See `specs/PRODUCE_CONSUME.md` for the full specification.
+
+**Implemented Commands:**
+- `clik produce <topic>` - Produce messages to a Kafka topic from various input sources
+- `clik consume <topic>` - Consume messages from a Kafka topic with flexible options
+
+**Producer Features:**
+- Multiple input sources:
+  - File input via `--file <path>` (one message per line)
+  - Standard input (piped input)
+  - Interactive mode via `--interactive` (prompt for messages)
+- Message key support via `--key <key>` (applied to all messages)
+- Partition targeting via `--partition <num>`
+- String serialization for simplicity (MVP scope)
+- Synchronous sending with flush for reliability
+- Success/failure counting and reporting
+
+**Consumer Features:**
+- Consumer modes:
+  - Standalone mode (default, auto-generated group ID)
+  - Consumer group mode via `--group <id>` (offset tracking)
+- Consumption modes:
+  - One-time read (default, with `--timeout` control)
+  - Continuous mode via `--follow` (consume until interrupted)
+- Offset control:
+  - `--from-beginning` - Start from earliest offset
+  - `--from-end` - Start from latest offset
+  - `--from-offset <offset>` - Start from specific offset (requires `--partition`)
+- Partition control:
+  - All partitions (default)
+  - Specific partition via `--partition <num>`
+- Output formats:
+  - `table` - ASCII table with partition, offset, key, value (default)
+  - `json` - JSON array with full message metadata
+  - `yaml` - YAML format with full message metadata
+  - `value` - Value-only output (no metadata)
+- Message limits:
+  - `--max-messages <num>` - Limit number of messages to consume
+  - `--timeout <ms>` - Timeout for one-time consumption (default: 5000)
+- String deserialization (MVP scope)
+- Clean shutdown handling for continuous mode
+
+**Key Features:**
+- Integration with context management (uses current context for configuration)
+- Multiple output formats for consumption
+- Flexible offset control for debugging and monitoring
+- Consumer group support for production use cases
+- Message metadata preservation (partition, offset, timestamp, key)
+
+**Key Services:**
+- `KafkaClientFactory` - Extended with `createProducer()` and `createConsumer()` methods
+- `ConsumedMessage` - Data model for consumed messages with @RegisterForReflection
+
+**Common Use Cases:**
+```bash
+# Produce messages from a file
+clik produce my-topic --file messages.txt
+
+# Produce with a specific key
+echo "test message" | clik produce my-topic --key user123
+
+# Consume from beginning (one-time read)
+clik consume my-topic --from-beginning
+
+# Consume latest messages continuously
+clik consume my-topic --from-end --follow
+
+# Consume from specific offset and partition
+clik consume my-topic --partition 0 --from-offset 1000
+
+# Consume and output as JSON
+clik consume my-topic --from-beginning -o json
+```
 
 ### Configuration
 
@@ -375,9 +453,44 @@ See `specs/GROUP.md` for detailed specification.
 - Group rebalancing controls
 - Consumer group export/import
 
+### Producer and Consumer (✅ COMPLETED)
+
+See `specs/PRODUCE_CONSUME.md` for detailed specification.
+
+**Phase 1: Foundation (✅ COMPLETED)**
+- Extended KafkaClientFactory with createProducer() and createConsumer() methods
+- Created ConsumedMessage model with builder pattern
+- String serializer/deserializer for MVP scope
+
+**Phase 2: Produce Command (✅ COMPLETED)**
+- Implemented ProduceCommand with file/stdin/interactive support
+- Message key and partition targeting options
+- Comprehensive test coverage (8 integration tests in ProduceCommandTest, ProduceCommandIT)
+
+**Phase 3: Consume Command (✅ COMPLETED)**
+- Implemented ConsumeCommand with standalone and consumer group modes
+- Offset control options (--from-beginning, --from-end, --from-offset)
+- Multiple output formats (table, JSON, YAML, value)
+- Continuous mode support (--follow)
+- Partition filtering and message limits
+- Comprehensive test coverage (14 integration tests in ConsumeCommandTest, ConsumeCommandIT)
+
+**Phase 4: Testing & Documentation (✅ COMPLETED)**
+- All 22 tests passing (8 produce + 14 consume)
+- Native image reflection configuration verified
+- Specification document (PRODUCE_CONSUME.md)
+- CLAUDE.md updates completed
+
+**Future Enhancements:**
+- Custom serializers/deserializers (Avro, Protobuf, JSON Schema)
+- Message headers support
+- Advanced filtering and transformation
+- Transactional producer support
+- Consumer offset commit control
+
 ### Overall Test Coverage
 
-**Total Tests: 149 passing**
+**Total Tests: 171 passing**
 - Unit tests: 60 tests (ContextService, ConfigurationLoader, ContextValidator, TopicService, GroupService, KafkaClientFactory)
-- Integration tests: 89 tests (29 ContextCommandTest + 27 TopicCommandTest + 27 GroupCommandTest + native IT variants)
+- Integration tests: 111 tests (29 ContextCommandTest + 27 TopicCommandTest + 27 GroupCommandTest + 8 ProduceCommandTest + 14 ConsumeCommandTest + 6 ConsumeCommandIT + native IT variants)
 - All tests passing in both JVM and native modes

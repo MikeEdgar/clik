@@ -1,7 +1,9 @@
 package io.streamshub.clik;
 
+import io.streamshub.clik.command.consume.ConsumeCommand;
 import io.streamshub.clik.command.context.ContextCommand;
 import io.streamshub.clik.command.group.GroupCommand;
+import io.streamshub.clik.command.produce.ProduceCommand;
 import io.streamshub.clik.command.topic.TopicCommand;
 import jakarta.inject.Singleton;
 
@@ -20,6 +22,8 @@ import picocli.CommandLine.IVersionProvider;
                 ContextCommand.class,
                 TopicCommand.class,
                 GroupCommand.class,
+                ProduceCommand.class,
+                ConsumeCommand.class,
                 CommandLine.HelpCommand.class,
         }
 )
