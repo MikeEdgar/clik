@@ -287,7 +287,7 @@ class GroupCommandTest extends ClikMainTestBase {
 
         // Verify group was deleted
         var groups = groupService.listGroups(admin(), null);
-        assertFalse(groups.stream().anyMatch(g -> g.getGroupId().equals("delete-test-group")));
+        assertFalse(groups.stream().anyMatch(g -> g.groupId().equals("delete-test-group")));
     }
 
     @Test
@@ -310,9 +310,9 @@ class GroupCommandTest extends ClikMainTestBase {
 
         // Verify groups were deleted
         var groups = groupService.listGroups(admin(), null);
-        assertFalse(groups.stream().anyMatch(g -> g.getGroupId().equals("delete1")));
-        assertFalse(groups.stream().anyMatch(g -> g.getGroupId().equals("delete2")));
-        assertFalse(groups.stream().anyMatch(g -> g.getGroupId().equals("delete3")));
+        assertFalse(groups.stream().anyMatch(g -> g.groupId().equals("delete1")));
+        assertFalse(groups.stream().anyMatch(g -> g.groupId().equals("delete2")));
+        assertFalse(groups.stream().anyMatch(g -> g.groupId().equals("delete3")));
     }
 
     @Test

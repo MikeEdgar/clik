@@ -51,9 +51,6 @@ public class ListContextsCommand implements Callable<Integer> {
             return 0;
         }
 
-        // Sort contexts by name for consistent output order
-        contexts.sort(String::compareTo);
-
         Optional<String> currentContext = showCurrent ? contextService.getCurrentContext() : Optional.empty();
 
         switch (outputFormat.toLowerCase()) {
@@ -169,17 +166,5 @@ public class ListContextsCommand implements Callable<Integer> {
         }
     }
 
-    private static class ContextRow {
-        final String current;
-        final String name;
-        final String bootstrapServers;
-        final String security;
-
-        ContextRow(String current, String name, String bootstrapServers, String security) {
-            this.current = current;
-            this.name = name;
-            this.bootstrapServers = bootstrapServers;
-            this.security = security;
-        }
-    }
+    private static record ContextRow(String current, String name, String bootstrapServers, String security) {}
 }

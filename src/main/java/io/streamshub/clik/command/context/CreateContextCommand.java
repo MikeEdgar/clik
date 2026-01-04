@@ -111,8 +111,8 @@ public class CreateContextCommand implements Callable<Integer> {
 
         // Validate
         ValidationResult result = validator.validateConfig(config);
-        if (!result.isValid()) {
-            System.err.println("Error: " + result.getMessage());
+        if (!result.valid()) {
+            System.err.println("Error: " + result.message());
             System.err.println();
             System.err.println("Provide servers with: --bootstrap-servers localhost:9092");
             System.err.println("Or load from file with: --from-file kafka.properties");
@@ -131,8 +131,8 @@ public class CreateContextCommand implements Callable<Integer> {
         if (verify) {
             System.out.println("Verifying connection to Kafka cluster...");
             ValidationResult connResult = validator.verifyConnection(config);
-            if (!connResult.isValid()) {
-                System.err.println("Error: " + connResult.getMessage());
+            if (!connResult.valid()) {
+                System.err.println("Error: " + connResult.message());
                 System.err.println();
                 System.err.println("Context was created but connection verification failed.");
                 return 1;

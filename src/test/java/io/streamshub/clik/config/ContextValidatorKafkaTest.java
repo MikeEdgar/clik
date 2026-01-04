@@ -32,7 +32,7 @@ class ContextValidatorKafkaTest extends ClikTestBase {
         // Verify connection should succeed with dev services Kafka
         ValidationResult result = validator.verifyConnection(config);
 
-        assertTrue(result.isValid(), "Connection verification should succeed with dev services Kafka");
+        assertTrue(result.valid(), "Connection verification should succeed with dev services Kafka");
     }
 
     @Test
@@ -45,8 +45,8 @@ class ContextValidatorKafkaTest extends ClikTestBase {
         // Verify connection should fail
         ValidationResult result = validator.verifyConnection(config);
 
-        assertFalse(result.isValid(), "Connection verification should fail with invalid servers");
-        assertTrue(result.getMessage().contains("Connection failed"),
+        assertFalse(result.valid(), "Connection verification should fail with invalid servers");
+        assertTrue(result.message().contains("Connection failed"),
                 "Error message should indicate connection failure");
     }
 
@@ -58,8 +58,8 @@ class ContextValidatorKafkaTest extends ClikTestBase {
         // Verify connection should fail
         ValidationResult result = validator.verifyConnection(config);
 
-        assertFalse(result.isValid(), "Connection verification should fail without bootstrap servers");
-        assertTrue(result.getMessage().contains("bootstrap.servers"),
+        assertFalse(result.valid(), "Connection verification should fail without bootstrap servers");
+        assertTrue(result.message().contains("bootstrap.servers"),
                 "Error message should mention missing bootstrap.servers");
     }
 }

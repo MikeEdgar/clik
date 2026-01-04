@@ -59,7 +59,7 @@ class TopicCommandTest extends ClikMainTestBase {
         // Verify topic was created
         var topicInfo = topicService.describeTopic(admin(), "test-topic");
         assertNotNull(topicInfo);
-        assertEquals("test-topic", topicInfo.getName());
+        assertEquals("test-topic", topicInfo.name());
     }
 
     @Test
@@ -70,8 +70,8 @@ class TopicCommandTest extends ClikMainTestBase {
         // Verify partition count
         var topicInfo = topicService.describeTopic(admin(), "test-topic");
         assertNotNull(topicInfo);
-        assertEquals(5, topicInfo.getPartitions());
-        assertEquals(5, topicInfo.getPartitionDetails().size());
+        assertEquals(5, topicInfo.partitions());
+        assertEquals(5, topicInfo.partitionDetails().size());
     }
 
     @Test
@@ -86,7 +86,7 @@ class TopicCommandTest extends ClikMainTestBase {
         // Verify config
         var topicInfo = topicService.describeTopic(admin(), "test-topic");
         assertNotNull(topicInfo);
-        assertEquals("3600000", topicInfo.getConfig().get("retention.ms"));
+        assertEquals("3600000", topicInfo.config().get("retention.ms"));
     }
 
     @Test
@@ -233,7 +233,7 @@ class TopicCommandTest extends ClikMainTestBase {
         // Verify the config was altered
         var topicInfo = topicService.describeTopic(admin(), "alter-test");
         assertNotNull(topicInfo);
-        assertEquals("172800000", topicInfo.getConfig().get("retention.ms"));
+        assertEquals("172800000", topicInfo.config().get("retention.ms"));
     }
 
     @Test
@@ -248,8 +248,8 @@ class TopicCommandTest extends ClikMainTestBase {
         // Verify both configs were set
         var topicInfo = topicService.describeTopic(admin(), "multi-config-test");
         assertNotNull(topicInfo);
-        assertEquals("86400000", topicInfo.getConfig().get("retention.ms"));
-        assertEquals("snappy", topicInfo.getConfig().get("compression.type"));
+        assertEquals("86400000", topicInfo.config().get("retention.ms"));
+        assertEquals("snappy", topicInfo.config().get("compression.type"));
     }
 
     @Test
@@ -264,8 +264,8 @@ class TopicCommandTest extends ClikMainTestBase {
         // Verify the config was deleted
         var topicInfo = topicService.describeTopic(admin(), "delete-config-test");
         assertNotNull(topicInfo);
-        assertTrue(topicInfo.getConfig().containsKey("retention.ms"));
-        assertFalse(topicInfo.getConfig().containsKey("compression.type"));
+        assertTrue(topicInfo.config().containsKey("retention.ms"));
+        assertFalse(topicInfo.config().containsKey("compression.type"));
     }
 
     @Test
@@ -281,9 +281,9 @@ class TopicCommandTest extends ClikMainTestBase {
         // Verify changes
         var topicInfo = topicService.describeTopic(admin(), "set-and-delete-test");
         assertNotNull(topicInfo);
-        assertTrue(topicInfo.getConfig().containsKey("retention.ms"));
-        assertEquals("lz4", topicInfo.getConfig().get("compression.type"));
-        assertFalse(topicInfo.getConfig().containsKey("max.message.bytes"));
+        assertTrue(topicInfo.config().containsKey("retention.ms"));
+        assertEquals("lz4", topicInfo.config().get("compression.type"));
+        assertFalse(topicInfo.config().containsKey("max.message.bytes"));
     }
 
     @Test
@@ -324,7 +324,7 @@ class TopicCommandTest extends ClikMainTestBase {
         // Verify partition count was increased
         var topicInfo = topicService.describeTopic(admin(), "partition-test");
         assertNotNull(topicInfo);
-        assertEquals(6, topicInfo.getPartitions());
+        assertEquals(6, topicInfo.partitions());
     }
 
     @Test
@@ -360,8 +360,8 @@ class TopicCommandTest extends ClikMainTestBase {
         // Verify both partition count and config were changed
         var topicInfo = topicService.describeTopic(admin(), "combined-test");
         assertNotNull(topicInfo);
-        assertEquals(5, topicInfo.getPartitions());
-        assertEquals("3600000", topicInfo.getConfig().get("retention.ms"));
+        assertEquals(5, topicInfo.partitions());
+        assertEquals("3600000", topicInfo.config().get("retention.ms"));
     }
 
     @Test

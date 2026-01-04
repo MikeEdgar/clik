@@ -3,9 +3,11 @@ package io.streamshub.clik.kafka;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import jakarta.inject.Inject;
 
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
@@ -35,10 +37,10 @@ class TopicServiceTest extends ClikTestBase {
         assertTrue(topics.contains("test-topic"));
 
         TopicInfo info = topicService.describeTopic(admin(), "test-topic");
-        assertEquals("test-topic", info.getName());
-        assertEquals(3, info.getPartitions());
-        assertEquals(1, info.getReplicationFactor());
-        assertFalse(info.isInternal());
+        assertEquals("test-topic", info.name());
+        assertEquals(3, info.partitions());
+        assertEquals(1, info.replicationFactor());
+        assertFalse(info.internal());
     }
 
     @Test
@@ -51,9 +53,9 @@ class TopicServiceTest extends ClikTestBase {
         topicService.createTopic(admin(), "test-topic-config", 1, 1, configs);
 
         TopicInfo info = topicService.describeTopic(admin(), "test-topic-config");
-        assertEquals("test-topic-config", info.getName());
-        assertEquals("86400000", info.getConfig().get("retention.ms"));
-        assertEquals("delete", info.getConfig().get("cleanup.policy"));
+        assertEquals("test-topic-config", info.name());
+        assertEquals("86400000", info.config().get("retention.ms"));
+        assertEquals("delete", info.config().get("cleanup.policy"));
     }
 
     @Test
@@ -91,12 +93,12 @@ class TopicServiceTest extends ClikTestBase {
 
         TopicInfo info = topicService.describeTopic(admin(), "describe-topic");
         assertNotNull(info);
-        assertEquals("describe-topic", info.getName());
-        assertEquals(5, info.getPartitions());
-        assertEquals(1, info.getReplicationFactor());
-        assertFalse(info.isInternal());
-        assertNotNull(info.getPartitionDetails());
-        assertEquals(5, info.getPartitionDetails().size());
+        assertEquals("describe-topic", info.name());
+        assertEquals(5, info.partitions());
+        assertEquals(1, info.replicationFactor());
+        assertFalse(info.internal());
+        assertNotNull(info.partitionDetails());
+        assertEquals(5, info.partitionDetails().size());
     }
 
     @Test
@@ -104,18 +106,24 @@ class TopicServiceTest extends ClikTestBase {
         topicService.createTopic(admin(), "multi-topic1", 2, 1, null);
         topicService.createTopic(admin(), "multi-topic2", 3, 1, null);
 
+        Awaitility.await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
+            assertTrue(topicService.listTopics(admin(), false).containsAll(
+                    List.of("multi-topic1", "multi-topic2")
+            ));
+        });
+
         Map<String, TopicInfo> topics = topicService.describeTopics(admin(), List.of("multi-topic1", "multi-topic2"));
         assertEquals(2, topics.size());
 
         TopicInfo topic1 = topics.get("multi-topic1");
         assertNotNull(topic1);
-        assertEquals("multi-topic1", topic1.getName());
-        assertEquals(2, topic1.getPartitions());
+        assertEquals("multi-topic1", topic1.name());
+        assertEquals(2, topic1.partitions());
 
         TopicInfo topic2 = topics.get("multi-topic2");
         assertNotNull(topic2);
-        assertEquals("multi-topic2", topic2.getName());
-        assertEquals(3, topic2.getPartitions());
+        assertEquals("multi-topic2", topic2.name());
+        assertEquals(3, topic2.partitions());
     }
 
     @Test
@@ -130,8 +138,8 @@ class TopicServiceTest extends ClikTestBase {
         topicService.alterTopicConfig(admin(), "alter-topic", newConfigs, null);
 
         TopicInfo info = topicService.describeTopic(admin(), "alter-topic");
-        assertEquals("3600000", info.getConfig().get("retention.ms"));
-        assertEquals("2000000", info.getConfig().get("max.message.bytes"));
+        assertEquals("3600000", info.config().get("retention.ms"));
+        assertEquals("2000000", info.config().get("max.message.bytes"));
     }
 
     @Test
@@ -143,15 +151,15 @@ class TopicServiceTest extends ClikTestBase {
         topicService.createTopic(admin(), "alter-delete-topic", 1, 1, initialConfigs);
 
         TopicInfo info = topicService.describeTopic(admin(), "alter-delete-topic");
-        assertEquals("3600000", info.getConfig().get("retention.ms"));
-        assertEquals("2000000", info.getConfig().get("max.message.bytes"));
+        assertEquals("3600000", info.config().get("retention.ms"));
+        assertEquals("2000000", info.config().get("max.message.bytes"));
 
         // Delete one config
         topicService.alterTopicConfig(admin(), "alter-delete-topic", null, List.of("max.message.bytes"));
 
         info = topicService.describeTopic(admin(), "alter-delete-topic");
-        assertEquals("3600000", info.getConfig().get("retention.ms"));
-        assertNull(info.getConfig().get("max.message.bytes"));
+        assertEquals("3600000", info.config().get("retention.ms"));
+        assertNull(info.config().get("max.message.bytes"));
     }
 
     @Test
@@ -167,18 +175,19 @@ class TopicServiceTest extends ClikTestBase {
         topicService.alterTopicConfig(admin(), "alter-both-topic", newConfigs, List.of("max.message.bytes"));
 
         TopicInfo info = topicService.describeTopic(admin(), "alter-both-topic");
-        assertEquals("3600000", info.getConfig().get("retention.ms"));
-        assertEquals("snappy", info.getConfig().get("compression.type"));
-        assertNull(info.getConfig().get("max.message.bytes"));
+        assertEquals("3600000", info.config().get("retention.ms"));
+        assertEquals("snappy", info.config().get("compression.type"));
+        assertNull(info.config().get("max.message.bytes"));
     }
 
     @Test
     void testDeleteTopic() throws Exception {
         topicService.createTopic(admin(), "delete-topic", 1, 1, null);
-        assertTrue(topicService.listTopics(admin(), false).contains("delete-topic"));
+        Awaitility.await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
+            assertTrue(topicService.listTopics(admin(), false).contains("delete-topic"));
+        });
 
         topicService.deleteTopic(admin(), "delete-topic");
-
         assertFalse(topicService.listTopics(admin(), false).contains("delete-topic"));
     }
 
@@ -202,11 +211,11 @@ class TopicServiceTest extends ClikTestBase {
         topicService.createTopic(admin(), "partition-test", 3, 1, null);
 
         TopicInfo beforeInfo = topicService.describeTopic(admin(), "partition-test");
-        assertEquals(3, beforeInfo.getPartitions());
+        assertEquals(3, beforeInfo.partitions());
 
         topicService.increasePartitions(admin(), "partition-test", 6);
 
         TopicInfo afterInfo = topicService.describeTopic(admin(), "partition-test");
-        assertEquals(6, afterInfo.getPartitions());
+        assertEquals(6, afterInfo.partitions());
     }
 }

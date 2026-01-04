@@ -92,29 +92,29 @@ public class DescribeTopicCommand implements Callable<Integer> {
     }
 
     private void printTable(TopicInfo topic) {
-        System.out.println("Topic: " + topic.getName());
-        System.out.println("Partitions: " + topic.getPartitions());
-        System.out.println("Replication Factor: " + topic.getReplicationFactor());
-        System.out.println("Internal: " + (topic.isInternal() ? "yes" : "no"));
+        System.out.println("Topic: " + topic.name());
+        System.out.println("Partitions: " + topic.partitions());
+        System.out.println("Replication Factor: " + topic.replicationFactor());
+        System.out.println("Internal: " + (topic.internal() ? "yes" : "no"));
         System.out.println();
 
-        if (!topic.getConfig().isEmpty()) {
+        if (!topic.config().isEmpty()) {
             System.out.println("Configuration:");
-            topic.getConfig().entrySet().stream()
+            topic.config().entrySet().stream()
                     .sorted((e1, e2) -> e1.getKey().compareTo(e2.getKey()))
                     .forEach(entry -> System.out.println("  " + entry.getKey() + " = " + entry.getValue()));
             System.out.println();
         }
 
-        if (topic.getPartitionDetails() != null && !topic.getPartitionDetails().isEmpty()) {
+        if (topic.partitionDetails() != null && !topic.partitionDetails().isEmpty()) {
             System.out.println("Partition Details:");
             List<PartitionRow> rows = new ArrayList<>();
-            for (PartitionInfo partition : topic.getPartitionDetails()) {
+            for (PartitionInfo partition : topic.partitionDetails()) {
                 rows.add(new PartitionRow(
-                        String.valueOf(partition.getId()),
-                        String.valueOf(partition.getLeader()),
-                        partition.getReplicas().toString(),
-                        partition.getIsr().toString()
+                        String.valueOf(partition.id()),
+                        String.valueOf(partition.leader()),
+                        partition.replicas().toString(),
+                        partition.isr().toString()
                 ));
             }
 

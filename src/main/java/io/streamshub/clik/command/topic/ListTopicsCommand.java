@@ -99,10 +99,10 @@ public class ListTopicsCommand implements Callable<Integer> {
                 TopicInfo info = topics.get(name);
                 if (info != null) {
                     rows.add(new TopicRow(
-                            info.getName(),
-                            String.valueOf(info.getPartitions()),
-                            String.valueOf(info.getReplicationFactor()),
-                            info.isInternal() ? "yes" : ""
+                            info.name(),
+                            String.valueOf(info.partitions()),
+                            String.valueOf(info.replicationFactor()),
+                            info.internal() ? "yes" : ""
                     ));
                 }
             }
@@ -133,10 +133,10 @@ public class ListTopicsCommand implements Callable<Integer> {
                 TopicInfo info = topics.get(name);
                 if (info != null) {
                     Map<String, Object> data = new LinkedHashMap<>();
-                    data.put("name", info.getName());
-                    data.put("partitions", info.getPartitions());
-                    data.put("replicationFactor", info.getReplicationFactor());
-                    data.put("internal", info.isInternal());
+                    data.put("name", info.name());
+                    data.put("partitions", info.partitions());
+                    data.put("replicationFactor", info.replicationFactor());
+                    data.put("internal", info.internal());
                     topicList.add(data);
                 }
             }
@@ -160,10 +160,10 @@ public class ListTopicsCommand implements Callable<Integer> {
                 TopicInfo info = topics.get(name);
                 if (info != null) {
                     Map<String, Object> data = new LinkedHashMap<>();
-                    data.put("name", info.getName());
-                    data.put("partitions", info.getPartitions());
-                    data.put("replicationFactor", info.getReplicationFactor());
-                    data.put("internal", info.isInternal());
+                    data.put("name", info.name());
+                    data.put("partitions", info.partitions());
+                    data.put("replicationFactor", info.replicationFactor());
+                    data.put("internal", info.internal());
                     topicList.add(data);
                 }
             }
@@ -176,17 +176,5 @@ public class ListTopicsCommand implements Callable<Integer> {
         }
     }
 
-    private static class TopicRow {
-        final String name;
-        final String partitions;
-        final String replication;
-        final String internal;
-
-        TopicRow(String name, String partitions, String replication, String internal) {
-            this.name = name;
-            this.partitions = partitions;
-            this.replication = replication;
-            this.internal = internal;
-        }
-    }
+    private static record TopicRow(String name, String partitions, String replication, String internal) {}
 }

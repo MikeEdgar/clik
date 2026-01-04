@@ -12,6 +12,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -144,8 +145,12 @@ abstract class CommonTestBase {
                     .filter(Predicate.not(String::isEmpty))
                     .map(MemberToRemove::new)
                     .toList();
+                if (value.isEmpty()) {
+                    return null;
+                }
                 return Map.entry(key, new RemoveMembersFromConsumerGroupOptions(value));
             })
+            .filter(Objects::nonNull)
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         memberRemoval.forEach(admin::removeMembersFromConsumerGroup);

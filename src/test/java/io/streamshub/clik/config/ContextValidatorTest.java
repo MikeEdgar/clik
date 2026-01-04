@@ -47,7 +47,7 @@ class ContextValidatorTest extends ClikTestBase {
 
         ValidationResult result = validator.validateConfig(config);
 
-        assertTrue(result.isValid());
+        assertTrue(result.valid());
     }
 
     @Test
@@ -58,8 +58,8 @@ class ContextValidatorTest extends ClikTestBase {
 
         ValidationResult result = validator.validateConfig(config);
 
-        assertFalse(result.isValid());
-        assertTrue(result.getMessage().contains("bootstrap.servers"));
+        assertFalse(result.valid());
+        assertTrue(result.message().contains("bootstrap.servers"));
     }
 
     @Test
@@ -70,15 +70,15 @@ class ContextValidatorTest extends ClikTestBase {
 
         ValidationResult result = validator.validateConfig(config);
 
-        assertFalse(result.isValid());
-        assertTrue(result.getMessage().contains("bootstrap.servers"));
+        assertFalse(result.valid());
+        assertTrue(result.message().contains("bootstrap.servers"));
     }
 
     @Test
     void testValidateConfigNull() {
         ValidationResult result = validator.validateConfig(null);
 
-        assertFalse(result.isValid());
-        assertTrue(result.getMessage().contains("cannot be null"));
+        assertFalse(result.valid());
+        assertTrue(result.message().contains("cannot be null"));
     }
 }

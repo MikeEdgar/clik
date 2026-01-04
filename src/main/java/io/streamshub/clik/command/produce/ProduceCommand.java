@@ -89,8 +89,8 @@ public class ProduceCommand implements Callable<Integer> {
             }
         }
 
-        try (Producer<String, String> producer = clientFactory.createProducer()) {
-            Stream<String> messages = readMessages();
+        try (Producer<String, String> producer = clientFactory.createProducer();
+            Stream<String> messages = readMessages()) {
             return sendMessages(producer, messages);
         } catch (IllegalStateException e) {
             err().println("Error: " + e.getMessage());

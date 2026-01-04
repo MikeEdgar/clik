@@ -57,6 +57,7 @@ public class GroupService {
             groups.put(groupId, GroupInfo.builder()
                     .groupId(groupId)
                     .type(groupType)
+                    .protocol(listing.protocol())
                     .state(listing.groupState().toString()));
         }
 

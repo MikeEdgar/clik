@@ -51,7 +51,7 @@ public class ContextValidator {
     public ValidationResult verifyConnection(ContextConfig config) {
         // Validate config first
         ValidationResult configValidation = validateConfig(config);
-        if (!configValidation.isValid()) {
+        if (!configValidation.valid()) {
             return configValidation;
         }
 

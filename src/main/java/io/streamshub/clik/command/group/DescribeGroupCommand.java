@@ -85,23 +85,23 @@ public class DescribeGroupCommand implements Callable<Integer> {
     }
 
     private void printTable(GroupInfo group) {
-        System.out.println("Group: " + group.getGroupId());
-        System.out.println("Type: " + group.getType());
-        System.out.println("State: " + group.getState());
-        if (group.getProtocol() != null) {
-            System.out.println("Protocol: " + group.getProtocol());
+        System.out.println("Group: " + group.groupId());
+        System.out.println("Type: " + group.type());
+        System.out.println("State: " + group.state());
+        if (group.protocol() != null) {
+            System.out.println("Protocol: " + group.protocol());
         }
         System.out.println();
 
-        if (group.getMembers() != null && !group.getMembers().isEmpty()) {
+        if (group.members() != null && !group.members().isEmpty()) {
             System.out.println("Members:");
             List<MemberRow> rows = new ArrayList<>();
-            for (GroupMemberInfo member : group.getMembers()) {
+            for (GroupMemberInfo member : group.members()) {
                 String partitions = formatPartitions(member);
                 rows.add(new MemberRow(
-                        member.getMemberId(),
-                        member.getHost(),
-                        member.getClientId(),
+                        member.memberId(),
+                        member.host(),
+                        member.clientId(),
                         partitions
                 ));
             }
@@ -117,16 +117,16 @@ public class DescribeGroupCommand implements Callable<Integer> {
             System.out.println();
         }
 
-        if (group.getOffsets() != null && !group.getOffsets().isEmpty()) {
+        if (group.offsets() != null && !group.offsets().isEmpty()) {
             System.out.println("Topic Lag:");
             List<OffsetRow> rows = new ArrayList<>();
-            for (OffsetLagInfo offset : group.getOffsets()) {
+            for (OffsetLagInfo offset : group.offsets()) {
                 rows.add(new OffsetRow(
-                        offset.getTopic(),
-                        String.valueOf(offset.getPartition()),
-                        offset.getCurrentOffset() != null ? String.valueOf(offset.getCurrentOffset()) : "-",
-                        offset.getLogEndOffset() != null ? String.valueOf(offset.getLogEndOffset()) : "-",
-                        offset.getLag() != null ? String.valueOf(offset.getLag()) : "-"
+                        offset.topic(),
+                        String.valueOf(offset.partition()),
+                        offset.currentOffset() != null ? String.valueOf(offset.currentOffset()) : "-",
+                        offset.logEndOffset() != null ? String.valueOf(offset.logEndOffset()) : "-",
+                        offset.lag() != null ? String.valueOf(offset.lag()) : "-"
                 ));
             }
 
@@ -143,16 +143,16 @@ public class DescribeGroupCommand implements Callable<Integer> {
     }
 
     private String formatPartitions(GroupMemberInfo member) {
-        if (member.getAssignments() == null || member.getAssignments().isEmpty()) {
+        if (member.assignments() == null || member.assignments().isEmpty()) {
             return "-";
         }
 
-        return member.getAssignments().stream()
+        return member.assignments().stream()
                 .map(assignment -> {
-                    String partList = assignment.getPartitions().stream()
+                    String partList = assignment.partitions().stream()
                             .map(String::valueOf)
                             .collect(Collectors.joining(","));
-                    return assignment.getTopic() + "(" + partList + ")";
+                    return assignment.topic() + "(" + partList + ")";
                 })
                 .collect(Collectors.joining(", "));
     }

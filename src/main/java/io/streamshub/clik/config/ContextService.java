@@ -1,11 +1,5 @@
 package io.streamshub.clik.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
-import jakarta.enterprise.context.ApplicationScoped;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
@@ -15,8 +9,16 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
+
+import jakarta.enterprise.context.ApplicationScoped;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 
 @ApplicationScoped
 public class ContextService {
@@ -68,7 +70,7 @@ public class ContextService {
                     .map(Path::getFileName)
                     .map(Path::toString)
                     .sorted()
-                    .collect(Collectors.toList());
+                    .toList();
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to list contexts", e);
         }
@@ -156,8 +158,8 @@ public class ContextService {
         try {
             RootConfig rootConfig = yamlMapper.readValue(rootConfigFile.toFile(), RootConfig.class);
             return Optional.ofNullable(rootConfig)
-                    .map(RootConfig::getCurrentContext)
-                    .filter(ctx -> !ctx.isEmpty());
+                    .map(RootConfig::currentContext)
+                    .filter(Predicate.not(String::isEmpty));
         } catch (IOException e) {
             return Optional.empty();
         }
@@ -176,21 +178,21 @@ public class ContextService {
             ensureDirectoryExists(configDir);
 
             // Load or create root config
-            RootConfig rootConfig;
+            final RootConfig updatedConfig;
+
             if (Files.exists(rootConfigFile)) {
-                rootConfig = yamlMapper.readValue(rootConfigFile.toFile(), RootConfig.class);
-                if (rootConfig == null) {
-                    rootConfig = new RootConfig();
+                var currentConfig  = yamlMapper.readValue(rootConfigFile.toFile(), RootConfig.class);
+                if (currentConfig == null) {
+                    updatedConfig = new RootConfig(name);
+                } else {
+                    updatedConfig = currentConfig.withCurrentContext(name);
                 }
             } else {
-                rootConfig = new RootConfig();
+                updatedConfig = new RootConfig(name);
             }
 
-            // Update current context
-            rootConfig.setCurrentContext(name);
-
             // Save
-            yamlMapper.writeValue(rootConfigFile.toFile(), rootConfig);
+            yamlMapper.writeValue(rootConfigFile.toFile(), updatedConfig);
 
             // Set file permissions (600)
             setFilePermissions(rootConfigFile);
@@ -209,8 +211,7 @@ public class ContextService {
         try {
             RootConfig rootConfig = yamlMapper.readValue(rootConfigFile.toFile(), RootConfig.class);
             if (rootConfig != null) {
-                rootConfig.setCurrentContext(null);
-                yamlMapper.writeValue(rootConfigFile.toFile(), rootConfig);
+                yamlMapper.writeValue(rootConfigFile.toFile(), rootConfig.withCurrentContext(null));
             }
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to clear current context", e);

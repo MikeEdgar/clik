@@ -5,132 +5,79 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
 import java.util.List;
 
 @RegisterForReflection
-public class GroupInfo {
-    private String groupId;
-    private String type;              // "consumer", "share", "stream"
-    private String state;             // "Stable", "Dead", "Empty", etc.
-    private String protocol;
-    private int memberCount;
-    private CoordinatorInfo coordinator;
-    private List<GroupMemberInfo> members;      // null for list, populated for describe
-    private List<OffsetLagInfo> offsets;        // null for list, populated for describe
-
-    public GroupInfo() {
+public record GroupInfo(
+    String groupId,
+    String type,              // "consumer", "share", "stream"
+    String state,             // "Stable", "Dead", "Empty", etc.
+    String protocol,
+    int memberCount,
+    CoordinatorInfo coordinator,
+    List<GroupMemberInfo> members,      // null for list, populated for describe
+    List<OffsetLagInfo> offsets        // null for list, populated for describe
+) {
+    // Compact constructor with defensive copying (preserve null semantics)
+    public GroupInfo {
+        members = members != null ? List.copyOf(members) : null;
+        offsets = offsets != null ? List.copyOf(offsets) : null;
     }
 
     public static Builder builder() {
         return new Builder();
     }
 
-    public String getGroupId() {
-        return groupId;
-    }
-
-    public void setGroupId(String groupId) {
-        this.groupId = groupId;
-    }
-
-    public String getType() {
-        return type;
-    }
-
-    public void setType(String type) {
-        this.type = type;
-    }
-
-    public String getState() {
-        return state;
-    }
-
-    public void setState(String state) {
-        this.state = state;
-    }
-
-    public String getProtocol() {
-        return protocol;
-    }
-
-    public void setProtocol(String protocol) {
-        this.protocol = protocol;
-    }
-
-    public int getMemberCount() {
-        return memberCount;
-    }
-
-    public void setMemberCount(int memberCount) {
-        this.memberCount = memberCount;
-    }
-
-    public CoordinatorInfo getCoordinator() {
-        return coordinator;
-    }
-
-    public void setCoordinator(CoordinatorInfo coordinator) {
-        this.coordinator = coordinator;
-    }
-
-    public List<GroupMemberInfo> getMembers() {
-        return members;
-    }
-
-    public void setMembers(List<GroupMemberInfo> members) {
-        this.members = members;
-    }
-
-    public List<OffsetLagInfo> getOffsets() {
-        return offsets;
-    }
-
-    public void setOffsets(List<OffsetLagInfo> offsets) {
-        this.offsets = offsets;
-    }
-
     public static class Builder {
-        private final GroupInfo groupInfo = new GroupInfo();
+        private String groupId;
+        private String type;
+        private String state;
+        private String protocol;
+        private int memberCount;
+        private CoordinatorInfo coordinator;
+        private List<GroupMemberInfo> members;
+        private List<OffsetLagInfo> offsets;
 
         public Builder groupId(String groupId) {
-            groupInfo.groupId = groupId;
+            this.groupId = groupId;
             return this;
         }
 
         public Builder type(String type) {
-            groupInfo.type = type;
+            this.type = type;
             return this;
         }
 
         public Builder state(String state) {
-            groupInfo.state = state;
+            this.state = state;
             return this;
         }
 
         public Builder protocol(String protocol) {
-            groupInfo.protocol = protocol;
+            this.protocol = protocol;
             return this;
         }
 
         public Builder memberCount(int memberCount) {
-            groupInfo.memberCount = memberCount;
+            this.memberCount = memberCount;
             return this;
         }
 
         public Builder coordinator(CoordinatorInfo coordinator) {
-            groupInfo.coordinator = coordinator;
+            this.coordinator = coordinator;
             return this;
         }
 
         public Builder members(List<GroupMemberInfo> members) {
-            groupInfo.members = members;
+            this.members = members;
             return this;
         }
 
         public Builder offsets(List<OffsetLagInfo> offsets) {
-            groupInfo.offsets = offsets;
+            this.offsets = offsets;
             return this;
         }
 
         public GroupInfo build() {
-            return groupInfo;
+            return new GroupInfo(groupId, type, state, protocol,
+                               memberCount, coordinator, members, offsets);
         }
     }
 }

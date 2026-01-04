@@ -88,18 +88,20 @@ public class TopicService {
                 ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, name);
                 org.apache.kafka.clients.admin.Config config = configs.get(configResource);
 
+                // Calculate replication factor from first partition
+                int replicationFactor = 0;
+                if (!desc.partitions().isEmpty()) {
+                    replicationFactor = desc.partitions().get(0).replicas().size();
+                }
+
                 TopicInfo topicInfo = TopicInfo.builder()
                         .name(desc.name())
                         .partitions(desc.partitions().size())
+                        .replicationFactor(replicationFactor)
                         .internal(desc.isInternal())
                         .config(convertConfig(config))
                         .partitionDetails(convertPartitions(desc.partitions()))
                         .build();
-
-                // Calculate replication factor from first partition
-                if (!desc.partitions().isEmpty()) {
-                    topicInfo.setReplicationFactor(desc.partitions().get(0).replicas().size());
-                }
 
                 result.put(name, topicInfo);
             }

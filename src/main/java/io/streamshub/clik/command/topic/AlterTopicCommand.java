@@ -74,7 +74,7 @@ public class AlterTopicCommand implements Callable<Integer> {
         if (partitions != null) {
             try (Admin admin = clientFactory.createAdminClient()) {
                 TopicInfo topicInfo = topicService.describeTopic(admin, name);
-                currentPartitions = topicInfo.getPartitions();
+                currentPartitions = topicInfo.partitions();
 
                 if (partitions <= currentPartitions) {
                     System.err.println("Error: New partition count (" + partitions +

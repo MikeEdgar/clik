@@ -210,9 +210,7 @@ public class ConsumeCommand implements Callable<Integer> {
             } else if (fromEnd || groupId == null) {
                 // Default for standalone (no group): from end
                 // Default for named group: let Kafka manage offsets
-                if (groupId == null) {
-                    consumer.seekToEnd(tps);
-                }
+                consumer.seekToEnd(tps);
             }
         }
     }
@@ -224,8 +222,8 @@ public class ConsumeCommand implements Callable<Integer> {
         while (System.currentTimeMillis() - startTime < timeout) {
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
 
-            for (ConsumerRecord<String, String> record : records) {
-                messages.add(ConsumedMessage.from(record));
+            for (ConsumerRecord<String, String> rec : records) {
+                messages.add(ConsumedMessage.from(rec));
 
                 if (maxMessages != null && messages.size() >= maxMessages) {
                     return messages;
@@ -250,8 +248,8 @@ public class ConsumeCommand implements Callable<Integer> {
         while (running.get()) {
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
 
-            for (ConsumerRecord<String, String> record : records) {
-                printMessage(ConsumedMessage.from(record));
+            for (ConsumerRecord<String, String> rec : records) {
+                printMessage(ConsumedMessage.from(rec));
 
                 if (maxMessages != null && count.incrementAndGet() >= maxMessages) {
                     running.set(false);
@@ -278,7 +276,7 @@ public class ConsumeCommand implements Callable<Integer> {
                 printYamlMessage(message);
                 break;
             case "value":
-                out().println(message.getValue());
+                out().println(message.value());
                 break;
         }
     }
@@ -295,7 +293,7 @@ public class ConsumeCommand implements Callable<Integer> {
                 printYaml(messages);
                 break;
             case "value":
-                messages.forEach(m -> out().println(m.getValue()));
+                messages.forEach(m -> out().println(m.value()));
                 break;
         }
     }
@@ -305,10 +303,10 @@ public class ConsumeCommand implements Callable<Integer> {
 
         for (ConsumedMessage msg : messages) {
             rows.add(new MessageRow(
-                    String.valueOf(msg.getPartition()),
-                    String.valueOf(msg.getOffset()),
-                    msg.getKey() != null ? msg.getKey() : "",
-                    msg.getValue() != null ? msg.getValue() : ""
+                    String.valueOf(msg.partition()),
+                    String.valueOf(msg.offset()),
+                    msg.key() != null ? msg.key() : "",
+                    msg.value() != null ? msg.value() : ""
             ));
         }
 
@@ -324,10 +322,10 @@ public class ConsumeCommand implements Callable<Integer> {
 
     private void printTableRow(ConsumedMessage msg) {
         out().printf("%d\t%d\t%s\t%s%n",
-                msg.getPartition(),
-                msg.getOffset(),
-                msg.getKey() != null ? msg.getKey() : "",
-                msg.getValue() != null ? msg.getValue() : "");
+                msg.partition(),
+                msg.offset(),
+                msg.key() != null ? msg.key() : "",
+                msg.value() != null ? msg.value() : "");
     }
 
     private void printJson(List<ConsumedMessage> messages) {
@@ -336,11 +334,11 @@ public class ConsumeCommand implements Callable<Integer> {
 
             for (ConsumedMessage msg : messages) {
                 Map<String, Object> data = new LinkedHashMap<>();
-                data.put("partition", msg.getPartition());
-                data.put("offset", msg.getOffset());
-                data.put("key", msg.getKey());
-                data.put("value", msg.getValue());
-                data.put("timestamp", msg.getTimestamp());
+                data.put("partition", msg.partition());
+                data.put("offset", msg.offset());
+                data.put("key", msg.key());
+                data.put("value", msg.value());
+                data.put("timestamp", msg.timestamp());
                 messageList.add(data);
             }
 
@@ -355,11 +353,11 @@ public class ConsumeCommand implements Callable<Integer> {
     private void printJsonMessage(ConsumedMessage msg) {
         try {
             Map<String, Object> data = new LinkedHashMap<>();
-            data.put("partition", msg.getPartition());
-            data.put("offset", msg.getOffset());
-            data.put("key", msg.getKey());
-            data.put("value", msg.getValue());
-            data.put("timestamp", msg.getTimestamp());
+            data.put("partition", msg.partition());
+            data.put("offset", msg.offset());
+            data.put("key", msg.key());
+            data.put("value", msg.value());
+            data.put("timestamp", msg.timestamp());
 
             ObjectMapper jsonMapper = new ObjectMapper();
             out().println(jsonMapper.writeValueAsString(data));
@@ -374,11 +372,11 @@ public class ConsumeCommand implements Callable<Integer> {
 
             for (ConsumedMessage msg : messages) {
                 Map<String, Object> data = new LinkedHashMap<>();
-                data.put("partition", msg.getPartition());
-                data.put("offset", msg.getOffset());
-                data.put("key", msg.getKey());
-                data.put("value", msg.getValue());
-                data.put("timestamp", msg.getTimestamp());
+                data.put("partition", msg.partition());
+                data.put("offset", msg.offset());
+                data.put("key", msg.key());
+                data.put("value", msg.value());
+                data.put("timestamp", msg.timestamp());
                 messageList.add(data);
             }
 
@@ -395,11 +393,11 @@ public class ConsumeCommand implements Callable<Integer> {
     private void printYamlMessage(ConsumedMessage msg) {
         try {
             Map<String, Object> data = new LinkedHashMap<>();
-            data.put("partition", msg.getPartition());
-            data.put("offset", msg.getOffset());
-            data.put("key", msg.getKey());
-            data.put("value", msg.getValue());
-            data.put("timestamp", msg.getTimestamp());
+            data.put("partition", msg.partition());
+            data.put("offset", msg.offset());
+            data.put("key", msg.key());
+            data.put("value", msg.value());
+            data.put("timestamp", msg.timestamp());
 
             YAMLFactory yamlFactory = YAMLFactory.builder()
                     .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
@@ -411,17 +409,5 @@ public class ConsumeCommand implements Callable<Integer> {
         }
     }
 
-    private static class MessageRow {
-        final String partition;
-        final String offset;
-        final String key;
-        final String value;
-
-        MessageRow(String partition, String offset, String key, String value) {
-            this.partition = partition;
-            this.offset = offset;
-            this.key = key;
-            this.value = value;
-        }
-    }
+    private static record MessageRow(String partition, String offset, String key, String value) {}
 }

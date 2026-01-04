@@ -314,9 +314,9 @@ public class AlterGroupCommand implements Callable<Integer> {
      */
     private void processToOffset(Map<TopicPartition, OffsetAndMetadata> offsetsToAlter, Set<TopicPartition> groupPartitions) {
         for (String spec : toOffset) {
-            Map.Entry<Long, Set<TopicPartition>> parsed = parseOffsetSpec(spec, groupPartitions, false);
-            long offset = parsed.getKey();
-            for (TopicPartition tp : parsed.getValue()) {
+            var parsed = parseOffsetSpec(spec, groupPartitions, false);
+            long offset = parsed.value();
+            for (TopicPartition tp : parsed.partitions()) {
                 offsetsToAlter.put(tp, new OffsetAndMetadata(offset));
             }
         }
@@ -328,9 +328,9 @@ public class AlterGroupCommand implements Callable<Integer> {
      */
     private boolean processShiftBy(Map<TopicPartition, OffsetAndMetadata> offsetsToAlter, Set<TopicPartition> groupPartitions, Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
         for (String spec : shiftBy) {
-            Map.Entry<Long, Set<TopicPartition>> parsed = parseOffsetSpec(spec, groupPartitions, true);
-            long shift = parsed.getKey();
-            for (TopicPartition tp : parsed.getValue()) {
+            var parsed = parseOffsetSpec(spec, groupPartitions, true);
+            long shift = parsed.value();
+            for (TopicPartition tp : parsed.partitions()) {
                 long currentOffset = currentOffsets.get(tp).offset();
                 long newOffset = currentOffset + shift;
                 if (newOffset < 0) {
@@ -349,12 +349,12 @@ public class AlterGroupCommand implements Callable<Integer> {
      */
     private boolean processToDatetime(Admin admin, Map<TopicPartition, OffsetAndMetadata> offsetsToAlter, Set<TopicPartition> groupPartitions) {
         for (String spec : toDatetime) {
-            Map.Entry<String, Set<TopicPartition>> parsed = parseDatetimeSpec(spec, groupPartitions);
-            String datetime = parsed.getKey();
+            var parsed = parseDatetimeSpec(spec, groupPartitions);
+            String datetime = parsed.value();
             try {
                 Instant instant = Instant.parse(datetime);
                 long timestamp = instant.toEpochMilli();
-                Map<TopicPartition, Long> timestampOffsets = getOffsetsForTimestamp(admin, parsed.getValue(), timestamp);
+                Map<TopicPartition, Long> timestampOffsets = getOffsetsForTimestamp(admin, parsed.partitions(), timestamp);
                 for (Map.Entry<TopicPartition, Long> entry : timestampOffsets.entrySet()) {
                     offsetsToAlter.put(entry.getKey(), new OffsetAndMetadata(entry.getValue()));
                 }
@@ -374,12 +374,12 @@ public class AlterGroupCommand implements Callable<Integer> {
      */
     private boolean processByDuration(Admin admin, Map<TopicPartition, OffsetAndMetadata> offsetsToAlter, Set<TopicPartition> groupPartitions) {
         for (String spec : byDuration) {
-            Map.Entry<String, Set<TopicPartition>> parsed = parseDatetimeSpec(spec, groupPartitions);
-            String durationStr = parsed.getKey();
+            var parsed = parseDatetimeSpec(spec, groupPartitions);
+            String durationStr = parsed.value();
             try {
                 Duration duration = Duration.parse(durationStr);
                 long timestamp = Instant.now().minus(duration).toEpochMilli();
-                Map<TopicPartition, Long> timestampOffsets = getOffsetsForTimestamp(admin, parsed.getValue(), timestamp);
+                Map<TopicPartition, Long> timestampOffsets = getOffsetsForTimestamp(admin, parsed.partitions(), timestamp);
                 for (Map.Entry<TopicPartition, Long> entry : timestampOffsets.entrySet()) {
                     offsetsToAlter.put(entry.getKey(), new OffsetAndMetadata(entry.getValue()));
                 }
@@ -436,7 +436,7 @@ public class AlterGroupCommand implements Callable<Integer> {
      * @param groupPartitions Available partitions in the group
      * @param allowNegative Whether to allow negative offset values (for shift-by)
      */
-    private Map.Entry<Long, Set<TopicPartition>> parseOffsetSpec(String spec, Set<TopicPartition> groupPartitions, boolean allowNegative) {
+    private PartitionOffsetSpec<Long> parseOffsetSpec(String spec, Set<TopicPartition> groupPartitions, boolean allowNegative) {
         String[] parts = spec.split(":", 3);
         if (parts.length < 3) {
             throw new IllegalArgumentException(
@@ -450,7 +450,7 @@ public class AlterGroupCommand implements Callable<Integer> {
             }
 
             Set<TopicPartition> partitions = parseTopicPartitionSpec(parts[1] + ':' + parts[2], groupPartitions);
-            return Map.entry(offset, partitions);
+            return new PartitionOffsetSpec<>(partitions, offset);
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid offset number: " + parts[0]);
         }
@@ -459,7 +459,7 @@ public class AlterGroupCommand implements Callable<Integer> {
     /**
      * Parse datetime/duration specification (datetime[:topic[:partition]])
      */
-    private Map.Entry<String, Set<TopicPartition>> parseDatetimeSpec(String spec, Set<TopicPartition> groupPartitions) {
+    private PartitionOffsetSpec<String> parseDatetimeSpec(String spec, Set<TopicPartition> groupPartitions) {
         // Find the topic:partition part by looking for the last occurrence that matches a topic name
         // This handles ISO-8601 timestamps which contain colons
         String datetime = spec;
@@ -477,7 +477,7 @@ public class AlterGroupCommand implements Callable<Integer> {
         }
 
         Set<TopicPartition> partitions = parseTopicPartitionSpec(topicPartSpec, groupPartitions);
-        return Map.entry(datetime, partitions);
+        return new PartitionOffsetSpec<>(partitions, datetime);
     }
 
     private Map<TopicPartition, Long> getEarliestOffsets(Admin admin, Set<TopicPartition> partitions) {
@@ -522,4 +522,6 @@ public class AlterGroupCommand implements Callable<Integer> {
             out().println("Deleted offsets for " + deletedCount + " partition(s) from group \"" + groupId + "\".");
         }
     }
+
+    private static record PartitionOffsetSpec<T>(Set<TopicPartition> partitions, T value) {}
 }

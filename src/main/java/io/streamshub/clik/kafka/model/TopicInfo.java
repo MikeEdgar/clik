@@ -6,104 +6,65 @@ import java.util.List;
 import java.util.Map;
 
 @RegisterForReflection
-public class TopicInfo {
-    private String name;
-    private int partitions;
-    private int replicationFactor;
-    private boolean internal;
-    private Map<String, String> config;
-    private List<PartitionInfo> partitionDetails;
-
-    public TopicInfo() {
+public record TopicInfo(
+    String name,
+    int partitions,
+    int replicationFactor,
+    boolean internal,
+    Map<String, String> config,
+    List<PartitionInfo> partitionDetails
+) {
+    // Compact constructor with defensive copying
+    public TopicInfo {
+        config = config != null ? Map.copyOf(config) : Map.of();
+        partitionDetails = partitionDetails != null ? List.copyOf(partitionDetails) : List.of();
     }
 
     public static Builder builder() {
         return new Builder();
     }
 
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
-    }
-
-    public int getPartitions() {
-        return partitions;
-    }
-
-    public void setPartitions(int partitions) {
-        this.partitions = partitions;
-    }
-
-    public int getReplicationFactor() {
-        return replicationFactor;
-    }
-
-    public void setReplicationFactor(int replicationFactor) {
-        this.replicationFactor = replicationFactor;
-    }
-
-    public boolean isInternal() {
-        return internal;
-    }
-
-    public void setInternal(boolean internal) {
-        this.internal = internal;
-    }
-
-    public Map<String, String> getConfig() {
-        return config;
-    }
-
-    public void setConfig(Map<String, String> config) {
-        this.config = config;
-    }
-
-    public List<PartitionInfo> getPartitionDetails() {
-        return partitionDetails;
-    }
-
-    public void setPartitionDetails(List<PartitionInfo> partitionDetails) {
-        this.partitionDetails = partitionDetails;
-    }
-
     public static class Builder {
-        private final TopicInfo topicInfo = new TopicInfo();
+        private String name;
+        private int partitions;
+        private int replicationFactor;
+        private boolean internal;
+        private Map<String, String> config;
+        private List<PartitionInfo> partitionDetails;
 
         public Builder name(String name) {
-            topicInfo.name = name;
+            this.name = name;
             return this;
         }
 
         public Builder partitions(int partitions) {
-            topicInfo.partitions = partitions;
+            this.partitions = partitions;
             return this;
         }
 
         public Builder replicationFactor(int replicationFactor) {
-            topicInfo.replicationFactor = replicationFactor;
+            this.replicationFactor = replicationFactor;
             return this;
         }
 
         public Builder internal(boolean internal) {
-            topicInfo.internal = internal;
+            this.internal = internal;
             return this;
         }
 
         public Builder config(Map<String, String> config) {
-            topicInfo.config = config;
+            this.config = config;
             return this;
         }
 
         public Builder partitionDetails(List<PartitionInfo> partitionDetails) {
-            topicInfo.partitionDetails = partitionDetails;
+            this.partitionDetails = partitionDetails;
             return this;
         }
 
         public TopicInfo build() {
-            return topicInfo;
+            return new TopicInfo(name, partitions, replicationFactor,
+                               internal, config, partitionDetails);
         }
     }
 }

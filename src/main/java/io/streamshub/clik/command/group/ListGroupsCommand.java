@@ -58,7 +58,7 @@ public class ListGroupsCommand implements Callable<Integer> {
 
             // Sort groups by name for consistent output order
             List<GroupInfo> sortedGroups = new ArrayList<>(groups);
-            sortedGroups.sort((a, b) -> a.getGroupId().compareTo(b.getGroupId()));
+            sortedGroups.sort((a, b) -> a.groupId().compareTo(b.groupId()));
 
             switch (outputFormat.toLowerCase()) {
                 case "table":
@@ -94,10 +94,10 @@ public class ListGroupsCommand implements Callable<Integer> {
 
         for (GroupInfo group : groups) {
             rows.add(new GroupRow(
-                    group.getGroupId(),
-                    group.getType(),
-                    group.getState(),
-                    String.valueOf(group.getMemberCount())
+                    group.groupId(),
+                    group.type(),
+                    group.state(),
+                    String.valueOf(group.memberCount())
             ));
         }
 
@@ -112,7 +112,7 @@ public class ListGroupsCommand implements Callable<Integer> {
     }
 
     private void printNames(List<GroupInfo> groups) {
-        groups.forEach(group -> System.out.println(group.getGroupId()));
+        groups.forEach(group -> System.out.println(group.groupId()));
     }
 
     private void printYaml(List<GroupInfo> groups) {
@@ -121,10 +121,10 @@ public class ListGroupsCommand implements Callable<Integer> {
 
             for (GroupInfo group : groups) {
                 Map<String, Object> data = new LinkedHashMap<>();
-                data.put("groupId", group.getGroupId());
-                data.put("type", group.getType());
-                data.put("state", group.getState());
-                data.put("members", group.getMemberCount());
+                data.put("groupId", group.groupId());
+                data.put("type", group.type());
+                data.put("state", group.state());
+                data.put("members", group.memberCount());
                 groupList.add(data);
             }
 
@@ -144,10 +144,10 @@ public class ListGroupsCommand implements Callable<Integer> {
 
             for (GroupInfo group : groups) {
                 Map<String, Object> data = new LinkedHashMap<>();
-                data.put("groupId", group.getGroupId());
-                data.put("type", group.getType());
-                data.put("state", group.getState());
-                data.put("members", group.getMemberCount());
+                data.put("groupId", group.groupId());
+                data.put("type", group.type());
+                data.put("state", group.state());
+                data.put("members", group.memberCount());
                 groupList.add(data);
             }
 
@@ -159,17 +159,5 @@ public class ListGroupsCommand implements Callable<Integer> {
         }
     }
 
-    private static class GroupRow {
-        final String name;
-        final String type;
-        final String state;
-        final String members;
-
-        GroupRow(String name, String type, String state, String members) {
-            this.name = name;
-            this.type = type;
-            this.state = state;
-            this.members = members;
-        }
-    }
+    private static record GroupRow(String name, String type, String state, String members) {}
 }

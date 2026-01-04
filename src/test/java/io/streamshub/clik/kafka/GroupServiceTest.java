@@ -67,7 +67,7 @@ class GroupServiceTest extends ClikTestBase {
 
         // Verify our test group IDs are present
         List<String> groupIds = groups.stream()
-                .map(GroupInfo::getGroupId)
+                .map(GroupInfo::groupId)
                 .sorted()
                 .toList();
         assertTrue(groupIds.contains("test-group-1"));
@@ -75,13 +75,13 @@ class GroupServiceTest extends ClikTestBase {
 
         // Verify basic metadata is present
         for (GroupInfo group : groups) {
-            assertNotNull(group.getGroupId());
-            assertNotNull(group.getType());
-            assertNotNull(group.getState());
-            assertTrue(group.getMemberCount() >= 0);
+            assertNotNull(group.groupId());
+            assertNotNull(group.type());
+            assertNotNull(group.state());
+            assertTrue(group.memberCount() >= 0);
             // Members and offsets should be null for list operation
-            assertNull(group.getMembers());
-            assertNull(group.getOffsets());
+            assertNull(group.members());
+            assertNull(group.offsets());
         }
     }
 
@@ -99,7 +99,7 @@ class GroupServiceTest extends ClikTestBase {
 
         // Verify our test group is present
         boolean foundTestGroup = consumerGroups.stream()
-                .anyMatch(g -> "consumer-group".equals(g.getGroupId()));
+                .anyMatch(g -> "consumer-group".equals(g.groupId()));
         assertTrue(foundTestGroup, "Should find consumer-group");
 
         // Filter by share type (should be empty)
@@ -122,13 +122,13 @@ class GroupServiceTest extends ClikTestBase {
 
         GroupInfo group = groupService.describeGroup(admin(), "describe-group");
         assertNotNull(group);
-        assertEquals("describe-group", group.getGroupId());
-        assertEquals(groupProtocol, group.getType());
-        assertNotNull(group.getState());
-        assertEquals(1, group.getMemberCount());
-        assertNotNull(group.getCoordinator());
-        assertNotNull(group.getMembers());
-        assertEquals(1, group.getMembers().size());
+        assertEquals("describe-group", group.groupId());
+        assertEquals(groupProtocol, group.type());
+        assertNotNull(group.state());
+        assertEquals(1, group.memberCount());
+        assertNotNull(group.coordinator());
+        assertNotNull(group.members());
+        assertEquals(1, group.members().size());
     }
 
     @Test
@@ -148,17 +148,17 @@ class GroupServiceTest extends ClikTestBase {
 
         GroupInfo group = groupService.describeGroup(admin(), "multi-member-group");
         assertNotNull(group);
-        assertEquals("multi-member-group", group.getGroupId());
-        assertEquals(3, group.getMemberCount());
-        assertNotNull(group.getMembers());
-        assertEquals(3, group.getMembers().size());
+        assertEquals("multi-member-group", group.groupId());
+        assertEquals(3, group.memberCount());
+        assertNotNull(group.members());
+        assertEquals(3, group.members().size());
 
         // Verify member info
-        for (var member : group.getMembers()) {
-            assertNotNull(member.getMemberId());
-            assertNotNull(member.getClientId());
-            assertNotNull(member.getHost());
-            assertNotNull(member.getAssignments());
+        for (var member : group.members()) {
+            assertNotNull(member.memberId());
+            assertNotNull(member.clientId());
+            assertNotNull(member.host());
+            assertNotNull(member.assignments());
         }
     }
 
@@ -186,21 +186,21 @@ class GroupServiceTest extends ClikTestBase {
 
         GroupInfo group = groupService.describeGroup(admin(), "offset-group");
         assertNotNull(group);
-        assertEquals("offset-group", group.getGroupId());
+        assertEquals("offset-group", group.groupId());
 
         // Verify offsets are present
-        List<OffsetLagInfo> offsets = group.getOffsets();
+        List<OffsetLagInfo> offsets = group.offsets();
         assertNotNull(offsets);
         assertFalse(offsets.isEmpty());
 
         // Verify offset information
         for (OffsetLagInfo offset : offsets) {
-            assertEquals("offset-topic", offset.getTopic());
-            assertTrue(offset.getPartition() >= 0);
-            assertNotNull(offset.getCurrentOffset());
-            assertNotNull(offset.getLogEndOffset());
-            assertNotNull(offset.getLag());
-            assertTrue(offset.getLag() >= 0);
+            assertEquals("offset-topic", offset.topic());
+            assertTrue(offset.partition() >= 0);
+            assertNotNull(offset.currentOffset());
+            assertNotNull(offset.logEndOffset());
+            assertNotNull(offset.lag());
+            assertTrue(offset.lag() >= 0);
         }
     }
 
@@ -214,13 +214,13 @@ class GroupServiceTest extends ClikTestBase {
 
         GroupInfo group = groupService.describeGroup(admin(), "no-offset-group");
         assertNotNull(group);
-        assertEquals("no-offset-group", group.getGroupId());
+        assertEquals("no-offset-group", group.groupId());
 
         // Offsets may be empty or null for a group with no committed offsets
-        List<OffsetLagInfo> offsets = group.getOffsets();
+        List<OffsetLagInfo> offsets = group.offsets();
         if (offsets != null) {
             // If offsets are present, they should be empty or have null current offsets
-            assertTrue(offsets.isEmpty() || offsets.get(0).getCurrentOffset() == null);
+            assertTrue(offsets.isEmpty() || offsets.get(0).currentOffset() == null);
         }
     }
 
