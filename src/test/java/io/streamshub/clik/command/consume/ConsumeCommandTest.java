@@ -11,10 +11,12 @@ import io.streamshub.clik.test.ClikMainTestBase;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -310,6 +312,149 @@ class ConsumeCommandTest extends ClikMainTestBase {
         assertTrue(result.getErrorOutput().contains("No current context set"));
     }
 
+    @Test
+    void testConsumeWithHeadersJson() throws Exception {
+        // Create topic and produce messages with headers
+        topicService.createTopic(admin(), "headers-json-topic", 1, 1, Collections.emptyMap());
+
+        RecordHeaders headers = new RecordHeaders();
+        headers.add("content-type", "application/json".getBytes(StandardCharsets.UTF_8));
+        headers.add("version", "1.0".getBytes(StandardCharsets.UTF_8));
+
+        produceMessagesWithHeaders("headers-json-topic", headers, "test message");
+
+        // Consume with JSON output
+        LaunchResult result = launcher.launch("consume", "headers-json-topic",
+                "--from-beginning",
+                "--output", "json",
+                "--timeout", "3000");
+        assertEquals(0, result.exitCode());
+
+        String output = result.getOutput();
+        assertTrue(output.contains("\"headers\""));
+        assertTrue(output.contains("\"key\" : \"content-type\""));
+        assertTrue(output.contains("\"value\" : \"application/json\""));
+        assertTrue(output.contains("\"key\" : \"version\""));
+        assertTrue(output.contains("\"value\" : \"1.0\""));
+    }
+
+    @Test
+    void testConsumeWithHeadersYaml() throws Exception {
+        // Create topic and produce messages with headers
+        topicService.createTopic(admin(), "headers-yaml-topic", 1, 1, Collections.emptyMap());
+
+        RecordHeaders headers = new RecordHeaders();
+        headers.add("source", "cli".getBytes(StandardCharsets.UTF_8));
+        headers.add("environment", "test".getBytes(StandardCharsets.UTF_8));
+
+        produceMessagesWithHeaders("headers-yaml-topic", headers, "yaml test message");
+
+        // Consume with YAML output
+        LaunchResult result = launcher.launch("consume", "headers-yaml-topic",
+                "--from-beginning",
+                "--output", "yaml",
+                "--timeout", "3000");
+        assertEquals(0, result.exitCode());
+
+        String output = result.getOutput();
+        assertTrue(output.contains("headers:"));
+        assertTrue(output.contains("key: \"source\""));
+        assertTrue(output.contains("value: \"cli\""));
+        assertTrue(output.contains("key: \"environment\""));
+        assertTrue(output.contains("value: \"test\""));
+    }
+
+    @Test
+    void testConsumeWithDuplicateHeadersJson() throws Exception {
+        // Create topic and produce messages with duplicate header keys
+        topicService.createTopic(admin(), "dup-headers-json-topic", 1, 1, Collections.emptyMap());
+
+        RecordHeaders headers = new RecordHeaders();
+        headers.add("tag", "v1".getBytes(StandardCharsets.UTF_8));
+        headers.add("tag", "v2".getBytes(StandardCharsets.UTF_8));
+        headers.add("tag", "v3".getBytes(StandardCharsets.UTF_8));
+
+        produceMessagesWithHeaders("dup-headers-json-topic", headers, "duplicate header test");
+
+        // Consume with JSON output
+        LaunchResult result = launcher.launch("consume", "dup-headers-json-topic",
+                "--from-beginning",
+                "--output", "json",
+                "--timeout", "3000");
+        assertEquals(0, result.exitCode());
+
+        String output = result.getOutput();
+        assertTrue(output.contains("\"headers\""));
+        // All three tag headers should be present
+        int tagCount = countOccurrences(output, "\"key\" : \"tag\"");
+        assertEquals(3, tagCount);
+        assertTrue(output.contains("\"value\" : \"v1\""));
+        assertTrue(output.contains("\"value\" : \"v2\""));
+        assertTrue(output.contains("\"value\" : \"v3\""));
+    }
+
+    @Test
+    void testConsumeWithDuplicateHeadersYaml() throws Exception {
+        // Create topic and produce messages with duplicate header keys
+        topicService.createTopic(admin(), "dup-headers-yaml-topic", 1, 1, Collections.emptyMap());
+
+        RecordHeaders headers = new RecordHeaders();
+        headers.add("label", "alpha".getBytes(StandardCharsets.UTF_8));
+        headers.add("label", "beta".getBytes(StandardCharsets.UTF_8));
+
+        produceMessagesWithHeaders("dup-headers-yaml-topic", headers, "yaml duplicate test");
+
+        // Consume with YAML output
+        LaunchResult result = launcher.launch("consume", "dup-headers-yaml-topic",
+                "--from-beginning",
+                "--output", "yaml",
+                "--timeout", "3000");
+        assertEquals(0, result.exitCode());
+
+        String output = result.getOutput();
+        assertTrue(output.contains("headers:"));
+        int labelCount = countOccurrences(output, "key: \"label\"");
+        assertEquals(2, labelCount);
+        assertTrue(output.contains("value: \"alpha\""));
+        assertTrue(output.contains("value: \"beta\""));
+    }
+
+    @Test
+    void testConsumeWithNoHeadersJson() throws Exception {
+        // Create topic and produce messages without headers
+        topicService.createTopic(admin(), "no-headers-json-topic", 1, 1, Collections.emptyMap());
+        produceMessages("no-headers-json-topic", "message without headers");
+
+        // Consume with JSON output
+        LaunchResult result = launcher.launch("consume", "no-headers-json-topic",
+                "--from-beginning",
+                "--output", "json",
+                "--timeout", "3000");
+        assertEquals(0, result.exitCode());
+
+        String output = result.getOutput();
+        // Headers field should exist but be an empty array
+        assertTrue(output.contains("\"headers\" : [ ]"));
+    }
+
+    @Test
+    void testConsumeWithNoHeadersYaml() throws Exception {
+        // Create topic and produce messages without headers
+        topicService.createTopic(admin(), "no-headers-yaml-topic", 1, 1, Collections.emptyMap());
+        produceMessages("no-headers-yaml-topic", "message without headers");
+
+        // Consume with YAML output
+        LaunchResult result = launcher.launch("consume", "no-headers-yaml-topic",
+                "--from-beginning",
+                "--output", "yaml",
+                "--timeout", "3000");
+        assertEquals(0, result.exitCode());
+
+        String output = result.getOutput();
+        // Headers field should exist but be empty
+        assertTrue(output.contains("headers: []"));
+    }
+
     /**
      * Helper method to produce test messages
      */
@@ -340,5 +485,35 @@ class ConsumeCommandTest extends ClikMainTestBase {
                 producer.send(new ProducerRecord<>(topic, partition, null, message)).get();
             }
         }
+    }
+
+    /**
+     * Helper method to produce messages with headers
+     */
+    private void produceMessagesWithHeaders(String topic, RecordHeaders headers, String... messages) throws Exception {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            for (String message : messages) {
+                ProducerRecord<String, String> record = new ProducerRecord<>(topic, null, null, null, message, headers);
+                producer.send(record).get();
+            }
+        }
+    }
+
+    /**
+     * Helper method to count occurrences of a substring
+     */
+    private int countOccurrences(String text, String substring) {
+        int count = 0;
+        int index = 0;
+        while ((index = text.indexOf(substring, index)) != -1) {
+            count++;
+            index += substring.length();
+        }
+        return count;
     }
 }

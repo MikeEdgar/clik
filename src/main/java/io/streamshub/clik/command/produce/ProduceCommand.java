@@ -1,22 +1,30 @@
 package io.streamshub.clik.command.produce;
 
-import io.streamshub.clik.kafka.KafkaClientFactory;
-import jakarta.inject.Inject;
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import picocli.CommandLine;
-import picocli.CommandLine.Model.CommandSpec;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
+
+import jakarta.inject.Inject;
+
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+
+import io.streamshub.clik.kafka.KafkaClientFactory;
+import picocli.CommandLine;
+import picocli.CommandLine.Model.CommandSpec;
 
 @CommandLine.Command(
         name = "produce",
@@ -57,6 +65,24 @@ public class ProduceCommand implements Callable<Integer> {
     )
     Integer partition;
 
+    @CommandLine.Option(
+            names = {"-v", "--value"},
+            description = "Message value (mutually exclusive with --file and --interactive)"
+    )
+    String value;
+
+    @CommandLine.Option(
+            names = {"--header"},
+            description = "Message header in format key=value (repeatable, supports duplicate keys)"
+    )
+    List<String> headers;
+
+    @CommandLine.Option(
+            names = {"-t", "--timestamp"},
+            description = "Message timestamp (epoch milliseconds or ISO-8601 format, e.g., 2026-01-04T12:00:00Z)"
+    )
+    String timestamp;
+
     @Inject
     KafkaClientFactory clientFactory;
 
@@ -71,8 +97,20 @@ public class ProduceCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         // Validate mutually exclusive options
-        if (file != null && interactive) {
-            err().println("Error: --file and --interactive options are mutually exclusive");
+        int inputModeCount = 0;
+
+        if (file != null) {
+            inputModeCount++;
+        }
+        if (interactive) {
+            inputModeCount++;
+        }
+        if (value != null) {
+            inputModeCount++;
+        }
+
+        if (inputModeCount > 1) {
+            err().println("Error: --file, --interactive, and --value are mutually exclusive");
             return 1;
         }
 
@@ -105,7 +143,9 @@ public class ProduceCommand implements Callable<Integer> {
     }
 
     private Stream<String> readMessages() throws IOException {
-        if (file != null) {
+        if (value != null) {
+            return Stream.of(value);
+        } else if (file != null) {
             return Files.lines(Paths.get(file));
         } else if (interactive) {
             err().println("Enter messages (Ctrl+D to finish):");
@@ -115,13 +155,69 @@ public class ProduceCommand implements Callable<Integer> {
         }
     }
 
+    private Headers toKafkaHeaders(List<String> headerList) {
+        if (headerList == null || headerList.isEmpty()) {
+            return null;
+        }
+
+        RecordHeaders recordHeaders = new RecordHeaders();
+
+        for (String header : headerList) {
+            int equalsIndex = header.indexOf('=');
+            if (equalsIndex <= 0) {
+                throw new IllegalArgumentException(
+                        "Invalid header format: " + header +
+                                ". Expected format: key=value");
+            }
+
+            String headerKey = header.substring(0, equalsIndex).trim();
+            String headerValue = header.substring(equalsIndex + 1).trim();
+
+            recordHeaders.add(headerKey, headerValue.getBytes(StandardCharsets.UTF_8));
+        }
+
+        return recordHeaders;
+    }
+
+    private Long parseTimestamp(String ts) {
+        if (ts == null || ts.isEmpty()) {
+            return null;
+        }
+
+        // Try parsing as epoch milliseconds first
+        try {
+            return Long.parseLong(ts);
+        } catch (NumberFormatException e) {
+            // Not a number, try parsing as ISO-8601
+            try {
+                return OffsetDateTime.parse(ts).toInstant().toEpochMilli();
+            } catch (DateTimeParseException ex) {
+                throw new IllegalArgumentException(
+                        "Invalid timestamp format: " + ts +
+                                ". Expected epoch milliseconds or ISO-8601 format (e.g., 2026-01-04T12:00:00Z)");
+            }
+        }
+    }
+
     private int sendMessages(Producer<String, String> producer, Stream<String> messages) {
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
 
+        // Convert headers List to Kafka Headers once
+        Headers recordHeaders = toKafkaHeaders(headers);
+
+        // Parse timestamp once
+        Long timestampMillis = parseTimestamp(timestamp);
+
         messages.forEach(message -> {
+            // Use headers and/or timestamp may be null
             ProducerRecord<String, String> rec = new ProducerRecord<>(
-                    topic, partition, key, message);
+                    topic,
+                    partition,
+                    timestampMillis,
+                    key,
+                    message,
+                    recordHeaders);
 
             producer.send(rec, (metadata, exception) -> {
                 if (exception == null) {
