@@ -1,5 +1,6 @@
 package io.streamshub.clik.kafka;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -7,7 +8,6 @@ import java.util.concurrent.TimeUnit;
 
 import jakarta.inject.Inject;
 
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.junit.QuarkusTest;
@@ -15,6 +15,7 @@ import io.quarkus.test.junit.TestProfile;
 import io.streamshub.clik.kafka.model.TopicInfo;
 import io.streamshub.clik.test.ClikTestBase;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -32,9 +33,7 @@ class TopicServiceTest extends ClikTestBase {
     @Test
     void testCreateTopic() throws Exception {
         topicService.createTopic(admin(), "test-topic", 3, 1, null);
-
-        Set<String> topics = topicService.listTopics(admin(), false);
-        assertTrue(topics.contains("test-topic"));
+        awaitTopics("test-topic");
 
         TopicInfo info = topicService.describeTopic(admin(), "test-topic");
         assertEquals("test-topic", info.name());
@@ -51,6 +50,7 @@ class TopicServiceTest extends ClikTestBase {
         );
 
         topicService.createTopic(admin(), "test-topic-config", 1, 1, configs);
+        awaitTopics("test-topic-config");
 
         TopicInfo info = topicService.describeTopic(admin(), "test-topic-config");
         assertEquals("test-topic-config", info.name());
@@ -60,10 +60,12 @@ class TopicServiceTest extends ClikTestBase {
 
     @Test
     void testCreateTopicAlreadyExists() throws Exception {
-        topicService.createTopic(admin(), "duplicate-topic", 1, 1, null);
+        var admin = admin();
+        topicService.createTopic(admin, "duplicate-topic", 1, 1, null);
+        awaitTopics("duplicate-topic");
 
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
-                topicService.createTopic(admin(), "duplicate-topic", 1, 1, null));
+        var exception = assertThrows(IllegalArgumentException.class, () ->
+                topicService.createTopic(admin, "duplicate-topic", 1, 1, null));
 
         assertTrue(exception.getMessage().contains("already exists"));
     }
@@ -79,6 +81,7 @@ class TopicServiceTest extends ClikTestBase {
         topicService.createTopic(admin(), "topic1", 1, 1, null);
         topicService.createTopic(admin(), "topic2", 1, 1, null);
         topicService.createTopic(admin(), "topic3", 1, 1, null);
+        awaitTopics("topic1", "topic2", "topic3");
 
         Set<String> topics = topicService.listTopics(admin(), false);
         assertEquals(3, topics.size());
@@ -90,6 +93,7 @@ class TopicServiceTest extends ClikTestBase {
     @Test
     void testDescribeTopic() throws Exception {
         topicService.createTopic(admin(), "describe-topic", 5, 1, null);
+        awaitTopics("describe-topic");
 
         TopicInfo info = topicService.describeTopic(admin(), "describe-topic");
         assertNotNull(info);
@@ -105,12 +109,7 @@ class TopicServiceTest extends ClikTestBase {
     void testDescribeTopics() throws Exception {
         topicService.createTopic(admin(), "multi-topic1", 2, 1, null);
         topicService.createTopic(admin(), "multi-topic2", 3, 1, null);
-
-        Awaitility.await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-            assertTrue(topicService.listTopics(admin(), false).containsAll(
-                    List.of("multi-topic1", "multi-topic2")
-            ));
-        });
+        awaitTopics("multi-topic1", "multi-topic2");
 
         Map<String, TopicInfo> topics = topicService.describeTopics(admin(), List.of("multi-topic1", "multi-topic2"));
         assertEquals(2, topics.size());
@@ -129,6 +128,7 @@ class TopicServiceTest extends ClikTestBase {
     @Test
     void testAlterTopicConfig() throws Exception {
         topicService.createTopic(admin(), "alter-topic", 1, 1, null);
+        awaitTopics("alter-topic");
 
         Map<String, String> newConfigs = Map.of(
                 "retention.ms", "3600000",
@@ -149,6 +149,7 @@ class TopicServiceTest extends ClikTestBase {
                 "max.message.bytes", "2000000"
         );
         topicService.createTopic(admin(), "alter-delete-topic", 1, 1, initialConfigs);
+        awaitTopics("alter-delete-topic");
 
         TopicInfo info = topicService.describeTopic(admin(), "alter-delete-topic");
         assertEquals("3600000", info.config().get("retention.ms"));
@@ -169,6 +170,7 @@ class TopicServiceTest extends ClikTestBase {
                 "max.message.bytes", "2000000"
         );
         topicService.createTopic(admin(), "alter-both-topic", 1, 1, initialConfigs);
+        awaitTopics("alter-both-topic");
 
         // Set a new config and delete an existing one
         Map<String, String> newConfigs = Map.of("compression.type", "snappy");
@@ -183,9 +185,7 @@ class TopicServiceTest extends ClikTestBase {
     @Test
     void testDeleteTopic() throws Exception {
         topicService.createTopic(admin(), "delete-topic", 1, 1, null);
-        Awaitility.await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
-            assertTrue(topicService.listTopics(admin(), false).contains("delete-topic"));
-        });
+        awaitTopics("delete-topic");
 
         topicService.deleteTopic(admin(), "delete-topic");
         assertFalse(topicService.listTopics(admin(), false).contains("delete-topic"));
@@ -196,6 +196,7 @@ class TopicServiceTest extends ClikTestBase {
         topicService.createTopic(admin(), "delete-topic1", 1, 1, null);
         topicService.createTopic(admin(), "delete-topic2", 1, 1, null);
         topicService.createTopic(admin(), "delete-topic3", 1, 1, null);
+        awaitTopics("delete-topic1", "delete-topic2", "delete-topic3");
 
         Set<String> topics = topicService.listTopics(admin(), false);
         assertEquals(3, topics.size());
@@ -209,6 +210,7 @@ class TopicServiceTest extends ClikTestBase {
     @Test
     void testIncreasePartitions() throws Exception {
         topicService.createTopic(admin(), "partition-test", 3, 1, null);
+        awaitTopics("partition-test");
 
         TopicInfo beforeInfo = topicService.describeTopic(admin(), "partition-test");
         assertEquals(3, beforeInfo.partitions());
@@ -217,5 +219,12 @@ class TopicServiceTest extends ClikTestBase {
 
         TopicInfo afterInfo = topicService.describeTopic(admin(), "partition-test");
         assertEquals(6, afterInfo.partitions());
+    }
+
+    void awaitTopics(String... topicNames) {
+        await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> {
+            assertTrue(topicService.listTopics(admin(), false)
+                    .containsAll(Arrays.asList(topicNames)));
+        });
     }
 }

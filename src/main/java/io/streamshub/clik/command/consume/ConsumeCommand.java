@@ -29,7 +29,7 @@ import com.github.freva.asciitable.Column;
 import com.github.freva.asciitable.HorizontalAlign;
 
 import io.streamshub.clik.kafka.KafkaClientFactory;
-import io.streamshub.clik.kafka.model.ConsumedMessage;
+import io.streamshub.clik.kafka.model.KafkaRecord;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.CommandSpec;
 
@@ -160,7 +160,7 @@ public class ConsumeCommand implements Callable<Integer> {
             if (follow) {
                 return consumeContinuously(consumer);
             } else {
-                List<ConsumedMessage> messages = consumeOnce(consumer);
+                List<KafkaRecord> messages = consumeOnce(consumer);
                 if (messages.isEmpty()) {
                     if (!format.equals("value")) {
                         out().println("No messages consumed");
@@ -215,15 +215,15 @@ public class ConsumeCommand implements Callable<Integer> {
         }
     }
 
-    private List<ConsumedMessage> consumeOnce(Consumer<String, String> consumer) {
-        List<ConsumedMessage> messages = new ArrayList<>();
+    private List<KafkaRecord> consumeOnce(Consumer<String, String> consumer) {
+        List<KafkaRecord> messages = new ArrayList<>();
         long startTime = System.currentTimeMillis();
 
         while (System.currentTimeMillis() - startTime < timeout) {
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
 
             for (ConsumerRecord<String, String> rec : records) {
-                messages.add(ConsumedMessage.from(rec));
+                messages.add(KafkaRecord.from(rec));
 
                 if (maxMessages != null && messages.size() >= maxMessages) {
                     return messages;
@@ -249,7 +249,7 @@ public class ConsumeCommand implements Callable<Integer> {
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
 
             for (ConsumerRecord<String, String> rec : records) {
-                printMessage(ConsumedMessage.from(rec));
+                printMessage(KafkaRecord.from(rec));
 
                 if (maxMessages != null && count.incrementAndGet() >= maxMessages) {
                     running.set(false);
@@ -264,7 +264,7 @@ public class ConsumeCommand implements Callable<Integer> {
         return 0;
     }
 
-    private void printMessage(ConsumedMessage message) {
+    private void printMessage(KafkaRecord message) {
         switch (outputFormat.toLowerCase()) {
             case "table":
                 printTableRow(message);
@@ -281,7 +281,7 @@ public class ConsumeCommand implements Callable<Integer> {
         }
     }
 
-    private void printMessages(List<ConsumedMessage> messages) {
+    private void printMessages(List<KafkaRecord> messages) {
         switch (outputFormat.toLowerCase()) {
             case "table":
                 printTable(messages);
@@ -298,10 +298,10 @@ public class ConsumeCommand implements Callable<Integer> {
         }
     }
 
-    private void printTable(List<ConsumedMessage> messages) {
+    private void printTable(List<KafkaRecord> messages) {
         List<MessageRow> rows = new ArrayList<>();
 
-        for (ConsumedMessage msg : messages) {
+        for (KafkaRecord msg : messages) {
             rows.add(new MessageRow(
                     String.valueOf(msg.partition()),
                     String.valueOf(msg.offset()),
@@ -320,7 +320,7 @@ public class ConsumeCommand implements Callable<Integer> {
         out().println(table);
     }
 
-    private void printTableRow(ConsumedMessage msg) {
+    private void printTableRow(KafkaRecord msg) {
         out().printf("%d\t%d\t%s\t%s%n",
                 msg.partition(),
                 msg.offset(),
@@ -328,17 +328,18 @@ public class ConsumeCommand implements Callable<Integer> {
                 msg.value() != null ? msg.value() : "");
     }
 
-    private void printJson(List<ConsumedMessage> messages) {
+    private void printJson(List<KafkaRecord> messages) {
         try {
             List<Map<String, Object>> messageList = new ArrayList<>();
 
-            for (ConsumedMessage msg : messages) {
+            for (KafkaRecord msg : messages) {
                 Map<String, Object> data = new LinkedHashMap<>();
                 data.put("partition", msg.partition());
                 data.put("offset", msg.offset());
                 data.put("key", msg.key());
                 data.put("value", msg.value());
                 data.put("timestamp", msg.timestamp());
+                data.put("headers", convertHeadersToMapList(msg.headers()));
                 messageList.add(data);
             }
 
@@ -350,7 +351,7 @@ public class ConsumeCommand implements Callable<Integer> {
         }
     }
 
-    private void printJsonMessage(ConsumedMessage msg) {
+    private void printJsonMessage(KafkaRecord msg) {
         try {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("partition", msg.partition());
@@ -358,6 +359,7 @@ public class ConsumeCommand implements Callable<Integer> {
             data.put("key", msg.key());
             data.put("value", msg.value());
             data.put("timestamp", msg.timestamp());
+            data.put("headers", convertHeadersToMapList(msg.headers()));
 
             ObjectMapper jsonMapper = new ObjectMapper();
             out().println(jsonMapper.writeValueAsString(data));
@@ -366,17 +368,18 @@ public class ConsumeCommand implements Callable<Integer> {
         }
     }
 
-    private void printYaml(List<ConsumedMessage> messages) {
+    private void printYaml(List<KafkaRecord> messages) {
         try {
             List<Map<String, Object>> messageList = new ArrayList<>();
 
-            for (ConsumedMessage msg : messages) {
+            for (KafkaRecord msg : messages) {
                 Map<String, Object> data = new LinkedHashMap<>();
                 data.put("partition", msg.partition());
                 data.put("offset", msg.offset());
                 data.put("key", msg.key());
                 data.put("value", msg.value());
                 data.put("timestamp", msg.timestamp());
+                data.put("headers", convertHeadersToMapList(msg.headers()));
                 messageList.add(data);
             }
 
@@ -390,7 +393,7 @@ public class ConsumeCommand implements Callable<Integer> {
         }
     }
 
-    private void printYamlMessage(ConsumedMessage msg) {
+    private void printYamlMessage(KafkaRecord msg) {
         try {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("partition", msg.partition());
@@ -398,6 +401,7 @@ public class ConsumeCommand implements Callable<Integer> {
             data.put("key", msg.key());
             data.put("value", msg.value());
             data.put("timestamp", msg.timestamp());
+            data.put("headers", convertHeadersToMapList(msg.headers()));
 
             YAMLFactory yamlFactory = YAMLFactory.builder()
                     .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
@@ -407,6 +411,21 @@ public class ConsumeCommand implements Callable<Integer> {
         } catch (Exception e) {
             err().println("Error: Failed to generate YAML output: " + e.getMessage());
         }
+    }
+
+    /**
+     * Convert headers to a list of maps for JSON/YAML serialization.
+     * Each header becomes a map with "key" and "value" properties.
+     */
+    private List<Map<String, String>> convertHeadersToMapList(List<KafkaRecord.Header> headers) {
+        List<Map<String, String>> headerList = new ArrayList<>();
+        for (var header : headers) {
+            Map<String, String> headerMap = new LinkedHashMap<>();
+            headerMap.put("key", header.key());
+            headerMap.put("value", header.value());
+            headerList.add(headerMap);
+        }
+        return headerList;
     }
 
     private static record MessageRow(String partition, String offset, String key, String value) {}
