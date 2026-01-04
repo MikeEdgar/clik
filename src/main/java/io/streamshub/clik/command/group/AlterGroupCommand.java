@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.Set;
 import java.util.Stack;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import jakarta.inject.Inject;
 
@@ -148,8 +150,7 @@ public class AlterGroupCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         // Validate at least one option is specified
-        if (toEarliest.isEmpty() && toLatest.isEmpty() && toOffset.isEmpty() &&
-                shiftBy.isEmpty() && toDatetime.isEmpty() && byDuration.isEmpty() && delete.isEmpty()) {
+        if (offsetOptionsEmpty()) {
             err().println("Error: At least one offset option must be specified.");
             err().println();
             err().println("Available options:");
@@ -172,6 +173,11 @@ public class AlterGroupCommand implements Callable<Integer> {
             err().println("Error: Failed to alter group offsets: " + e.getMessage());
             return 1;
         }
+    }
+
+    private boolean offsetOptionsEmpty() {
+        return Stream.of(toEarliest, toLatest, toOffset, shiftBy, toDatetime, byDuration, delete)
+                .allMatch(Collection::isEmpty);
     }
 
     private int process(Admin admin) throws Exception {
