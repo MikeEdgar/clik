@@ -161,8 +161,9 @@ cat data.txt | clik produce my-topic --input "%k %v %{h.content-type} %T %p"
 - Messages are sent synchronously for reliability
 - All messages use the same metadata if global options are specified (without `--input`)
 - Format strings must contain at least one placeholder
-- Duplicate named headers in format string are not allowed
-- Generic header placeholder (`%h`) can only appear once
+- Duplicate headers are allowed (Kafka supports multiple headers with the same key)
+  - Example: `%{h.tag} %{h.tag} %{h.tag}` can parse three separate "tag" headers from input
+  - Both named headers and generic `%h` placeholders can appear multiple times
 
 **Error Conditions:**
 - File not found

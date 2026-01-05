@@ -171,22 +171,6 @@ class FormatParserTest {
     }
 
     @Test
-    void testDuplicateNamedHeader() {
-        IllegalArgumentException ex = assertThrows(
-            IllegalArgumentException.class,
-            () -> FormatParser.parse("%{h.type} %{h.type}"));
-        assertTrue(ex.getMessage().contains("Duplicate header"));
-    }
-
-    @Test
-    void testMultipleGenericHeaders() {
-        IllegalArgumentException ex = assertThrows(
-            IllegalArgumentException.class,
-            () -> FormatParser.parse("%h %h"));
-        assertTrue(ex.getMessage().contains("Generic header placeholder can only appear once"));
-    }
-
-    @Test
     void testEmptyHeaderName() {
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,

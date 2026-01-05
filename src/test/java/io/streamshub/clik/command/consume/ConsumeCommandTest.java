@@ -332,10 +332,10 @@ class ConsumeCommandTest extends ClikMainTestBase {
 
         String output = result.getOutput();
         assertTrue(output.contains("\"headers\""));
-        assertTrue(output.contains("\"key\" : \"content-type\""));
-        assertTrue(output.contains("\"value\" : \"application/json\""));
-        assertTrue(output.contains("\"key\" : \"version\""));
-        assertTrue(output.contains("\"value\" : \"1.0\""));
+        assertTrue(output.contains("\"key\":\"content-type\""));
+        assertTrue(output.contains("\"value\":\"application/json\""));
+        assertTrue(output.contains("\"key\":\"version\""));
+        assertTrue(output.contains("\"value\":\"1.0\""));
     }
 
     @Test
@@ -386,11 +386,11 @@ class ConsumeCommandTest extends ClikMainTestBase {
         String output = result.getOutput();
         assertTrue(output.contains("\"headers\""));
         // All three tag headers should be present
-        int tagCount = countOccurrences(output, "\"key\" : \"tag\"");
+        int tagCount = countOccurrences(output, "\"key\":\"tag\"");
         assertEquals(3, tagCount);
-        assertTrue(output.contains("\"value\" : \"v1\""));
-        assertTrue(output.contains("\"value\" : \"v2\""));
-        assertTrue(output.contains("\"value\" : \"v3\""));
+        assertTrue(output.contains("\"value\":\"v1\""));
+        assertTrue(output.contains("\"value\":\"v2\""));
+        assertTrue(output.contains("\"value\":\"v3\""));
     }
 
     @Test
@@ -434,7 +434,7 @@ class ConsumeCommandTest extends ClikMainTestBase {
 
         String output = result.getOutput();
         // Headers field should exist but be an empty array
-        assertTrue(output.contains("\"headers\" : [ ]"));
+        assertTrue(output.contains("\"headers\":[]"));
     }
 
     @Test

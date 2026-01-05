@@ -1,9 +1,7 @@
 package io.streamshub.clik.support;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * Parser for format strings used in the --input option.
@@ -42,8 +40,6 @@ public class FormatParser {
         format = processUnicodeEscapes(format);
 
         List<FormatToken> tokens = new ArrayList<>();
-        Set<String> namedHeaders = new HashSet<>();
-        boolean hasGenericHeader = false;
         boolean hasPlaceholder = false;
 
         int i = 0;
@@ -52,7 +48,7 @@ public class FormatParser {
         while (i < format.length()) {
             if (format.charAt(i) == '%') {
                 // Save preceding literal
-                if (literal.length() > 0) {
+                if (!literal.isEmpty()) {
                     tokens.add(new LiteralToken(literal.toString()));
                     literal.setLength(0);
                 }
@@ -79,36 +75,12 @@ public class FormatParser {
                     PlaceholderToken token = parseParameterizedPlaceholder(spec);
                     tokens.add(token);
                     hasPlaceholder = true;
-
-                    // Validate header rules
-                    if (token.type() == PlaceholderType.HEADER) {
-                        if (token.name() != null) {
-                            if (namedHeaders.contains(token.name())) {
-                                throw new IllegalArgumentException("Duplicate header: " + token.name());
-                            }
-                            namedHeaders.add(token.name());
-                        } else {
-                            if (hasGenericHeader) {
-                                throw new IllegalArgumentException("Generic header placeholder can only appear once");
-                            }
-                            hasGenericHeader = true;
-                        }
-                    }
-
                     i = closeBrace + 1;
                 } else {
                     // Simple placeholder: %k, %v, %h, %T, %p
                     PlaceholderToken token = parseSimplePlaceholder(format.charAt(i));
                     tokens.add(token);
                     hasPlaceholder = true;
-
-                    if (token.type() == PlaceholderType.HEADER) {
-                        if (hasGenericHeader) {
-                            throw new IllegalArgumentException("Generic header placeholder can only appear once");
-                        }
-                        hasGenericHeader = true;
-                    }
-
                     i++;
                 }
             } else {
