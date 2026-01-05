@@ -154,7 +154,7 @@ public class ConsumeCommand implements Callable<Integer> {
         String consumerGroupId = groupId != null ? groupId :
                 "clik-consumer-" + UUID.randomUUID().toString();
 
-        try (Consumer<String, String> consumer = clientFactory.createConsumer(consumerGroupId)) {
+        try (Consumer<byte[], byte[]> consumer = clientFactory.createConsumer(consumerGroupId)) {
             configureConsumer(consumer);
 
             if (follow) {
@@ -179,7 +179,7 @@ public class ConsumeCommand implements Callable<Integer> {
         }
     }
 
-    private void configureConsumer(Consumer<String, String> consumer) {
+    private void configureConsumer(Consumer<byte[], byte[]> consumer) {
         if (partition != null) {
             // Single partition mode
             TopicPartition tp = new TopicPartition(topic, partition);
@@ -215,14 +215,14 @@ public class ConsumeCommand implements Callable<Integer> {
         }
     }
 
-    private List<KafkaRecord> consumeOnce(Consumer<String, String> consumer) {
+    private List<KafkaRecord> consumeOnce(Consumer<byte[], byte[]> consumer) {
         List<KafkaRecord> messages = new ArrayList<>();
         long startTime = System.currentTimeMillis();
 
         while (System.currentTimeMillis() - startTime < timeout) {
-            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
 
-            for (ConsumerRecord<String, String> rec : records) {
+            for (ConsumerRecord<byte[], byte[]> rec : records) {
                 messages.add(KafkaRecord.from(rec));
 
                 if (maxMessages != null && messages.size() >= maxMessages) {
@@ -239,16 +239,16 @@ public class ConsumeCommand implements Callable<Integer> {
         return messages;
     }
 
-    private int consumeContinuously(Consumer<String, String> consumer) {
+    private int consumeContinuously(Consumer<byte[], byte[]> consumer) {
         AtomicBoolean running = new AtomicBoolean(true);
         AtomicInteger count = new AtomicInteger(0);
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> running.set(false)));
 
         while (running.get()) {
-            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
 
-            for (ConsumerRecord<String, String> rec : records) {
+            for (ConsumerRecord<byte[], byte[]> rec : records) {
                 printMessage(KafkaRecord.from(rec));
 
                 if (maxMessages != null && count.incrementAndGet() >= maxMessages) {
@@ -276,7 +276,7 @@ public class ConsumeCommand implements Callable<Integer> {
                 printYamlMessage(message);
                 break;
             case "value":
-                out().println(message.value());
+                out().println(message.valueString(null));
                 break;
         }
     }
@@ -293,7 +293,7 @@ public class ConsumeCommand implements Callable<Integer> {
                 printYaml(messages);
                 break;
             case "value":
-                messages.forEach(m -> out().println(m.value()));
+                messages.forEach(m -> out().println(m.valueString(null)));
                 break;
         }
     }
@@ -305,8 +305,8 @@ public class ConsumeCommand implements Callable<Integer> {
             rows.add(new MessageRow(
                     String.valueOf(msg.partition()),
                     String.valueOf(msg.offset()),
-                    msg.key() != null ? msg.key() : "",
-                    msg.value() != null ? msg.value() : ""
+                    msg.keyString(""),
+                    msg.valueString("")
             ));
         }
 
@@ -324,8 +324,8 @@ public class ConsumeCommand implements Callable<Integer> {
         out().printf("%d\t%d\t%s\t%s%n",
                 msg.partition(),
                 msg.offset(),
-                msg.key() != null ? msg.key() : "",
-                msg.value() != null ? msg.value() : "");
+                msg.keyString(""),
+                msg.valueString(""));
     }
 
     private void printJson(List<KafkaRecord> messages) {
@@ -336,8 +336,8 @@ public class ConsumeCommand implements Callable<Integer> {
                 Map<String, Object> data = new LinkedHashMap<>();
                 data.put("partition", msg.partition());
                 data.put("offset", msg.offset());
-                data.put("key", msg.key());
-                data.put("value", msg.value());
+                data.put("key", msg.keyString(null));
+                data.put("value", msg.valueString(null));
                 data.put("timestamp", msg.timestamp());
                 data.put("headers", convertHeadersToMapList(msg.headers()));
                 messageList.add(data);
@@ -356,8 +356,8 @@ public class ConsumeCommand implements Callable<Integer> {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("partition", msg.partition());
             data.put("offset", msg.offset());
-            data.put("key", msg.key());
-            data.put("value", msg.value());
+            data.put("key", msg.keyString(null));
+            data.put("value", msg.valueString(null));
             data.put("timestamp", msg.timestamp());
             data.put("headers", convertHeadersToMapList(msg.headers()));
 
@@ -376,8 +376,8 @@ public class ConsumeCommand implements Callable<Integer> {
                 Map<String, Object> data = new LinkedHashMap<>();
                 data.put("partition", msg.partition());
                 data.put("offset", msg.offset());
-                data.put("key", msg.key());
-                data.put("value", msg.value());
+                data.put("key", msg.keyString(null));
+                data.put("value", msg.valueString(null));
                 data.put("timestamp", msg.timestamp());
                 data.put("headers", convertHeadersToMapList(msg.headers()));
                 messageList.add(data);
@@ -398,8 +398,8 @@ public class ConsumeCommand implements Callable<Integer> {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("partition", msg.partition());
             data.put("offset", msg.offset());
-            data.put("key", msg.key());
-            data.put("value", msg.value());
+            data.put("key", msg.keyString(null));
+            data.put("value", msg.valueString(null));
             data.put("timestamp", msg.timestamp());
             data.put("headers", convertHeadersToMapList(msg.headers()));
 
@@ -422,7 +422,7 @@ public class ConsumeCommand implements Callable<Integer> {
         for (var header : headers) {
             Map<String, String> headerMap = new LinkedHashMap<>();
             headerMap.put("key", header.key());
-            headerMap.put("value", header.value());
+            headerMap.put("value", header.valueString(null));
             headerList.add(headerMap);
         }
         return headerList;
