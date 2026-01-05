@@ -4,24 +4,29 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import jakarta.inject.Inject;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.jboss.logging.Logger;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,6 +53,9 @@ public class ConsumeCommand implements Callable<Integer> {
     private static final String OUTPUT_YAML = "yaml";
     private static final String OUTPUT_VALUE = "value";
 
+    @Inject
+    Logger logger;
+
     @CommandLine.Spec
     CommandSpec commandSpec;
 
@@ -59,7 +67,7 @@ public class ConsumeCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"-g", "--group"},
-            description = "Consumer group ID (default: generated unique ID)"
+            description = "Consumer group ID"
     )
     String groupId;
 
@@ -113,6 +121,12 @@ public class ConsumeCommand implements Callable<Integer> {
     )
     long timeout;
 
+    @CommandLine.Option(
+            names = {"--property", "-P"},
+            description = "Consumer client properties to override those in the context (repeatable, format: key=value)"
+    )
+    Map<String, String> properties = new HashMap<>();
+
     @Inject
     KafkaClientFactory clientFactory;
 
@@ -144,6 +158,12 @@ public class ConsumeCommand implements Callable<Integer> {
             return 1;
         }
 
+        // Consumer cannot subscribe to a group using a specific partition
+        if (groupId != null && partition != null) {
+            err().println("Error: --groupId cannot be used with --partition");
+            return 1;
+        }
+
         // Validate offset requires partition
         if (offset != null && partition == null) {
             err().println("Error: --from-offset requires --partition to be specified");
@@ -157,11 +177,7 @@ public class ConsumeCommand implements Callable<Integer> {
             return 1;
         }
 
-        // Generate group ID if not specified
-        String consumerGroupId = groupId != null ? groupId :
-                "clik-consumer-" + UUID.randomUUID().toString();
-
-        try (Consumer<byte[], byte[]> consumer = clientFactory.createConsumer(consumerGroupId)) {
+        try (Consumer<byte[], byte[]> consumer = clientFactory.createConsumer(properties, groupId)) {
             configureConsumer(consumer);
 
             if (follow) {
@@ -193,38 +209,77 @@ public class ConsumeCommand implements Callable<Integer> {
 
     private void configureConsumer(Consumer<byte[], byte[]> consumer) {
         if (partition != null) {
-            // Single partition mode
-            TopicPartition tp = new TopicPartition(topic, partition);
-            consumer.assign(Collections.singleton(tp));
-
-            if (offset != null) {
-                consumer.seek(tp, offset);
-            } else if (fromBeginning) {
-                consumer.seekToBeginning(Collections.singleton(tp));
-            } else if (fromEnd) {
-                consumer.seekToEnd(Collections.singleton(tp));
-            }
+            assignSinglePartition(consumer);
+        } else if (groupId != null) {
+            subscribeAllPartitions(consumer);
         } else {
-            // All partitions mode
-            List<PartitionInfo> partitions = consumer.partitionsFor(topic);
-            if (partitions == null || partitions.isEmpty()) {
-                throw new IllegalArgumentException("Topic not found or has no partitions: " + topic);
-            }
-
-            List<TopicPartition> tps = partitions.stream()
-                    .map(p -> new TopicPartition(topic, p.partition()))
-                    .toList();
-
-            consumer.assign(tps);
-
-            if (fromBeginning) {
-                consumer.seekToBeginning(tps);
-            } else if (fromEnd || groupId == null) {
-                // Default for standalone (no group): from end
-                // Default for named group: let Kafka manage offsets
-                consumer.seekToEnd(tps);
-            }
+            assignAllPartitions(consumer);
         }
+    }
+
+    private void assignSinglePartition(Consumer<byte[], byte[]> consumer) {
+        // Single partition mode
+        TopicPartition topicPartition = new TopicPartition(topic, partition);
+        var assignment = Collections.singleton(topicPartition);
+        consumer.assign(assignment);
+
+        if (offset != null) {
+            consumer.seek(topicPartition, offset);
+        } else if (fromBeginning) {
+            consumer.seekToBeginning(assignment);
+        } else if (fromEnd) {
+            consumer.seekToEnd(assignment);
+        }
+    }
+
+    private void assignAllPartitions(Consumer<byte[], byte[]> consumer) {
+        // All partitions mode
+        List<PartitionInfo> partitions = consumer.partitionsFor(topic);
+        if (partitions == null || partitions.isEmpty()) {
+            throw new IllegalArgumentException("Topic not found or has no partitions: " + topic);
+        }
+
+        Set<TopicPartition> assignment = partitions.stream()
+            .map(p -> new TopicPartition(topic, p.partition()))
+            .collect(Collectors.toSet());
+
+        consumer.assign(assignment);
+
+        if (fromBeginning) {
+            consumer.seekToBeginning(consumer.assignment());
+        } else if (fromEnd) {
+            // Default for standalone (no group): from end
+            // Default for named group: let Kafka manage offsets
+            consumer.seekToEnd(consumer.assignment());
+        }
+
+    }
+
+    private void subscribeAllPartitions(Consumer<byte[], byte[]> consumer) {
+        AtomicBoolean initial = new AtomicBoolean(true);
+
+        consumer.subscribe(Collections.singleton(topic), new ConsumerRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                // Not interested
+            }
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                if (initial.compareAndSet(true, false)) {
+                    logger.infof("Member %s in group %s received assignment: %s",
+                            consumer.groupMetadata().memberId(),
+                            consumer.groupMetadata().groupId(),
+                            consumer.assignment());
+
+                    if (fromBeginning) {
+                        consumer.seekToBeginning(partitions);
+                    } else if (fromEnd) {
+                        consumer.seekToEnd(partitions);
+                    }
+                }
+            }
+        });
     }
 
     private List<KafkaRecord> consumeOnce(Consumer<byte[], byte[]> consumer) {

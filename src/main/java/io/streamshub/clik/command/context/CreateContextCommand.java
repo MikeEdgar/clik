@@ -50,7 +50,7 @@ public class CreateContextCommand implements Callable<Integer> {
     String saslMechanism;
 
     @CommandLine.Option(
-            names = {"--property"},
+            names = {"--property", "-P"},
             description = "Additional Kafka property (repeatable, format: key=value)"
     )
     Map<String, String> properties = new HashMap<>();

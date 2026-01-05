@@ -9,7 +9,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
@@ -92,6 +94,12 @@ public class ProduceCommand implements Callable<Integer> {
     )
     String inputFormat;
 
+    @CommandLine.Option(
+            names = {"--property", "-P"},
+            description = "Producer client properties to override those in the context (repeatable, format: key=value)"
+    )
+    Map<String, String> properties = new HashMap<>();
+
     @Inject
     KafkaClientFactory clientFactory;
 
@@ -162,7 +170,7 @@ public class ProduceCommand implements Callable<Integer> {
             }
         }
 
-        try (Producer<byte[], byte[]> producer = clientFactory.createProducer();
+        try (Producer<byte[], byte[]> producer = clientFactory.createProducer(properties);
             Stream<String> messages = readMessages()) {
             return sendMessages(producer, messages);
         } catch (IllegalStateException e) {

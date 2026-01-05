@@ -1,5 +1,7 @@
 package io.streamshub.clik.support;
 
+import java.util.List;
+
 import org.junit.jupiter.api.Test;
 
 import io.streamshub.clik.kafka.model.KafkaRecord;
@@ -127,6 +129,72 @@ class FormatParserTest {
         assertEquals("key", components.keyString(null));
         assertEquals("Test", components.valueString(null));
         assertEquals("data", components.firstHeader("type").valueString(null));
+    }
+
+    @Test
+    void testDuplicateNamedHeaders() {
+        ParsedFormat format = FormatParser.parse("%k %v %{h.tag} %{h.tag}");
+        KafkaRecord record = format.matchLine("key1 value1 tag=v1 tag=v2");
+
+        assertEquals("key1", record.keyString(null));
+        assertEquals("value1", record.valueString(null));
+
+        // Verify both "tag" headers are present
+        List<KafkaRecord.Header> tagHeaders = record.headers("tag");
+        assertEquals(2, tagHeaders.size());
+        assertEquals("v1", tagHeaders.get(0).valueString(null));
+        assertEquals("v2", tagHeaders.get(1).valueString(null));
+    }
+
+    @Test
+    void testMultipleGenericHeaders() {
+        ParsedFormat format = FormatParser.parse("%k %v %h %h");
+        KafkaRecord record = format.matchLine("key1 value1 type=json version=1.0");
+
+        assertEquals("key1", record.keyString(null));
+        assertEquals("value1", record.valueString(null));
+
+        // Verify both headers were parsed with different keys
+        assertEquals(2, record.headers().size());
+        assertEquals("json", record.firstHeader("type").valueString(null));
+        assertEquals("1.0", record.firstHeader("version").valueString(null));
+    }
+
+    @Test
+    void testMixedDuplicateHeaders() {
+        ParsedFormat format = FormatParser.parse("%k %v %{h.tag} %h %{h.tag}");
+        KafkaRecord record = format.matchLine("key1 value1 tag=v1 type=json tag=v2");
+
+        assertEquals("key1", record.keyString(null));
+        assertEquals("value1", record.valueString(null));
+
+        // Verify three headers total
+        assertEquals(3, record.headers().size());
+
+        // Verify two "tag" headers
+        List<KafkaRecord.Header> tagHeaders = record.headers("tag");
+        assertEquals(2, tagHeaders.size());
+        assertEquals("v1", tagHeaders.get(0).valueString(null));
+        assertEquals("v2", tagHeaders.get(1).valueString(null));
+
+        // Verify one "type" header
+        assertEquals("json", record.firstHeader("type").valueString(null));
+    }
+
+    @Test
+    void testDuplicateHeadersWithEncoding() {
+        // "plain" in base64 is "cGxhaW4="
+        ParsedFormat format = FormatParser.parse("%k %v %{h.data} %{base64:h.data}");
+        KafkaRecord record = format.matchLine("key1 value1 data=plain data=cGxhaW4=");
+
+        assertEquals("key1", record.keyString(null));
+        assertEquals("value1", record.valueString(null));
+
+        // Verify both "data" headers are present and decoded correctly
+        List<KafkaRecord.Header> dataHeaders = record.headers("data");
+        assertEquals(2, dataHeaders.size());
+        assertEquals("plain", dataHeaders.get(0).valueString(null));
+        assertEquals("plain", dataHeaders.get(1).valueString(null)); // base64 decoded
     }
 
     // ========== Error Cases ==========

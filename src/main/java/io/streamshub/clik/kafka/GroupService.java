@@ -7,9 +7,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
@@ -19,8 +21,11 @@ import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
+import org.jboss.logging.Logger;
 
 import io.streamshub.clik.kafka.model.CoordinatorInfo;
 import io.streamshub.clik.kafka.model.GroupInfo;
@@ -29,6 +34,9 @@ import io.streamshub.clik.kafka.model.OffsetLagInfo;
 
 @ApplicationScoped
 public class GroupService {
+
+    @Inject
+    Logger logger;
 
     /**
      * List all groups, optionally filtered by type
@@ -47,7 +55,7 @@ public class GroupService {
 
         for (GroupListing listing : listings) {
             String groupId = listing.groupId();
-            String groupType = determineGroupType(listing.type().orElse(GroupType.UNKNOWN));
+            String groupType = listing.type().orElse(GroupType.UNKNOWN).toString();
 
             // Filter by type if specified
             if (typeFilter != null && !typeFilter.isEmpty() && !typeFilter.equalsIgnoreCase(groupType)) {
@@ -58,18 +66,35 @@ public class GroupService {
                     .groupId(groupId)
                     .type(groupType)
                     .protocol(listing.protocol())
-                    .state(listing.groupState().toString()));
+                    .state(listing.groupState().orElse(GroupState.UNKNOWN).toString()));
         }
 
         Collection<String> groupIds = groups.keySet();
         // Describe groups to get state and member count
-        Map<String, ConsumerGroupDescription> descriptions = admin.describeConsumerGroups(groupIds).all().get();
+        Map<String, KafkaFuture<ConsumerGroupDescription>> descriptions = admin.describeConsumerGroups(groupIds)
+                .describedGroups();
 
-        for (Map.Entry<String, ConsumerGroupDescription> entry : descriptions.entrySet()) {
-            groups.get(entry.getKey()).memberCount(entry.getValue().members().size());
-        }
+        return CompletableFuture.allOf(descriptions.values()
+                .stream()
+                .map(f -> f.toCompletionStage().toCompletableFuture())
+                .toArray(CompletableFuture[]::new))
+            .handle((nothing, error) -> {
+                for (Map.Entry<String, KafkaFuture<ConsumerGroupDescription>> entry : descriptions.entrySet()) {
+                    KafkaFuture<ConsumerGroupDescription> value = entry.getValue();
+                    GroupInfo.Builder groupBuilder = groups.get(entry.getKey());
 
-        return groups.values().stream().map(GroupInfo.Builder::build).toList();
+                    if (value.isCompletedExceptionally()) {
+                        var message = value.exceptionNow().toString();
+                        logger.infof("Failed to describe group %s: %s", entry.getKey(), message);
+                        groupBuilder.describeError(value.exceptionNow().getMessage());
+                    } else {
+                        groupBuilder.memberCount(entry.getValue().toCompletionStage().toCompletableFuture().join().members().size());
+                    }
+                }
+
+                return groups.values().stream().map(GroupInfo.Builder::build).toList();
+            })
+            .join();
     }
 
     /**
@@ -137,7 +162,7 @@ public class GroupService {
 
         return GroupInfo.builder()
                 .groupId(desc.groupId())
-                .type(determineGroupType(desc.type()))
+                .type(desc.type().toString())
                 .state(desc.groupState().toString())
                 .memberCount(desc.members().size())
                 .coordinator(coordinator)
@@ -281,18 +306,5 @@ public class GroupService {
                 Collections.singleton(groupId)).all().get();
         ConsumerGroupDescription desc = descriptions.get(groupId);
         return desc != null && !desc.members().isEmpty();
-    }
-
-    /**
-     * Determine group type based on description
-     */
-    private String determineGroupType(GroupType type) {
-        // For Kafka 4.1.1, use the GroupType enum
-        // GroupType can be: UNKNOWN, CONSUMER, CLASSIC, SHARE, STREAMS
-        if (type == GroupType.UNKNOWN) {
-            // Default to consumer for unknown types
-            return "consumer";
-        }
-        return type.toString().toLowerCase();
     }
 }
