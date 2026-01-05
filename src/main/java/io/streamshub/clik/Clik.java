@@ -30,7 +30,7 @@ import picocli.CommandLine.IVersionProvider;
 public class Clik {
     public static final String NAME = "clik";
 
-    private Clik() {
+    Clik() {
         // No instances
     }
 
