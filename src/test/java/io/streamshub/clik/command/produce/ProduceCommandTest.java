@@ -524,6 +524,640 @@ class ProduceCommandTest extends ClikMainTestBase {
         assertEquals("", consumed.get(0));
     }
 
+    @Test
+    void testProduceWithBase64Value() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "base64-value-topic", 1, 1, Collections.emptyMap());
+
+        // "Hello World" in base64
+        LaunchResult result = launcher.launch("produce", "base64-value-topic", "--value", "base64:SGVsbG8gV29ybGQ=");
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("1 messages sent successfully"));
+
+        // Verify message was decoded correctly
+        List<ConsumerRecord<String, String>> records = consumeRecords("base64-value-topic", 1);
+        assertEquals(1, records.size());
+        assertEquals("Hello World", records.get(0).value());
+    }
+
+    @Test
+    void testProduceWithHexValue() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "hex-value-topic", 1, 1, Collections.emptyMap());
+
+        // "Hello" in hex
+        LaunchResult result = launcher.launch("produce", "hex-value-topic", "--value", "hex:48656c6c6f");
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("1 messages sent successfully"));
+
+        // Verify message was decoded correctly
+        List<ConsumerRecord<String, String>> records = consumeRecords("hex-value-topic", 1);
+        assertEquals(1, records.size());
+        assertEquals("Hello", records.get(0).value());
+    }
+
+    @Test
+    void testProduceWithBase64Key() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "base64-key-topic", 1, 1, Collections.emptyMap());
+
+        // "test-key" in base64
+        LaunchResult result = launcher.launch("produce", "base64-key-topic",
+                "--value", "message",
+                "--key", "base64:dGVzdC1rZXk=");
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("1 messages sent successfully"));
+
+        // Verify key was decoded correctly
+        List<ConsumerRecord<String, String>> records = consumeRecords("base64-key-topic", 1);
+        assertEquals(1, records.size());
+        assertEquals("test-key", records.get(0).key());
+        assertEquals("message", records.get(0).value());
+    }
+
+    @Test
+    void testProduceWithHexKey() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "hex-key-topic", 1, 1, Collections.emptyMap());
+
+        // "key" in hex (produces valid UTF-8)
+        LaunchResult result = launcher.launch("produce", "hex-key-topic",
+                "--value", "message",
+                "--key", "hex:6b6579");
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("1 messages sent successfully"));
+
+        // Verify key was decoded correctly
+        List<ConsumerRecord<String, String>> records = consumeRecords("hex-key-topic", 1);
+        assertEquals(1, records.size());
+        assertEquals("key", records.get(0).key());
+    }
+
+    @Test
+    void testProduceWithBase64Header() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "base64-header-topic", 1, 1, Collections.emptyMap());
+
+        // Header value in base64
+        LaunchResult result = launcher.launch("produce", "base64-header-topic",
+                "--value", "message",
+                "--header", "signature=base64:U2lnbmF0dXJl");
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("1 messages sent successfully"));
+
+        // Verify header was decoded correctly
+        List<ConsumerRecord<String, String>> records = consumeRecords("base64-header-topic", 1);
+        assertEquals(1, records.size());
+
+        Header header = records.get(0).headers().lastHeader("signature");
+        assertNotNull(header);
+        assertEquals("Signature", new String(header.value(), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void testProduceWithHexHeader() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "hex-header-topic", 1, 1, Collections.emptyMap());
+
+        // Header value in hex
+        LaunchResult result = launcher.launch("produce", "hex-header-topic",
+                "--value", "message",
+                "--header", "checksum=hex:a1b2c3d4");
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("1 messages sent successfully"));
+
+        // Verify header was decoded correctly (binary data)
+        List<ConsumerRecord<String, String>> records = consumeRecords("hex-header-topic", 1);
+        assertEquals(1, records.size());
+
+        Header header = records.get(0).headers().lastHeader("checksum");
+        assertNotNull(header);
+        byte[] expectedValue = new byte[]{(byte) 0xA1, (byte) 0xB2, (byte) 0xC3, (byte) 0xD4};
+        assertArrayEquals(expectedValue, header.value());
+    }
+
+    @Test
+    void testProduceWithMixedEncodings() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "mixed-encoding-topic", 1, 1, Collections.emptyMap());
+
+        // Mix of encodings: hex key, base64 value, plain header
+        LaunchResult result = launcher.launch("produce", "mixed-encoding-topic",
+                "--key", "hex:6d6978",
+                "--value", "base64:VGVzdA==",
+                "--header", "type=plain-text");
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("1 messages sent successfully"));
+
+        // Verify all encodings worked correctly
+        List<ConsumerRecord<String, String>> records = consumeRecords("mixed-encoding-topic", 1);
+        assertEquals(1, records.size());
+
+        ConsumerRecord<String, String> record = records.get(0);
+
+        // Hex key ("mix" in hex)
+        assertEquals("mix", record.key());
+
+        // Base64 value
+        assertEquals("Test", record.value());
+
+        // Plain text header
+        Header header = record.headers().lastHeader("type");
+        assertNotNull(header);
+        assertEquals("plain-text", new String(header.value(), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void testProduceInvalidBase64() {
+        // Invalid base64 characters
+        LaunchResult result = launcher.launch("produce", "test-topic", "--value", "base64:Invalid!@#$%");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("Invalid base64 encoding") ||
+                   result.getErrorOutput().contains("Failed to produce messages"));
+    }
+
+    @Test
+    void testProduceInvalidHexOddLength() {
+        // Hex with odd number of characters
+        LaunchResult result = launcher.launch("produce", "test-topic", "--value", "hex:abc");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("odd number of characters") ||
+                   result.getErrorOutput().contains("Failed to produce messages"));
+    }
+
+    @Test
+    void testProduceInvalidHexCharacters() {
+        // Hex with invalid characters
+        LaunchResult result = launcher.launch("produce", "test-topic", "--value", "hex:gg");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("Invalid hex encoding") ||
+                   result.getErrorOutput().contains("Failed to produce messages"));
+    }
+
+    @Test
+    void testProduceBackwardsCompatiblePlainText() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "plain-text-topic", 1, 1, Collections.emptyMap());
+
+        // Plain text without any prefix (backwards compatibility)
+        LaunchResult result = launcher.launch("produce", "plain-text-topic",
+                "--key", "simple-key",
+                "--value", "simple value",
+                "--header", "type=text");
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("1 messages sent successfully"));
+
+        // Verify everything still works as UTF-8 strings
+        List<ConsumerRecord<String, String>> records = consumeRecords("plain-text-topic", 1);
+        assertEquals(1, records.size());
+
+        ConsumerRecord<String, String> record = records.get(0);
+        assertEquals("simple-key", record.key());
+        assertEquals("simple value", record.value());
+
+        Header header = record.headers().lastHeader("type");
+        assertNotNull(header);
+        assertEquals("text", new String(header.value(), StandardCharsets.UTF_8));
+    }
+
+    // ========== Format String (--input) Tests ==========
+
+    @Test
+    void testProduceWithInputFormatKeyValue() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "format-kv-topic", 1, 1, Collections.emptyMap());
+
+        // Create temporary file with key-value pairs
+        Path tempFile = Files.createTempFile("produce-format-kv-test", ".txt");
+        Files.writeString(tempFile, "key1 value1\nkey2 value2\nkey3 value3\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "format-kv-topic", "--file", tempFile.toString(),
+                    "--input", "%k %v");
+            assertEquals(0, result.exitCode());
+            assertTrue(result.getOutput().contains("3 messages sent successfully"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+
+        // Verify messages were produced with correct keys and values
+        List<ConsumerRecord<String, String>> records = consumeRecords("format-kv-topic", 3);
+        assertEquals(3, records.size());
+        assertEquals("key1", records.get(0).key());
+        assertEquals("value1", records.get(0).value());
+        assertEquals("key2", records.get(1).key());
+        assertEquals("value2", records.get(1).value());
+        assertEquals("key3", records.get(2).key());
+        assertEquals("value3", records.get(2).value());
+    }
+
+    @Test
+    void testProduceWithInputFormatBase64Key() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "format-base64-topic", 1, 1, Collections.emptyMap());
+
+        // Create temporary file with base64-encoded keys
+        // "test-key" in base64 is "dGVzdC1rZXk="
+        Path tempFile = Files.createTempFile("produce-format-base64-test", ".txt");
+        Files.writeString(tempFile, "dGVzdC1rZXk= value1\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "format-base64-topic", "--file", tempFile.toString(),
+                    "--input", "%{base64:k} %v");
+            assertEquals(0, result.exitCode());
+            assertTrue(result.getOutput().contains("1 messages sent successfully"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+
+        // Verify key was decoded correctly
+        List<ConsumerRecord<String, String>> records = consumeRecords("format-base64-topic", 1);
+        assertEquals(1, records.size());
+        assertEquals("test-key", records.get(0).key());
+        assertEquals("value1", records.get(0).value());
+    }
+
+    @Test
+    void testProduceWithInputFormatNamedHeader() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "format-header-topic", 1, 1, Collections.emptyMap());
+
+        // Create temporary file with headers
+        Path tempFile = Files.createTempFile("produce-format-header-test", ".txt");
+        Files.writeString(tempFile, "key1 value1 content-type=application/json\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "format-header-topic", "--file", tempFile.toString(),
+                    "--input", "%k %v %{h.content-type}");
+            assertEquals(0, result.exitCode());
+            assertTrue(result.getOutput().contains("1 messages sent successfully"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+
+        // Verify message has header
+        List<ConsumerRecord<String, String>> records = consumeRecords("format-header-topic", 1);
+        assertEquals(1, records.size());
+        assertEquals("key1", records.get(0).key());
+        assertEquals("value1", records.get(0).value());
+
+        Header header = records.get(0).headers().lastHeader("content-type");
+        assertNotNull(header);
+        assertEquals("application/json", new String(header.value(), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void testProduceWithInputFormatGenericHeader() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "format-generic-header-topic", 1, 1, Collections.emptyMap());
+
+        // Create temporary file with generic headers
+        Path tempFile = Files.createTempFile("produce-format-generic-test", ".txt");
+        Files.writeString(tempFile, "key1 value1 my-header=data\nkey2 value2 other-header=info\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "format-generic-header-topic", "--file", tempFile.toString(),
+                    "--input", "%k %v %h");
+            assertEquals(0, result.exitCode());
+            assertTrue(result.getOutput().contains("2 messages sent successfully"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+
+        // Verify messages have headers
+        List<ConsumerRecord<String, String>> records = consumeRecords("format-generic-header-topic", 2);
+        assertEquals(2, records.size());
+
+        Header header1 = records.get(0).headers().lastHeader("my-header");
+        assertNotNull(header1);
+        assertEquals("data", new String(header1.value(), StandardCharsets.UTF_8));
+
+        Header header2 = records.get(1).headers().lastHeader("other-header");
+        assertNotNull(header2);
+        assertEquals("info", new String(header2.value(), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void testProduceWithInputFormatTimestamp() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "format-timestamp-topic", 1, 1, Collections.emptyMap());
+
+        // Create temporary file with timestamps
+        Path tempFile = Files.createTempFile("produce-format-timestamp-test", ".txt");
+        Files.writeString(tempFile, "key1 value1 1735401600000\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "format-timestamp-topic", "--file", tempFile.toString(),
+                    "--input", "%k %v %T");
+            assertEquals(0, result.exitCode());
+            assertTrue(result.getOutput().contains("1 messages sent successfully"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+
+        // Verify message has timestamp
+        List<ConsumerRecord<String, String>> records = consumeRecords("format-timestamp-topic", 1);
+        assertEquals(1, records.size());
+        assertEquals(1735401600000L, records.get(0).timestamp());
+    }
+
+    @Test
+    void testProduceWithInputFormatPartition() throws Exception {
+        // Create test topic with multiple partitions
+        topicService.createTopic(admin(), "format-partition-topic", 3, 1, Collections.emptyMap());
+
+        // Create temporary file with partition numbers
+        Path tempFile = Files.createTempFile("produce-format-partition-test", ".txt");
+        Files.writeString(tempFile, "key1 value1 0\nkey2 value2 1\nkey3 value3 2\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "format-partition-topic", "--file", tempFile.toString(),
+                    "--input", "%k %v %p");
+            assertEquals(0, result.exitCode());
+            assertTrue(result.getOutput().contains("3 messages sent successfully"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+
+        // Verify messages went to correct partitions
+        List<ConsumerRecord<String, String>> records = consumeRecords("format-partition-topic", 3);
+        assertEquals(3, records.size());
+
+        // Sort by partition for predictable checking
+        records.sort((r1, r2) -> Integer.compare(r1.partition(), r2.partition()));
+        assertEquals(0, records.get(0).partition());
+        assertEquals(1, records.get(1).partition());
+        assertEquals(2, records.get(2).partition());
+    }
+
+    @Test
+    void testProduceWithInputFormatMixedEncodings() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "format-mixed-topic", 1, 1, Collections.emptyMap());
+
+        // Create temporary file with mixed encodings
+        // "key" in hex: 6b6579
+        // "Test" in base64: VGVzdA==
+        Path tempFile = Files.createTempFile("produce-format-mixed-test", ".txt");
+        Files.writeString(tempFile, "6b6579 VGVzdA== sig=U2lnbmF0dXJl\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "format-mixed-topic", "--file", tempFile.toString(),
+                    "--input", "%{hex:k} %{base64:v} %{base64:h.sig}");
+            assertEquals(0, result.exitCode());
+            assertTrue(result.getOutput().contains("1 messages sent successfully"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+
+        // Verify all encodings were decoded correctly
+        List<ConsumerRecord<String, String>> records = consumeRecords("format-mixed-topic", 1);
+        assertEquals(1, records.size());
+        assertEquals("key", records.get(0).key());
+        assertEquals("Test", records.get(0).value());
+
+        Header header = records.get(0).headers().lastHeader("sig");
+        assertNotNull(header);
+        assertEquals("Signature", new String(header.value(), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void testProduceWithInputFormatUnicodeDelimiter() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "format-unicode-topic", 1, 1, Collections.emptyMap());
+
+        // Create temporary file with tab-separated values
+        Path tempFile = Files.createTempFile("produce-format-unicode-test", ".txt");
+        Files.writeString(tempFile, "key1\tvalue1\nkey2\tvalue2\n");
+
+        try {
+            // Use \u0009 for tab character
+            LaunchResult result = launcher.launch("produce", "format-unicode-topic", "--file", tempFile.toString(),
+                    "--input", "%k\\u0009%v");
+            assertEquals(0, result.exitCode());
+            assertTrue(result.getOutput().contains("2 messages sent successfully"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+
+        // Verify messages were parsed correctly
+        List<ConsumerRecord<String, String>> records = consumeRecords("format-unicode-topic", 2);
+        assertEquals(2, records.size());
+        assertEquals("key1", records.get(0).key());
+        assertEquals("value1", records.get(0).value());
+        assertEquals("key2", records.get(1).key());
+        assertEquals("value2", records.get(1).value());
+    }
+
+    @Test
+    void testProduceWithInputFormatValueWithSpaces() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "format-spaces-topic", 1, 1, Collections.emptyMap());
+
+        // Last placeholder should consume rest of line including spaces
+        Path tempFile = Files.createTempFile("produce-format-spaces-test", ".txt");
+        Files.writeString(tempFile, "key1 value with multiple spaces\nkey2 another value with  spaces\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "format-spaces-topic", "--file", tempFile.toString(),
+                    "--input", "%k %v");
+            assertEquals(0, result.exitCode());
+            assertTrue(result.getOutput().contains("2 messages sent successfully"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+
+        // Verify values contain spaces
+        List<ConsumerRecord<String, String>> records = consumeRecords("format-spaces-topic", 2);
+        assertEquals(2, records.size());
+        assertEquals("value with multiple spaces", records.get(0).value());
+        assertEquals("another value with  spaces", records.get(1).value());
+    }
+
+    @Test
+    void testProduceInputFormatConflictWithValue() throws Exception {
+        // --input cannot be used with --value
+        LaunchResult result = launcher.launch("produce", "test-topic", "--value", "test", "--input", "%k %v");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("--input cannot be used with --value"));
+    }
+
+    @Test
+    void testProduceInputFormatConflictWithKey() throws Exception {
+        Path tempFile = Files.createTempFile("produce-conflict-test", ".txt");
+        Files.writeString(tempFile, "key1 value1\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "test-topic", "--file", tempFile.toString(),
+                    "--input", "%k %v", "--key", "global-key");
+            assertEquals(1, result.exitCode());
+            assertTrue(result.getErrorOutput().contains("--input cannot be used with --key"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+    }
+
+    @Test
+    void testProduceInputFormatConflictWithHeader() throws Exception {
+        Path tempFile = Files.createTempFile("produce-conflict-test", ".txt");
+        Files.writeString(tempFile, "key1 value1\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "test-topic", "--file", tempFile.toString(),
+                    "--input", "%k %v", "--header", "type=test");
+            assertEquals(1, result.exitCode());
+            assertTrue(result.getErrorOutput().contains("--input cannot be used with --header"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+    }
+
+    @Test
+    void testProduceInputFormatConflictWithTimestamp() throws Exception {
+        Path tempFile = Files.createTempFile("produce-conflict-test", ".txt");
+        Files.writeString(tempFile, "key1 value1\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "test-topic", "--file", tempFile.toString(),
+                    "--input", "%k %v", "--timestamp", "1735401600000");
+            assertEquals(1, result.exitCode());
+            assertTrue(result.getErrorOutput().contains("--input cannot be used with --timestamp"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+    }
+
+    @Test
+    void testProduceInputFormatConflictWithPartition() throws Exception {
+        Path tempFile = Files.createTempFile("produce-conflict-test", ".txt");
+        Files.writeString(tempFile, "key1 value1\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "test-topic", "--file", tempFile.toString(),
+                    "--input", "%k %v", "--partition", "0");
+            assertEquals(1, result.exitCode());
+            assertTrue(result.getErrorOutput().contains("--input cannot be used with --partition"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+    }
+
+    @Test
+    void testProduceInputFormatInvalidFormatString() throws Exception {
+        Path tempFile = Files.createTempFile("produce-invalid-format-test", ".txt");
+        Files.writeString(tempFile, "key1 value1\n");
+
+        try {
+            // Format string without placeholders
+            LaunchResult result = launcher.launch("produce", "test-topic", "--file", tempFile.toString(),
+                    "--input", "just literal text");
+            assertEquals(1, result.exitCode());
+            assertTrue(result.getErrorOutput().contains("Invalid format string") ||
+                       result.getErrorOutput().contains("must contain at least one placeholder"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+    }
+
+    @Test
+    void testProduceInputFormatMissingDelimiter() throws Exception {
+        topicService.createTopic(admin(), "format-error-topic", 1, 1, Collections.emptyMap());
+
+        Path tempFile = Files.createTempFile("produce-missing-delimiter-test", ".txt");
+        Files.writeString(tempFile, "keyvalue\n"); // missing space delimiter
+
+        try {
+            LaunchResult result = launcher.launch("produce", "format-error-topic", "--file", tempFile.toString(),
+                    "--input", "%k %v");
+            assertEquals(1, result.exitCode());
+            assertTrue(result.getErrorOutput().contains("Failed to parse line") ||
+                       result.getErrorOutput().contains("delimiter"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+    }
+
+    @Test
+    void testProduceInputFormatInvalidHeaderFormat() throws Exception {
+        topicService.createTopic(admin(), "format-bad-header-topic", 1, 1, Collections.emptyMap());
+
+        Path tempFile = Files.createTempFile("produce-bad-header-test", ".txt");
+        Files.writeString(tempFile, "key1 value1 noequals\n"); // header missing =
+
+        try {
+            LaunchResult result = launcher.launch("produce", "format-bad-header-topic", "--file", tempFile.toString(),
+                    "--input", "%k %v %h");
+            assertEquals(1, result.exitCode());
+            assertTrue(result.getErrorOutput().contains("Invalid header format"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+    }
+
+    @Test
+    void testProduceInputFormatMultipleHeaders() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "format-multi-header-topic", 1, 1, Collections.emptyMap());
+
+        // Create temporary file with multiple headers
+        Path tempFile = Files.createTempFile("produce-format-multi-header-test", ".txt");
+        Files.writeString(tempFile, "key1 value1 type=json version=1.0\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "format-multi-header-topic", "--file", tempFile.toString(),
+                    "--input", "%k %v %{h.type} %{h.version}");
+            assertEquals(0, result.exitCode());
+            assertTrue(result.getOutput().contains("1 messages sent successfully"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+
+        // Verify both headers are present
+        List<ConsumerRecord<String, String>> records = consumeRecords("format-multi-header-topic", 1);
+        assertEquals(1, records.size());
+
+        Header typeHeader = records.get(0).headers().lastHeader("type");
+        assertNotNull(typeHeader);
+        assertEquals("json", new String(typeHeader.value(), StandardCharsets.UTF_8));
+
+        Header versionHeader = records.get(0).headers().lastHeader("version");
+        assertNotNull(versionHeader);
+        assertEquals("1.0", new String(versionHeader.value(), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void testProduceInputFormatAllFields() throws Exception {
+        // Create test topic with multiple partitions
+        topicService.createTopic(admin(), "format-all-fields-topic", 3, 1, Collections.emptyMap());
+
+        // Create temporary file with all fields
+        Path tempFile = Files.createTempFile("produce-format-all-test", ".txt");
+        Files.writeString(tempFile, "mykey myvalue type=json 1735401600000 2\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "format-all-fields-topic", "--file", tempFile.toString(),
+                    "--input", "%k %v %{h.type} %T %p");
+            assertEquals(0, result.exitCode());
+            assertTrue(result.getOutput().contains("1 messages sent successfully"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+
+        // Verify all fields are set correctly
+        List<ConsumerRecord<String, String>> records = consumeRecords("format-all-fields-topic", 1);
+        assertEquals(1, records.size());
+
+        ConsumerRecord<String, String> record = records.get(0);
+        assertEquals("mykey", record.key());
+        assertEquals("myvalue", record.value());
+        assertEquals(1735401600000L, record.timestamp());
+        assertEquals(2, record.partition());
+
+        Header header = record.headers().lastHeader("type");
+        assertNotNull(header);
+        assertEquals("json", new String(header.value(), StandardCharsets.UTF_8));
+    }
+
     /**
      * Helper method to consume messages from a topic
      */

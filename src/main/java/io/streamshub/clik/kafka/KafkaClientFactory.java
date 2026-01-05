@@ -12,8 +12,8 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.util.Optional;
 import java.util.Properties;
@@ -50,7 +50,7 @@ public class KafkaClientFactory {
     /**
      * Create KafkaProducer from current context
      */
-    public Producer<String, String> createProducer() {
+    public Producer<byte[], byte[]> createProducer() {
         Optional<String> currentContext = contextService.getCurrentContext();
         if (!currentContext.isPresent()) {
             throw new IllegalStateException("No current context set. Use 'clik context use <name>' to set a context.");
@@ -61,15 +61,15 @@ public class KafkaClientFactory {
     /**
      * Create KafkaProducer from specific context
      */
-    public Producer<String, String> createProducer(String contextName) {
+    public Producer<byte[], byte[]> createProducer(String contextName) {
         ContextConfig config = contextService.loadContext(contextName);
         Properties props = configurationLoader.mergeConfiguration(config, KafkaClientType.PRODUCER);
 
         // Set required serializers
         props.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-                StringSerializer.class.getName());
+                ByteArraySerializer.class.getName());
         props.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-                StringSerializer.class.getName());
+                ByteArraySerializer.class.getName());
 
         return new KafkaProducer<>(props);
     }

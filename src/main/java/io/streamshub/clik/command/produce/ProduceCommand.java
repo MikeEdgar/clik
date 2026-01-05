@@ -4,13 +4,13 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
@@ -23,6 +23,10 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import io.streamshub.clik.kafka.KafkaClientFactory;
+import io.streamshub.clik.support.Encoding;
+import io.streamshub.clik.support.FormatParser;
+import io.streamshub.clik.support.MessageComponents;
+import io.streamshub.clik.support.ParsedFormat;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.CommandSpec;
 
@@ -83,6 +87,12 @@ public class ProduceCommand implements Callable<Integer> {
     )
     String timestamp;
 
+    @CommandLine.Option(
+            names = {"-I", "--input"},
+            description = "Format string for parsing input lines (e.g., '%k %v' for key-value pairs)"
+    )
+    String inputFormat;
+
     @Inject
     KafkaClientFactory clientFactory;
 
@@ -114,6 +124,32 @@ public class ProduceCommand implements Callable<Integer> {
             return 1;
         }
 
+        // --input cannot be used with --value
+        if (inputFormat != null && value != null) {
+            err().println("Error: --input cannot be used with --value");
+            return 1;
+        }
+
+        // --input cannot be used with global --key, --header, --timestamp, or --partition
+        if (inputFormat != null) {
+            if (key != null) {
+                err().println("Error: --input cannot be used with --key (use %k in format string instead)");
+                return 1;
+            }
+            if (headers != null && !headers.isEmpty()) {
+                err().println("Error: --input cannot be used with --header (use %h in format string instead)");
+                return 1;
+            }
+            if (timestamp != null) {
+                err().println("Error: --input cannot be used with --timestamp (use %T in format string instead)");
+                return 1;
+            }
+            if (partition != null) {
+                err().println("Error: --input cannot be used with --partition (use %p in format string instead)");
+                return 1;
+            }
+        }
+
         // Validate file exists if specified
         if (file != null) {
             Path filePath = Paths.get(file);
@@ -127,7 +163,7 @@ public class ProduceCommand implements Callable<Integer> {
             }
         }
 
-        try (Producer<String, String> producer = clientFactory.createProducer();
+        try (Producer<byte[], byte[]> producer = clientFactory.createProducer();
             Stream<String> messages = readMessages()) {
             return sendMessages(producer, messages);
         } catch (IllegalStateException e) {
@@ -173,9 +209,23 @@ public class ProduceCommand implements Callable<Integer> {
             String headerKey = header.substring(0, equalsIndex).trim();
             String headerValue = header.substring(equalsIndex + 1).trim();
 
-            recordHeaders.add(headerKey, headerValue.getBytes(StandardCharsets.UTF_8));
+            // Use EncodingUtil to support base64: and hex: prefixes
+            byte[] headerValueBytes = Encoding.decodeValue(headerValue);
+            recordHeaders.add(headerKey, headerValueBytes);
         }
 
+        return recordHeaders;
+    }
+
+    private Headers toKafkaHeaders(Map<String, byte[]> headerMap) {
+        if (headerMap == null || headerMap.isEmpty()) {
+            return null;
+        }
+
+        RecordHeaders recordHeaders = new RecordHeaders();
+        for (Map.Entry<String, byte[]> entry : headerMap.entrySet()) {
+            recordHeaders.add(entry.getKey(), entry.getValue());
+        }
         return recordHeaders;
     }
 
@@ -199,35 +249,77 @@ public class ProduceCommand implements Callable<Integer> {
         }
     }
 
-    private int sendMessages(Producer<String, String> producer, Stream<String> messages) {
+    private int sendMessages(Producer<byte[], byte[]> producer, Stream<String> messages) {
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
 
-        // Convert headers List to Kafka Headers once
-        Headers recordHeaders = toKafkaHeaders(headers);
+        if (inputFormat != null) {
+            // Parse format string once
+            ParsedFormat format;
+            try {
+                format = FormatParser.parse(inputFormat);
+            } catch (IllegalArgumentException e) {
+                err().println("Error: Invalid format string: " + e.getMessage());
+                return 1;
+            }
 
-        // Parse timestamp once
-        Long timestampMillis = parseTimestamp(timestamp);
+            // Process each line according to format string
+            messages.forEach(line -> {
+                try {
+                    // Parse line according to format
+                    MessageComponents components = format.matchLine(line);
 
-        messages.forEach(message -> {
-            // Use headers and/or timestamp may be null
-            ProducerRecord<String, String> rec = new ProducerRecord<>(
-                    topic,
-                    partition,
-                    timestampMillis,
-                    key,
-                    message,
-                    recordHeaders);
+                    // Create producer record from parsed components
+                    ProducerRecord<byte[], byte[]> rec = new ProducerRecord<>(
+                            topic,
+                            components.getPartition(),
+                            components.getTimestamp(),
+                            components.getKey(),
+                            components.getValue(),
+                            toKafkaHeaders(components.getHeaders()));
 
-            producer.send(rec, (metadata, exception) -> {
-                if (exception == null) {
-                    successCount.incrementAndGet();
-                } else {
+                    producer.send(rec, (metadata, exception) -> {
+                        if (exception == null) {
+                            successCount.incrementAndGet();
+                        } else {
+                            failureCount.incrementAndGet();
+                            err().println("Failed to send message: " + exception.getMessage());
+                        }
+                    });
+                } catch (IllegalArgumentException e) {
                     failureCount.incrementAndGet();
-                    err().println("Failed to send message: " + exception.getMessage());
+                    err().println("Failed to parse line: " + e.getMessage());
                 }
             });
-        });
+        } else {
+            // Existing behavior: use global options
+            Headers recordHeaders = toKafkaHeaders(headers);
+            Long timestampMillis = parseTimestamp(timestamp);
+            byte[] keyBytes = key != null ? Encoding.decodeValue(key) : null;
+
+            messages.forEach(message -> {
+                // Decode message value (may have base64: or hex: prefix)
+                byte[] valueBytes = Encoding.decodeValue(message);
+
+                // Use headers and/or timestamp may be null
+                ProducerRecord<byte[], byte[]> rec = new ProducerRecord<>(
+                        topic,
+                        partition,
+                        timestampMillis,
+                        keyBytes,
+                        valueBytes,
+                        recordHeaders);
+
+                producer.send(rec, (metadata, exception) -> {
+                    if (exception == null) {
+                        successCount.incrementAndGet();
+                    } else {
+                        failureCount.incrementAndGet();
+                        err().println("Failed to send message: " + exception.getMessage());
+                    }
+                });
+            });
+        }
 
         producer.flush();
 
