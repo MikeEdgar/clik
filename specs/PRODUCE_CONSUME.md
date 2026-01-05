@@ -17,7 +17,6 @@ This specification defines producer and consumer commands for Clik, enabling use
 
 - Custom serializers/deserializers (Avro, Protobuf, JSON Schema)
 - Transactional producer support
-- Headers manipulation
 - Compression configuration
 - Advanced consumer features (manual partition assignment with rebalancing)
 - Message filtering or transformation
@@ -57,8 +56,12 @@ clik produce <topic> [OPTIONS]
 |------|-------------|---------|
 | `-f, --file <path>` | Read messages from file (one message per line) | - |
 | `-i, --interactive` | Interactive mode (prompt for messages) | - |
-| `-k, --key <key>` | Message key (applied to all messages) | null |
-| `-p, --partition <num>` | Target partition number | - |
+| `-v, --value <value>` | Single message value (mutually exclusive with file/interactive) | - |
+| `-k, --key <key>` | Message key (applied to all messages, not compatible with --input) | null |
+| `-p, --partition <num>` | Target partition number (not compatible with --input) | - |
+| `--header <key=value>` | Message header (repeatable, supports duplicate keys, not compatible with --input) | - |
+| `-t, --timestamp <ts>` | Message timestamp in epoch milliseconds or ISO-8601 format (not compatible with --input) | - |
+| `-I, --input <format>` | Format string for parsing input lines (e.g., '%k %v' for key-value pairs) | - |
 
 **Examples:**
 
@@ -69,14 +72,43 @@ clik produce my-topic --file messages.txt
 # Produce messages from stdin (via pipe)
 echo -e "msg1\nmsg2\nmsg3" | clik produce my-topic
 
+# Produce a single message
+clik produce my-topic --value "Hello World"
+
 # Produce with a specific key
 clik produce my-topic --file messages.txt --key user123
 
 # Produce to a specific partition
 clik produce my-topic --file messages.txt --partition 2
 
+# Produce with headers
+clik produce my-topic --value "test" --header "content-type=application/json" --header "version=1.0"
+
+# Produce with timestamp (epoch milliseconds or ISO-8601)
+clik produce my-topic --value "timestamped message" --timestamp 1735401600000
+clik produce my-topic --value "timestamped message" --timestamp "2026-01-04T12:00:00Z"
+
+# Produce with binary encoding (base64 or hex)
+clik produce my-topic --value "base64:SGVsbG8gV29ybGQ=" --key "hex:6b6579"
+clik produce my-topic --value "test" --header "signature=base64:U2lnbmF0dXJl"
+
 # Interactive mode
 clik produce my-topic --interactive
+
+# Format string for structured input (key-value pairs)
+echo -e "key1 value1\nkey2 value2" | clik produce my-topic --input "%k %v"
+
+# Format string with base64-encoded key
+cat data.txt | clik produce my-topic --input "%{base64:k} %v"
+
+# Format string with headers and timestamp
+cat data.txt | clik produce my-topic --input "%k %v %{h.type} %T"
+
+# Format string with tab delimiter (using unicode escape)
+cat data.tsv | clik produce my-topic --input "%k\u0009%v"
+
+# Format string with all fields
+cat data.txt | clik produce my-topic --input "%k %v %{h.content-type} %T %p"
 ```
 
 **Output:**
@@ -88,27 +120,59 @@ clik produce my-topic --interactive
 
 1. Load configuration from current context
 2. Create KafkaProducer with String serializer
-3. Read messages from input source (file, stdin, or interactive)
-4. Send each message as a ProducerRecord
-5. Flush producer to ensure all messages are sent
-6. Report success/failure counts
+3. Read messages from input source (file, stdin, interactive, or single value)
+4. Parse input according to format string if `--input` is specified
+5. Decode binary-encoded values (base64:, hex:) in keys, values, and headers
+6. Send each message as a ProducerRecord with appropriate metadata
+7. Flush producer to ensure all messages are sent
+8. Report success/failure counts
 
 **Input Sources Priority:**
-1. If `--file` specified: read from file
-2. Else if `--interactive` specified: read from System.in with prompt
-3. Else: read from stdin (piped input)
+1. If `--value` specified: send single message
+2. Else if `--file` specified: read from file
+3. Else if `--interactive` specified: read from System.in with prompt
+4. Else: read from stdin (piped input)
+
+**Binary Encoding:**
+- Supports `base64:` and `hex:` prefixes for keys, values, and header values
+- Example: `--key "base64:dGVzdC1rZXk="` decodes to "test-key"
+- Example: `--value "hex:48656c6c6f"` decodes to "Hello"
+- Plain text (no prefix) is treated as UTF-8
+
+**Format String Syntax:**
+- `%k` - Message key (plain text)
+- `%v` - Message value (plain text)
+- `%h` - Generic header (matches any header, parses as key=value)
+- `%T` - Timestamp (epoch milliseconds)
+- `%p` - Partition number
+- `%%` - Literal percent character
+- `%{base64:k}` - Base64-encoded key
+- `%{hex:v}` - Hex-encoded value
+- `%{h.name}` - Named header (matches specific header name)
+- `%{base64:h.signature}` - Base64-encoded named header
+- `\uXXXX` - Unicode character (e.g., `\u0009` for tab)
 
 **Important Notes:**
-- Each line in the input is treated as a separate message
+- Input modes (`--value`, `--file`, `--interactive`, stdin) are mutually exclusive
+- `--input` format string cannot be used with `--value`
+- `--input` format string cannot be used with global `--key`, `--header`, `--timestamp`, or `--partition` options
+- Each line in the input is treated as a separate message (except with `--value`)
 - Empty lines produce empty messages
-- File and interactive modes are mutually exclusive
 - Messages are sent synchronously for reliability
-- All messages use the same key if `--key` is specified
+- All messages use the same metadata if global options are specified (without `--input`)
+- Format strings must contain at least one placeholder
+- Duplicate named headers in format string are not allowed
+- Generic header placeholder (`%h`) can only appear once
 
 **Error Conditions:**
 - File not found
 - No current context set
-- File and interactive both specified
+- Multiple input modes specified (--value, --file, --interactive)
+- `--input` used with `--value`
+- `--input` used with global `--key`, `--header`, `--timestamp`, or `--partition`
+- Invalid format string (missing placeholders, duplicate headers, etc.)
+- Invalid binary encoding (malformed base64 or hex)
+- Format string parsing errors (missing delimiters, invalid header format, etc.)
 - Topic does not exist (auto-creation disabled)
 - Producer configuration errors
 - Network/broker errors
@@ -269,6 +333,15 @@ io.streamshub.clik/
 │   ├── KafkaClientFactory.java           # Modified: added createProducer() and createConsumer()
 │   └── model/
 │       └── ConsumedMessage.java          # Model for consumed messages
+├── support/
+│   ├── Encoding.java                     # Binary encoding utilities (base64, hex)
+│   ├── FormatParser.java                 # Format string parser
+│   ├── FormatToken.java                  # Sealed interface for format tokens
+│   ├── LiteralToken.java                 # Literal text token
+│   ├── PlaceholderToken.java             # Placeholder token with encoding
+│   ├── PlaceholderType.java              # Enum for placeholder types
+│   ├── ParsedFormat.java                 # Parsed format for matching input lines
+│   └── MessageComponents.java            # Parsed message components
 └── Clik.java                             # Updated with produce/consume subcommands
 ```
 
@@ -360,8 +433,9 @@ public class ConsumedMessage {
 
 ### ProduceCommand Tests
 
-**Test Coverage (8 tests):**
+**Test Coverage (54 passing tests, 1 skipped):**
 
+**Basic Production (8 tests):**
 1. `testProduceFromStdin()` - Produce messages from stdin (disabled for QuarkusMainTest)
 2. `testProduceFromFile()` - Produce messages from file
 3. `testProduceWithKey()` - Verify key assignment
@@ -371,12 +445,70 @@ public class ConsumedMessage {
 7. `testProduceMultipleMessages()` - Batch sending (10 messages)
 8. `testProduceEmptyInput()` - Handle empty input
 
+**Single Value & Headers (11 tests):**
+9. `testProduceWithValue()` - Single message via --value
+10. `testProduceWithValueAndKey()` - Value with key
+11. `testProduceWithValueAndPartition()` - Value with partition
+12. `testProduceWithSingleHeader()` - Single header
+13. `testProduceWithMultipleHeaders()` - Multiple headers
+14. `testProduceWithDuplicateHeaderKeys()` - Duplicate header keys
+15. `testProduceWithHeadersFromFile()` - Headers applied to file input
+16. `testProduceWithTimestampEpochMillis()` - Timestamp as epoch milliseconds
+17. `testProduceWithTimestampISO8601()` - Timestamp as ISO-8601
+18. `testProduceWithValueHeadersAndTimestamp()` - Combined metadata
+19. `testProduceHeaderWithEqualsInValue()` - Header value contains =
+
+**Binary Encoding (10 tests):**
+20. `testProduceWithBase64Value()` - Base64-encoded value
+21. `testProduceWithHexValue()` - Hex-encoded value
+22. `testProduceWithBase64Key()` - Base64-encoded key
+23. `testProduceWithHexKey()` - Hex-encoded key
+24. `testProduceWithBase64Header()` - Base64-encoded header value
+25. `testProduceWithHexHeader()` - Hex-encoded header value
+26. `testProduceWithMixedEncodings()` - Mixed encoding types
+27. `testProduceInvalidBase64()` - Invalid base64 error
+28. `testProduceInvalidHexOddLength()` - Hex with odd length error
+29. `testProduceInvalidHexCharacters()` - Invalid hex characters error
+
+**Format String (17 tests):**
+30. `testProduceWithInputFormatKeyValue()` - Format: %k %v
+31. `testProduceWithInputFormatBase64Key()` - Format: %{base64:k} %v
+32. `testProduceWithInputFormatNamedHeader()` - Format: %k %v %{h.name}
+33. `testProduceWithInputFormatGenericHeader()` - Format: %k %v %h
+34. `testProduceWithInputFormatTimestamp()` - Format: %k %v %T
+35. `testProduceWithInputFormatPartition()` - Format: %k %v %p
+36. `testProduceWithInputFormatMixedEncodings()` - Format with mixed encodings
+37. `testProduceWithInputFormatUnicodeDelimiter()` - Format: %k\u0009%v (tab)
+38. `testProduceWithInputFormatValueWithSpaces()` - Values containing spaces
+39. `testProduceWithInputFormatMultipleHeaders()` - Multiple named headers
+40. `testProduceWithInputFormatAllFields()` - All fields in one format
+41. `testProduceInputFormatConflictWithValue()` - Error: --input with --value
+42. `testProduceInputFormatConflictWithKey()` - Error: --input with --key
+43. `testProduceInputFormatConflictWithHeader()` - Error: --input with --header
+44. `testProduceInputFormatConflictWithTimestamp()` - Error: --input with --timestamp
+45. `testProduceInputFormatConflictWithPartition()` - Error: --input with --partition
+46. `testProduceInputFormatInvalidFormatString()` - Invalid format string error
+
+**Error Cases (9 tests):**
+47. `testProduceMutualExclusivityValueAndFile()` - Error handling
+48. `testProduceMutualExclusivityValueAndInteractive()` - Error handling
+49. `testProduceInvalidHeaderFormat()` - Invalid header error
+50. `testProduceInvalidHeaderFormatEmptyKey()` - Empty header key error
+51. `testProduceInvalidTimestampFormat()` - Invalid timestamp error
+52. `testProduceEmptyValue()` - Handle empty value
+53. `testProduceInputFormatMissingDelimiter()` - Missing delimiter error
+54. `testProduceInputFormatInvalidHeaderFormat()` - Invalid header in format
+55. `testProduceBackwardsCompatiblePlainText()` - Plain text compatibility
+
 **Test Approach:**
 - Create test topics using TopicService
 - Produce messages using ProduceCommand
 - Verify messages using KafkaConsumer
 - Use temporary files for file-based tests
-- Validate output messages and counts
+- Validate output messages, counts, and metadata
+- Test all encoding types (plain, base64, hex)
+- Test format string parsing and validation
+- Test error conditions and validation
 
 ### ConsumeCommand Tests
 
@@ -495,17 +627,36 @@ No messages consumed
 - [x] Write ConsumeCommandIT for native builds
 
 ### Phase 4: Testing & Documentation ✅ COMPLETED
-- [x] All tests passing (22 tests total)
+- [x] All tests passing (22 tests: 8 produce + 14 consume)
 - [x] Native image reflection configuration verified
 - [x] Specification document (this file)
 - [x] CLAUDE.md updates
 
-### Phase 5: Future Enhancements
+### Phase 5: Binary Encoding & Headers ✅ COMPLETED
+- [x] Add base64 and hex encoding support for keys, values, and headers
+- [x] Add --header option for message headers
+- [x] Add --timestamp option for message timestamps
+- [x] Add --value option for single message production
+- [x] Add comprehensive encoding tests (26 EncodingTest unit tests + 10 integration tests)
+- [x] Add header and timestamp tests (11 integration tests)
+
+### Phase 6: Format String Support ✅ COMPLETED
+- [x] Design and implement format string parser
+- [x] Add --input option for structured input parsing
+- [x] Support simple placeholders (%k, %v, %h, %T, %p, %%)
+- [x] Support parameterized placeholders (%{base64:k}, %{hex:v}, %{h.name})
+- [x] Support unicode escapes (\uXXXX)
+- [x] Add format string validation and error handling
+- [x] Add FormatParser unit tests (35 tests)
+- [x] Add format string integration tests (20 tests)
+- [x] Total producer tests: 54 passing (1 skipped)
+
+### Phase 7: Future Enhancements
 - [ ] Custom serializers/deserializers (Avro, Protobuf)
-- [ ] Message headers support
 - [ ] Advanced filtering and transformation
 - [ ] Transactional producer support
 - [ ] Consumer offset commit control
+- [ ] Consumer format string support for output formatting
 
 ## Key Design Decisions
 
@@ -517,15 +668,25 @@ No messages consumed
 6. **File-based testing**: stdin manipulation doesn't work with QuarkusMainTest
 7. **No offset commits in consume**: Read-only operation to avoid side effects
 8. **Generated group IDs**: Prevents accidental consumer group creation
+9. **Prefix-based encoding**: `base64:` and `hex:` prefixes are intuitive and easy to parse
+10. **Format string syntax**: Inspired by kcat/kafkacat for familiarity
+11. **Sealed interfaces for tokens**: Type-safe token hierarchy with pattern matching
+12. **Unicode escapes in format strings**: Allows special delimiters like tabs without shell quoting issues
+13. **Validation at parse time**: Format string errors caught early before processing input
+14. **Mutually exclusive options**: Prevents ambiguous combinations (--input vs global options)
 
 ## Success Criteria
 
-- ✅ Can produce messages from file and stdin
+- ✅ Can produce messages from file, stdin, interactive mode, and single value
+- ✅ Can produce with keys, partitions, headers, and timestamps
+- ✅ Supports binary encoding (base64 and hex) for keys, values, and headers
+- ✅ Can parse structured input with format strings
+- ✅ Format strings support all placeholders and encodings
 - ✅ Can consume messages in one-time and continuous modes
 - ✅ Supports all output formats (table, JSON, YAML, value)
 - ✅ Proper offset control for consumers
 - ✅ Consumer group support with --group flag
-- ✅ All tests passing (22 tests: 8 produce + 14 consume)
+- ✅ All tests passing (286 tests: 54 produce + 14 consume + 26 Encoding + 35 FormatParser + other unit/integration tests)
 - ✅ Native image builds successfully
 - ✅ Documentation complete
 

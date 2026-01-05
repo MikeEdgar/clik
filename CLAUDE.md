@@ -73,6 +73,7 @@ The codebase follows a standard Maven project layout:
   - `config/` - Configuration services (ContextService, ConfigurationLoader, ContextValidator)
   - `kafka/` - Kafka services (KafkaClientFactory, TopicService, GroupService)
   - `kafka/model/` - Data models (TopicInfo, GroupInfo, ConsumedMessage, etc.)
+  - `support/` - Utility classes (Encoding, FormatParser, format tokens, MessageComponents)
   - `version/` - Application version provider
 - `src/main/resources/` - Configuration files and resources
 - `src/test/java/` - Test code
@@ -177,11 +178,25 @@ Clik implements message production and consumption commands for Kafka topics. Se
 
 **Producer Features:**
 - Multiple input sources:
+  - Single message via `--value <value>`
   - File input via `--file <path>` (one message per line)
   - Standard input (piped input)
   - Interactive mode via `--interactive` (prompt for messages)
-- Message key support via `--key <key>` (applied to all messages)
-- Partition targeting via `--partition <num>`
+- Message metadata support (applied globally to all messages):
+  - Message key via `--key <key>`
+  - Partition targeting via `--partition <num>`
+  - Headers via `--header <key=value>` (repeatable, supports duplicates)
+  - Timestamp via `--timestamp <ts>` (epoch milliseconds or ISO-8601)
+- Binary encoding support:
+  - `base64:` prefix for base64-encoded data
+  - `hex:` prefix for hex-encoded data
+  - Applies to keys, values, and header values
+- Format string support for structured input parsing:
+  - `--input <format>` parses each line according to format string
+  - Simple placeholders: `%k` (key), `%v` (value), `%h` (header), `%T` (timestamp), `%p` (partition), `%%` (literal %)
+  - Parameterized placeholders: `%{base64:k}`, `%{hex:v}`, `%{h.name}`
+  - Unicode escapes: `\uXXXX` for special delimiters
+  - Format strings cannot be used with global metadata options
 - String serialization for simplicity (MVP scope)
 - Synchronous sending with flush for reliability
 - Success/failure counting and reporting
@@ -227,8 +242,20 @@ Clik implements message production and consumption commands for Kafka topics. Se
 # Produce messages from a file
 clik produce my-topic --file messages.txt
 
-# Produce with a specific key
-echo "test message" | clik produce my-topic --key user123
+# Produce a single message with headers and timestamp
+clik produce my-topic --value "test" --header "type=json" --timestamp "2026-01-04T12:00:00Z"
+
+# Produce with binary encoding
+echo "base64:SGVsbG8gV29ybGQ=" | clik produce my-topic --key "hex:6b6579"
+
+# Produce with format string (key-value pairs)
+echo -e "key1 value1\nkey2 value2" | clik produce my-topic --input "%k %v"
+
+# Produce with format string (tab-delimited with headers)
+cat data.tsv | clik produce my-topic --input "%k\u0009%v\u0009%{h.type}"
+
+# Produce with format string (all fields)
+cat data.txt | clik produce my-topic --input "%{hex:k} %{base64:v} %{h.sig} %T %p"
 
 # Consume from beginning (one-time read)
 clik consume my-topic --from-beginning
@@ -481,16 +508,40 @@ See `specs/PRODUCE_CONSUME.md` for detailed specification.
 - Specification document (PRODUCE_CONSUME.md)
 - CLAUDE.md updates completed
 
+**Phase 5: Binary Encoding & Headers (✅ COMPLETED)**
+- Added base64 and hex encoding support for keys, values, and headers
+- Added `--header` option for message headers
+- Added `--timestamp` option for message timestamps
+- Added `--value` option for single message production
+- Added comprehensive encoding tests (26 EncodingTest unit tests + 10 integration tests)
+- Added header and timestamp tests (11 integration tests)
+
+**Phase 6: Format String Support (✅ COMPLETED)**
+- Designed and implemented format string parser
+- Added `--input` option for structured input parsing
+- Support for simple placeholders (`%k`, `%v`, `%h`, `%T`, `%p`, `%%`)
+- Support for parameterized placeholders (`%{base64:k}`, `%{hex:v}`, `%{h.name}`)
+- Support for unicode escapes (`\uXXXX`)
+- Added format string validation and error handling
+- Added FormatParser unit tests (35 tests)
+- Added format string integration tests (20 tests)
+- Total producer test count: 54 passing tests (1 skipped)
+
 **Future Enhancements:**
 - Custom serializers/deserializers (Avro, Protobuf, JSON Schema)
-- Message headers support
 - Advanced filtering and transformation
 - Transactional producer support
 - Consumer offset commit control
+- Consumer format string support for output formatting
 
 ### Overall Test Coverage
 
-**Total Tests: 171 passing**
-- Unit tests: 60 tests (ContextService, ConfigurationLoader, ContextValidator, TopicService, GroupService, KafkaClientFactory)
-- Integration tests: 111 tests (29 ContextCommandTest + 27 TopicCommandTest + 27 GroupCommandTest + 8 ProduceCommandTest + 14 ConsumeCommandTest + 6 ConsumeCommandIT + native IT variants)
+**Total Tests: 286 passing (1 skipped)**
+- Unit tests: 121 tests (ContextService, ConfigurationLoader, ContextValidator, TopicService, GroupService, KafkaClientFactory, Encoding, FormatParser)
+  - 60 existing service tests
+  - 26 Encoding tests
+  - 35 FormatParser tests
+- Integration tests: 165 tests (29 ContextCommandTest + 27 TopicCommandTest + 28 GroupCommandTest + 54 ProduceCommandTest + 14 ConsumeCommandTest + 13 ConsumeCommandIT + native IT variants)
+  - ProduceCommandTest expanded: 54 passing tests (1 skipped for stdin handling)
+  - ConsumeCommandTest: 14 tests
 - All tests passing in both JVM and native modes
