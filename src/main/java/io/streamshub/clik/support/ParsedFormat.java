@@ -1,7 +1,8 @@
 package io.streamshub.clik.support;
 
 import java.util.List;
-import java.util.Set;
+
+import io.streamshub.clik.kafka.model.KafkaRecord;
 
 /**
  * Represents a parsed format string ready to match against input lines.
@@ -10,13 +11,9 @@ import java.util.Set;
  */
 public class ParsedFormat {
     private final List<FormatToken> tokens;
-    private final Set<String> namedHeaders;
-    private final boolean hasGenericHeader;
 
-    public ParsedFormat(List<FormatToken> tokens, Set<String> namedHeaders, boolean hasGenericHeader) {
+    public ParsedFormat(List<FormatToken> tokens) {
         this.tokens = List.copyOf(tokens);
-        this.namedHeaders = Set.copyOf(namedHeaders);
-        this.hasGenericHeader = hasGenericHeader;
     }
 
     /**
@@ -26,30 +23,30 @@ public class ParsedFormat {
      * @return Parsed message components
      * @throws IllegalArgumentException if the line doesn't match the format
      */
-    public MessageComponents matchLine(String line) {
-        MessageComponents components = new MessageComponents();
+    public KafkaRecord matchLine(String line) {
+        KafkaRecord.Builder components = KafkaRecord.builder();
         int linePos = 0;
 
         for (int i = 0; i < tokens.size(); i++) {
             FormatToken token = tokens.get(i);
 
-            if (token instanceof LiteralToken literal) {
+            if (token instanceof LiteralToken(String literal)) {
                 // Match literal string
-                if (!line.startsWith(literal.literal(), linePos)) {
+                if (!line.startsWith(literal, linePos)) {
                     throw new IllegalArgumentException(
-                        "Expected '" + literal.literal() + "' at position " + linePos);
+                        "Expected '" + literal + "' at position " + linePos);
                 }
-                linePos += literal.literal().length();
+                linePos += literal.length();
             } else if (token instanceof PlaceholderToken placeholder) {
                 // Extract value up to next delimiter
                 String value;
 
                 // Find next literal delimiter (or end of line)
-                if (i + 1 < tokens.size() && tokens.get(i + 1) instanceof LiteralToken nextLiteral) {
-                    int nextPos = line.indexOf(nextLiteral.literal(), linePos);
+                if (i + 1 < tokens.size() && tokens.get(i + 1) instanceof LiteralToken(String nextLiteral)) {
+                    int nextPos = line.indexOf(nextLiteral, linePos);
                     if (nextPos == -1) {
                         throw new IllegalArgumentException(
-                            "Expected delimiter '" + nextLiteral.literal() + "' not found");
+                            "Expected delimiter '" + nextLiteral + "' not found");
                     }
                     value = line.substring(linePos, nextPos);
                     linePos = nextPos;
@@ -64,10 +61,10 @@ public class ParsedFormat {
             }
         }
 
-        return components;
+        return components.build();
     }
 
-    private void processPlaceholder(PlaceholderToken placeholder, String value, MessageComponents components) {
+    private void processPlaceholder(PlaceholderToken placeholder, String value, KafkaRecord.Builder components) {
         switch (placeholder.type()) {
             case KEY -> components.setKey(decodeWithEncoding(value, placeholder.encoding()));
 
@@ -114,10 +111,6 @@ public class ParsedFormat {
     }
 
     private byte[] decodeWithEncoding(String value, String encoding) {
-        if (encoding == null) {
-            return Encoding.decodeValue(value);
-        } else {
-            return Encoding.decodeValue(encoding + ":" + value);
-        }
+        return Encoding.decodeValue(value, encoding);
     }
 }

@@ -12,8 +12,8 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
 
 import java.util.Optional;
 import java.util.Properties;
@@ -77,7 +77,7 @@ public class KafkaClientFactory {
     /**
      * Create KafkaConsumer from current context
      */
-    public Consumer<String, String> createConsumer(String groupId) {
+    public Consumer<byte[], byte[]> createConsumer(String groupId) {
         Optional<String> currentContext = contextService.getCurrentContext();
         if (!currentContext.isPresent()) {
             throw new IllegalStateException("No current context set. Use 'clik context use <name>' to set a context.");
@@ -88,15 +88,15 @@ public class KafkaClientFactory {
     /**
      * Create KafkaConsumer from specific context
      */
-    public Consumer<String, String> createConsumer(String contextName, String groupId) {
+    public Consumer<byte[], byte[]> createConsumer(String contextName, String groupId) {
         ContextConfig config = contextService.loadContext(contextName);
         Properties props = configurationLoader.mergeConfiguration(config, KafkaClientType.CONSUMER);
 
         // Set required deserializers and group.id
         props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-                StringDeserializer.class.getName());
+                ByteArrayDeserializer.class.getName());
         props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                StringDeserializer.class.getName());
+                ByteArrayDeserializer.class.getName());
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
 
         return new KafkaConsumer<>(props);

@@ -2,10 +2,11 @@ package io.streamshub.clik.support;
 
 import org.junit.jupiter.api.Test;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
+import io.streamshub.clik.kafka.model.KafkaRecord;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class FormatParserTest {
 
@@ -14,122 +15,118 @@ class FormatParserTest {
     @Test
     void testSimplePlaceholders() {
         ParsedFormat format = FormatParser.parse("%k %v");
-        MessageComponents components = format.matchLine("key1 value1");
+        KafkaRecord components = format.matchLine("key1 value1");
 
-        assertEquals("key1", new String(components.getKey(), StandardCharsets.UTF_8));
-        assertEquals("value1", new String(components.getValue(), StandardCharsets.UTF_8));
+        assertEquals("key1", components.keyString(null));
+        assertEquals("value1", components.valueString(null));
     }
 
     @Test
     void testAllSimplePlaceholders() {
         ParsedFormat format = FormatParser.parse("%k %v %T %p");
-        MessageComponents components = format.matchLine("mykey myvalue 1735401600000 2");
+        KafkaRecord components = format.matchLine("mykey myvalue 1735401600000 2");
 
-        assertEquals("mykey", new String(components.getKey(), StandardCharsets.UTF_8));
-        assertEquals("myvalue", new String(components.getValue(), StandardCharsets.UTF_8));
-        assertEquals(1735401600000L, components.getTimestamp());
-        assertEquals(2, components.getPartition());
+        assertEquals("mykey", components.keyString(null));
+        assertEquals("myvalue", components.valueString(null));
+        assertEquals(1735401600000L, components.timestamp());
+        assertEquals(2, components.partition());
     }
 
     @Test
     void testBase64EncodedKey() {
         // "test-key" in base64
         ParsedFormat format = FormatParser.parse("%{base64:k} %v");
-        MessageComponents components = format.matchLine("dGVzdC1rZXk= value1");
+        KafkaRecord components = format.matchLine("dGVzdC1rZXk= value1");
 
-        assertEquals("test-key", new String(components.getKey(), StandardCharsets.UTF_8));
-        assertEquals("value1", new String(components.getValue(), StandardCharsets.UTF_8));
+        assertEquals("test-key", components.keyString(null));
+        assertEquals("value1", components.valueString(null));
     }
 
     @Test
     void testHexEncodedValue() {
         // "Hello" in hex
         ParsedFormat format = FormatParser.parse("%k %{hex:v}");
-        MessageComponents components = format.matchLine("key1 48656c6c6f");
+        KafkaRecord components = format.matchLine("key1 48656c6c6f");
 
-        assertEquals("key1", new String(components.getKey(), StandardCharsets.UTF_8));
-        assertEquals("Hello", new String(components.getValue(), StandardCharsets.UTF_8));
+        assertEquals("key1", components.keyString(null));
+        assertEquals("Hello", components.valueString(null));
     }
 
     @Test
     void testNamedHeader() {
         ParsedFormat format = FormatParser.parse("%k %v %{h.content-type}");
-        MessageComponents components = format.matchLine("key1 value1 content-type=application/json");
+        KafkaRecord components = format.matchLine("key1 value1 content-type=application/json");
 
-        assertEquals("key1", new String(components.getKey(), StandardCharsets.UTF_8));
-        assertEquals("value1", new String(components.getValue(), StandardCharsets.UTF_8));
-        assertEquals("application/json",
-            new String(components.getHeaders().get("content-type"), StandardCharsets.UTF_8));
+        assertEquals("key1", components.keyString(null));
+        assertEquals("value1", components.valueString(null));
+        assertEquals("application/json", components.firstHeader("content-type").valueString(null));
     }
 
     @Test
     void testGenericHeader() {
         ParsedFormat format = FormatParser.parse("%k %v %h");
-        MessageComponents components = format.matchLine("key1 value1 my-header=data");
+        KafkaRecord components = format.matchLine("key1 value1 my-header=data");
 
-        assertEquals("key1", new String(components.getKey(), StandardCharsets.UTF_8));
-        assertEquals("value1", new String(components.getValue(), StandardCharsets.UTF_8));
-        assertEquals("data",
-            new String(components.getHeaders().get("my-header"), StandardCharsets.UTF_8));
+        assertEquals("key1", components.keyString(null));
+        assertEquals("value1", components.valueString(null));
+        assertEquals("data", components.firstHeader("my-header").valueString(null));
     }
 
     @Test
     void testBase64EncodedHeader() {
         // "signature" in base64
         ParsedFormat format = FormatParser.parse("%k %v %{base64:h.sig}");
-        MessageComponents components = format.matchLine("key1 value1 sig=U2lnbmF0dXJl");
+        KafkaRecord components = format.matchLine("key1 value1 sig=U2lnbmF0dXJl");
 
-        assertEquals("key1", new String(components.getKey(), StandardCharsets.UTF_8));
-        assertEquals("Signature",
-            new String(components.getHeaders().get("sig"), StandardCharsets.UTF_8));
+        assertEquals("key1", components.keyString(null));
+        assertEquals("Signature", components.firstHeader("sig").valueString(null));
     }
 
     @Test
     void testMultipleNamedHeaders() {
         ParsedFormat format = FormatParser.parse("%k %v %{h.type} %{h.version}");
-        MessageComponents components = format.matchLine("key1 value1 type=json version=1.0");
+        KafkaRecord components = format.matchLine("key1 value1 type=json version=1.0");
 
-        Map<String, byte[]> headers = components.getHeaders();
-        assertEquals("json", new String(headers.get("type"), StandardCharsets.UTF_8));
-        assertEquals("1.0", new String(headers.get("version"), StandardCharsets.UTF_8));
+        assertEquals("json", components.firstHeader("type").valueString(null));
+        assertEquals("1.0", components.firstHeader("version").valueString(null));
     }
 
     @Test
     void testEscapedPercent() {
         ParsedFormat format = FormatParser.parse("%k%% %v");
-        MessageComponents components = format.matchLine("key% value");
+        KafkaRecord components = format.matchLine("key% value");
 
-        assertEquals("key", new String(components.getKey(), StandardCharsets.UTF_8));
-        assertEquals("value", new String(components.getValue(), StandardCharsets.UTF_8));
+        assertEquals("key", components.keyString(null));
+        assertEquals("value", components.valueString(null));
     }
 
     @Test
     void testUnicodeEscapeTab() {
         ParsedFormat format = FormatParser.parse("%k\u0009%v");
-        MessageComponents components = format.matchLine("key1\tvalue1");
+        KafkaRecord components = format.matchLine("key1\tvalue1");
 
-        assertEquals("key1", new String(components.getKey(), StandardCharsets.UTF_8));
-        assertEquals("value1", new String(components.getValue(), StandardCharsets.UTF_8));
+        assertEquals("key1", components.keyString(null));
+        assertEquals("value1", components.valueString(null));
     }
 
     @Test
     void testUnicodeEscapeSpace() {
         ParsedFormat format = FormatParser.parse("%k\u0020%v");
-        MessageComponents components = format.matchLine("key1 value1");
+        KafkaRecord components = format.matchLine("key1 value1");
 
-        assertEquals("key1", new String(components.getKey(), StandardCharsets.UTF_8));
-        assertEquals("value1", new String(components.getValue(), StandardCharsets.UTF_8));
+        assertEquals("key1", components.keyString(null));
+        assertEquals("value1", components.valueString(null));
     }
 
     @Test
     void testMixedEncodings() {
         // hex key, base64 value, plain header
         ParsedFormat format = FormatParser.parse("%{hex:k} %{base64:v} %{h.type}");
-        MessageComponents components = format.matchLine("6b6579 VGVzdA== type=data");
+        KafkaRecord components = format.matchLine("6b6579 VGVzdA== type=data");
 
-        assertEquals("key", new String(components.getKey(), StandardCharsets.UTF_8));
-        assertEquals("Test", new String(components.getValue(), StandardCharsets.UTF_8));
-        assertEquals("data", new String(components.getHeaders().get("type"), StandardCharsets.UTF_8));
+        assertEquals("key", components.keyString(null));
+        assertEquals("Test", components.valueString(null));
+        assertEquals("data", components.firstHeader("type").valueString(null));
     }
 
     // ========== Error Cases ==========
@@ -300,27 +297,27 @@ class FormatParserTest {
     @Test
     void testValueWithSpaces() {
         ParsedFormat format = FormatParser.parse("%k %v");
-        MessageComponents components = format.matchLine("key value with multiple spaces");
+        KafkaRecord components = format.matchLine("key value with multiple spaces");
 
-        assertEquals("key", new String(components.getKey(), StandardCharsets.UTF_8));
-        assertEquals("value with multiple spaces", new String(components.getValue(), StandardCharsets.UTF_8));
+        assertEquals("key", components.keyString(null));
+        assertEquals("value with multiple spaces", components.valueString(null));
     }
 
     @Test
     void testLastPlaceholderConsumesRestOfLine() {
         ParsedFormat format = FormatParser.parse("%k:%v");
-        MessageComponents components = format.matchLine("mykey:value with : colons : inside");
+        KafkaRecord components = format.matchLine("mykey:value with : colons : inside");
 
-        assertEquals("mykey", new String(components.getKey(), StandardCharsets.UTF_8));
-        assertEquals("value with : colons : inside", new String(components.getValue(), StandardCharsets.UTF_8));
+        assertEquals("mykey", components.keyString(null));
+        assertEquals("value with : colons : inside", components.valueString(null));
     }
 
     @Test
     void testEmptyValue() {
         ParsedFormat format = FormatParser.parse("%k %v");
-        MessageComponents components = format.matchLine("key ");
+        KafkaRecord components = format.matchLine("key ");
 
-        assertEquals("key", new String(components.getKey(), StandardCharsets.UTF_8));
-        assertEquals("", new String(components.getValue(), StandardCharsets.UTF_8));
+        assertEquals("key", components.keyString(null));
+        assertEquals("", components.valueString(null));
     }
 }

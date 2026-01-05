@@ -118,7 +118,7 @@ public class FormatParser {
         }
 
         // Save trailing literal
-        if (literal.length() > 0) {
+        if (!literal.isEmpty()) {
             tokens.add(new LiteralToken(literal.toString()));
         }
 
@@ -126,7 +126,7 @@ public class FormatParser {
             throw new IllegalArgumentException("Format string must contain at least one placeholder");
         }
 
-        return new ParsedFormat(tokens, namedHeaders, hasGenericHeader);
+        return new ParsedFormat(tokens);
     }
 
     /**

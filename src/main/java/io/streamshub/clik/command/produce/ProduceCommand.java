@@ -10,7 +10,6 @@ import java.nio.file.Paths;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
@@ -23,9 +22,9 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import io.streamshub.clik.kafka.KafkaClientFactory;
+import io.streamshub.clik.kafka.model.KafkaRecord;
 import io.streamshub.clik.support.Encoding;
 import io.streamshub.clik.support.FormatParser;
-import io.streamshub.clik.support.MessageComponents;
 import io.streamshub.clik.support.ParsedFormat;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.CommandSpec;
@@ -191,7 +190,7 @@ public class ProduceCommand implements Callable<Integer> {
         }
     }
 
-    private Headers toKafkaHeaders(List<String> headerList) {
+    private Headers parseHeaders(List<String> headerList) {
         if (headerList == null || headerList.isEmpty()) {
             return null;
         }
@@ -217,14 +216,14 @@ public class ProduceCommand implements Callable<Integer> {
         return recordHeaders;
     }
 
-    private Headers toKafkaHeaders(Map<String, byte[]> headerMap) {
-        if (headerMap == null || headerMap.isEmpty()) {
+    private Headers mapHeaders(List<KafkaRecord.Header> headers) {
+        if (headers == null || headers.isEmpty()) {
             return null;
         }
 
         RecordHeaders recordHeaders = new RecordHeaders();
-        for (Map.Entry<String, byte[]> entry : headerMap.entrySet()) {
-            recordHeaders.add(entry.getKey(), entry.getValue());
+        for (KafkaRecord.Header entry : headers) {
+            recordHeaders.add(entry.key(), entry.valueBytes());
         }
         return recordHeaders;
     }
@@ -267,16 +266,16 @@ public class ProduceCommand implements Callable<Integer> {
             messages.forEach(line -> {
                 try {
                     // Parse line according to format
-                    MessageComponents components = format.matchLine(line);
+                    KafkaRecord components = format.matchLine(line);
 
                     // Create producer record from parsed components
                     ProducerRecord<byte[], byte[]> rec = new ProducerRecord<>(
                             topic,
-                            components.getPartition(),
-                            components.getTimestamp(),
-                            components.getKey(),
-                            components.getValue(),
-                            toKafkaHeaders(components.getHeaders()));
+                            components.partition(),
+                            components.timestamp(),
+                            components.keyBytes(),
+                            components.valueBytes(),
+                            mapHeaders(components.headers()));
 
                     producer.send(rec, (metadata, exception) -> {
                         if (exception == null) {
@@ -293,7 +292,7 @@ public class ProduceCommand implements Callable<Integer> {
             });
         } else {
             // Existing behavior: use global options
-            Headers recordHeaders = toKafkaHeaders(headers);
+            Headers recordHeaders = parseHeaders(headers);
             Long timestampMillis = parseTimestamp(timestamp);
             byte[] keyBytes = key != null ? Encoding.decodeValue(key) : null;
 
