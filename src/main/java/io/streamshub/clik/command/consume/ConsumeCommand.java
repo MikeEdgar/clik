@@ -1,5 +1,6 @@
 package io.streamshub.clik.command.consume;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -11,6 +12,8 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
+import java.util.stream.Stream;
 
 import jakarta.inject.Inject;
 
@@ -20,12 +23,13 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 
+import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import com.github.freva.asciitable.AsciiTable;
 import com.github.freva.asciitable.Column;
+import com.github.freva.asciitable.ColumnData;
 import com.github.freva.asciitable.HorizontalAlign;
 
 import io.streamshub.clik.kafka.KafkaClientFactory;
@@ -38,6 +42,11 @@ import picocli.CommandLine.Model.CommandSpec;
         description = "Consume messages from a Kafka topic"
 )
 public class ConsumeCommand implements Callable<Integer> {
+
+    private static final String OUTPUT_TABLE = "table";
+    private static final String OUTPUT_JSON = "json";
+    private static final String OUTPUT_YAML = "yaml";
+    private static final String OUTPUT_VALUE = "value";
 
     @CommandLine.Spec
     CommandSpec commandSpec;
@@ -142,9 +151,7 @@ public class ConsumeCommand implements Callable<Integer> {
         }
 
         // Validate output format
-        String format = outputFormat.toLowerCase();
-        if (!format.equals("table") && !format.equals("json") &&
-            !format.equals("yaml") && !format.equals("value")) {
+        if (!validOutputFormat()) {
             err().println("Error: Invalid output format: " + outputFormat);
             err().println("Valid formats: table, json, yaml, value");
             return 1;
@@ -162,7 +169,7 @@ public class ConsumeCommand implements Callable<Integer> {
             } else {
                 List<KafkaRecord> messages = consumeOnce(consumer);
                 if (messages.isEmpty()) {
-                    if (!format.equals("value")) {
+                    if (!outputFormat.equalsIgnoreCase(OUTPUT_VALUE)) {
                         out().println("No messages consumed");
                     }
                 } else {
@@ -177,6 +184,11 @@ public class ConsumeCommand implements Callable<Integer> {
             err().println("Error: Failed to consume messages: " + e.getMessage());
             return 1;
         }
+    }
+
+    private boolean validOutputFormat() {
+        return Stream.of(OUTPUT_TABLE, OUTPUT_JSON, OUTPUT_YAML, OUTPUT_VALUE)
+            .anyMatch(outputFormat.toLowerCase()::equals);
     }
 
     private void configureConsumer(Consumer<byte[], byte[]> consumer) {
@@ -249,7 +261,11 @@ public class ConsumeCommand implements Callable<Integer> {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
 
             for (ConsumerRecord<byte[], byte[]> rec : records) {
-                printMessage(KafkaRecord.from(rec));
+                if (outputFormat.equalsIgnoreCase(OUTPUT_TABLE)) {
+                    printTableRow(KafkaRecord.from(rec));
+                } else {
+                    printMessages(List.of(KafkaRecord.from(rec)));
+                }
 
                 if (maxMessages != null && count.incrementAndGet() >= maxMessages) {
                     running.set(false);
@@ -258,66 +274,42 @@ public class ConsumeCommand implements Callable<Integer> {
             }
         }
 
-        if (!outputFormat.equalsIgnoreCase("value")) {
+        if (!outputFormat.equalsIgnoreCase(OUTPUT_VALUE)) {
             err().println("\n" + count.get() + " messages consumed");
         }
         return 0;
     }
 
-    private void printMessage(KafkaRecord message) {
-        switch (outputFormat.toLowerCase()) {
-            case "table":
-                printTableRow(message);
-                break;
-            case "json":
-                printJsonMessage(message);
-                break;
-            case "yaml":
-                printYamlMessage(message);
-                break;
-            case "value":
-                out().println(message.valueString(null));
-                break;
-        }
-    }
-
     private void printMessages(List<KafkaRecord> messages) {
         switch (outputFormat.toLowerCase()) {
-            case "table":
+            case OUTPUT_TABLE:
                 printTable(messages);
                 break;
-            case "json":
+            case OUTPUT_JSON:
                 printJson(messages);
                 break;
-            case "yaml":
+            case OUTPUT_YAML:
                 printYaml(messages);
                 break;
-            case "value":
+            case OUTPUT_VALUE:
                 messages.forEach(m -> out().println(m.valueString(null)));
                 break;
         }
     }
 
     private void printTable(List<KafkaRecord> messages) {
-        List<MessageRow> rows = new ArrayList<>();
-
-        for (KafkaRecord msg : messages) {
-            rows.add(new MessageRow(
-                    String.valueOf(msg.partition()),
-                    String.valueOf(msg.offset()),
-                    msg.keyString(""),
-                    msg.valueString("")
-            ));
-        }
-
-        String table = AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, List.of(
-                new Column().header("PARTITION").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.RIGHT).with(r -> r.partition),
-                new Column().header("OFFSET").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.RIGHT).with(r -> r.offset),
-                new Column().header("KEY").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.LEFT).with(r -> r.key),
-                new Column().header("VALUE").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.LEFT).with(r -> r.value)
+        String table = AsciiTable.getTable(AsciiTable.NO_BORDERS, messages, List.of(
+                column("PARTITION", HorizontalAlign.RIGHT, msg -> String.valueOf(msg.partition())),
+                column("OFFSET", HorizontalAlign.RIGHT, msg -> String.valueOf(msg.offset())),
+                column("KEY", HorizontalAlign.LEFT, msg -> msg.keyString("")),
+                column("VALUE", HorizontalAlign.LEFT, msg -> msg.valueString(""))
         ));
 
         out().println(table);
+    }
+
+    private static <T> ColumnData<T> column(String name, HorizontalAlign dataAlign, Function<T, String> data) {
+        return new Column().header(name).headerAlign(HorizontalAlign.LEFT).dataAlign(dataAlign).with(data);
     }
 
     private void printTableRow(KafkaRecord msg) {
@@ -329,88 +321,48 @@ public class ConsumeCommand implements Callable<Integer> {
     }
 
     private void printJson(List<KafkaRecord> messages) {
-        try {
-            List<Map<String, Object>> messageList = new ArrayList<>();
+        ObjectMapper jsonMapper = new ObjectMapper()
+                .disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
 
+        try {
             for (KafkaRecord msg : messages) {
-                Map<String, Object> data = new LinkedHashMap<>();
-                data.put("partition", msg.partition());
-                data.put("offset", msg.offset());
-                data.put("key", msg.keyString(null));
-                data.put("value", msg.valueString(null));
-                data.put("timestamp", msg.timestamp());
-                data.put("headers", convertHeadersToMapList(msg.headers()));
-                messageList.add(data);
+                printStructuredMessage(jsonMapper, msg);
+                out().println();
             }
-
-            ObjectMapper jsonMapper = new ObjectMapper();
-            jsonMapper.enable(SerializationFeature.INDENT_OUTPUT);
-            out().println(jsonMapper.writeValueAsString(messageList));
-        } catch (Exception e) {
-            err().println("Error: Failed to generate JSON output: " + e.getMessage());
-        }
-    }
-
-    private void printJsonMessage(KafkaRecord msg) {
-        try {
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("partition", msg.partition());
-            data.put("offset", msg.offset());
-            data.put("key", msg.keyString(null));
-            data.put("value", msg.valueString(null));
-            data.put("timestamp", msg.timestamp());
-            data.put("headers", convertHeadersToMapList(msg.headers()));
-
-            ObjectMapper jsonMapper = new ObjectMapper();
-            out().println(jsonMapper.writeValueAsString(data));
         } catch (Exception e) {
             err().println("Error: Failed to generate JSON output: " + e.getMessage());
         }
     }
 
     private void printYaml(List<KafkaRecord> messages) {
+        YAMLFactory yamlFactory = YAMLFactory.builder()
+                .enable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
+                .build();
+        ObjectMapper yamlMapper = new ObjectMapper(yamlFactory)
+                .disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
+
         try {
-            List<Map<String, Object>> messageList = new ArrayList<>();
-
             for (KafkaRecord msg : messages) {
-                Map<String, Object> data = new LinkedHashMap<>();
-                data.put("partition", msg.partition());
-                data.put("offset", msg.offset());
-                data.put("key", msg.keyString(null));
-                data.put("value", msg.valueString(null));
-                data.put("timestamp", msg.timestamp());
-                data.put("headers", convertHeadersToMapList(msg.headers()));
-                messageList.add(data);
+                printStructuredMessage(yamlMapper, msg);
+                if (follow) {
+                    // Write the document end marker when streaming
+                    out().println("...");
+                }
             }
-
-            YAMLFactory yamlFactory = YAMLFactory.builder()
-                    .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
-                    .build();
-            ObjectMapper yamlMapper = new ObjectMapper(yamlFactory);
-            out().println(yamlMapper.writeValueAsString(messageList));
         } catch (Exception e) {
             err().println("Error: Failed to generate YAML output: " + e.getMessage());
         }
     }
 
-    private void printYamlMessage(KafkaRecord msg) {
-        try {
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("partition", msg.partition());
-            data.put("offset", msg.offset());
-            data.put("key", msg.keyString(null));
-            data.put("value", msg.valueString(null));
-            data.put("timestamp", msg.timestamp());
-            data.put("headers", convertHeadersToMapList(msg.headers()));
-
-            YAMLFactory yamlFactory = YAMLFactory.builder()
-                    .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
-                    .build();
-            ObjectMapper yamlMapper = new ObjectMapper(yamlFactory);
-            out().println(yamlMapper.writeValueAsString(data));
-        } catch (Exception e) {
-            err().println("Error: Failed to generate YAML output: " + e.getMessage());
-        }
+    private void printStructuredMessage(ObjectMapper mapper, KafkaRecord msg) throws IOException {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("partition", msg.partition());
+        data.put("offset", msg.offset());
+        data.put("key", msg.keyString(null));
+        data.put("value", msg.valueString(null));
+        data.put("timestamp", msg.timestamp());
+        data.put("headers", convertHeadersToMapList(msg.headers()));
+        mapper.writeValue(out(), data);
     }
 
     /**
@@ -418,7 +370,7 @@ public class ConsumeCommand implements Callable<Integer> {
      * Each header becomes a map with "key" and "value" properties.
      */
     private List<Map<String, String>> convertHeadersToMapList(List<KafkaRecord.Header> headers) {
-        List<Map<String, String>> headerList = new ArrayList<>();
+        List<Map<String, String>> headerList = new ArrayList<>(headers.size());
         for (var header : headers) {
             Map<String, String> headerMap = new LinkedHashMap<>();
             headerMap.put("key", header.key());
@@ -427,6 +379,4 @@ public class ConsumeCommand implements Callable<Integer> {
         }
         return headerList;
     }
-
-    private static record MessageRow(String partition, String offset, String key, String value) {}
 }
