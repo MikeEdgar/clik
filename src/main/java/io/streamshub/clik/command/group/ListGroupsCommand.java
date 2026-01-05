@@ -6,6 +6,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import com.github.freva.asciitable.AsciiTable;
 import com.github.freva.asciitable.Column;
+import com.github.freva.asciitable.ColumnData;
 import com.github.freva.asciitable.HorizontalAlign;
 import io.streamshub.clik.kafka.GroupService;
 import io.streamshub.clik.kafka.KafkaClientFactory;
@@ -20,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.function.Function;
 
 @CommandLine.Command(
         name = "list",
@@ -90,25 +92,27 @@ public class ListGroupsCommand implements Callable<Integer> {
     }
 
     private void printTable(List<GroupInfo> groups) {
-        List<GroupRow> rows = new ArrayList<>();
-
-        for (GroupInfo group : groups) {
-            rows.add(new GroupRow(
-                    group.groupId(),
-                    group.type(),
-                    group.state(),
-                    String.valueOf(group.memberCount())
-            ));
-        }
-
-        String table = AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, List.of(
-                new Column().header("NAME").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.LEFT).with(r -> r.name),
-                new Column().header("TYPE").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.LEFT).with(r -> r.type),
-                new Column().header("STATE").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.LEFT).with(r -> r.state),
-                new Column().header("MEMBERS").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.RIGHT).with(r -> r.members)
+        String table = AsciiTable.getTable(AsciiTable.NO_BORDERS, groups, List.of(
+                column("NAME", HorizontalAlign.LEFT, GroupInfo::groupId),
+                column("TYPE", HorizontalAlign.LEFT, GroupInfo::type),
+                column("PROTOCOL", HorizontalAlign.LEFT, group -> {
+                    var protocol = group.protocol();
+                    return protocol.isEmpty() ? "-" : protocol;
+                }),
+                column("STATE", HorizontalAlign.LEFT, GroupInfo::state),
+                column("MEMBERS", HorizontalAlign.LEFT, group -> {
+                    if (group.describeError() != null) {
+                        return "Not Available";
+                    }
+                    return String.valueOf(group.memberCount());
+                })
         ));
 
         System.out.println(table);
+    }
+
+    private static <T> ColumnData<T> column(String name, HorizontalAlign dataAlign, Function<T, String> data) {
+        return new Column().header(name).headerAlign(HorizontalAlign.LEFT).dataAlign(dataAlign).with(data);
     }
 
     private void printNames(List<GroupInfo> groups) {
@@ -158,6 +162,4 @@ public class ListGroupsCommand implements Callable<Integer> {
             System.err.println("Error: Failed to generate JSON output: " + e.getMessage());
         }
     }
-
-    private static record GroupRow(String name, String type, String state, String members) {}
 }

@@ -13,7 +13,8 @@ public record GroupInfo(
     int memberCount,
     CoordinatorInfo coordinator,
     List<GroupMemberInfo> members,      // null for list, populated for describe
-    List<OffsetLagInfo> offsets        // null for list, populated for describe
+    List<OffsetLagInfo> offsets,        // null for list, populated for describe
+    String describeError
 ) {
     // Compact constructor with defensive copying (preserve null semantics)
     public GroupInfo {
@@ -34,6 +35,7 @@ public record GroupInfo(
         private CoordinatorInfo coordinator;
         private List<GroupMemberInfo> members;
         private List<OffsetLagInfo> offsets;
+        private String describeError;
 
         public Builder groupId(String groupId) {
             this.groupId = groupId;
@@ -75,9 +77,14 @@ public record GroupInfo(
             return this;
         }
 
+        public Builder describeError(String describeError) {
+            this.describeError = describeError;
+            return this;
+        }
+
         public GroupInfo build() {
             return new GroupInfo(groupId, type, state, protocol,
-                               memberCount, coordinator, members, offsets);
+                               memberCount, coordinator, members, offsets, describeError);
         }
     }
 }

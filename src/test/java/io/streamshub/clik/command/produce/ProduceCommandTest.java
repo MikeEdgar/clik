@@ -227,6 +227,35 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
+    void testProduceWithPropertyOverride() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "property-override-topic", 1, 1, Collections.emptyMap());
+
+        // Create temporary file with test data
+        Path tempFile = Files.createTempFile("produce-property-test", ".txt");
+        Files.writeString(tempFile, "message1\nmessage2\n");
+
+        try {
+            // Produce with property override
+            // Note: This is a smoke test that verifies the --property flag is accepted.
+            // It does not verify the property was actually applied to the Kafka client.
+            LaunchResult result = launcher.launch("produce", "property-override-topic",
+                    "--file", tempFile.toString(),
+                    "--property", "linger.ms=100");
+            assertEquals(0, result.exitCode());
+            assertTrue(result.getOutput().contains("2 messages sent successfully"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+
+        // Verify messages were produced
+        List<String> consumed = consumeMessages("property-override-topic", 2);
+        assertEquals(2, consumed.size());
+        assertEquals("message1", consumed.get(0));
+        assertEquals("message2", consumed.get(1));
+    }
+
+    @Test
     void testProduceWithValue() throws Exception {
         // Create test topic
         topicService.createTopic(admin(), "value-topic", 1, 1, Collections.emptyMap());
@@ -1156,6 +1185,79 @@ class ProduceCommandTest extends ClikMainTestBase {
         Header header = record.headers().lastHeader("type");
         assertNotNull(header);
         assertEquals("json", new String(header.value(), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void testProduceWithInputFormatDuplicateNamedHeaders() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "format-dup-headers-topic", 1, 1, Collections.emptyMap());
+
+        // Create temporary file with duplicate named headers
+        Path tempFile = Files.createTempFile("produce-dup-headers-test", ".txt");
+        Files.writeString(tempFile, "key1 value1 tag=v1 tag=v2 tag=v3\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "format-dup-headers-topic",
+                "--file", tempFile.toString(),
+                "--input", "%k %v %{h.tag} %{h.tag} %{h.tag}");
+            assertEquals(0, result.exitCode());
+            assertTrue(result.getOutput().contains("1 messages sent successfully"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+
+        // Verify all three "tag" headers are present
+        List<ConsumerRecord<String, String>> records = consumeRecords("format-dup-headers-topic", 1);
+        assertEquals(1, records.size());
+
+        // Count headers with key "tag"
+        List<Header> tagHeaders = new ArrayList<>();
+        records.get(0).headers().headers("tag").forEach(tagHeaders::add);
+        assertEquals(3, tagHeaders.size(), "Should have 3 'tag' headers");
+        assertEquals("v1", new String(tagHeaders.get(0).value(), StandardCharsets.UTF_8));
+        assertEquals("v2", new String(tagHeaders.get(1).value(), StandardCharsets.UTF_8));
+        assertEquals("v3", new String(tagHeaders.get(2).value(), StandardCharsets.UTF_8));
+    }
+
+    @Test
+    void testProduceWithInputFormatMultipleGenericHeaders() throws Exception {
+        // Create test topic
+        topicService.createTopic(admin(), "format-multi-generic-topic", 1, 1, Collections.emptyMap());
+
+        // Create temporary file with multiple generic headers
+        Path tempFile = Files.createTempFile("produce-multi-generic-test", ".txt");
+        Files.writeString(tempFile, "key1 value1 type=json version=1.0 source=cli\n");
+
+        try {
+            LaunchResult result = launcher.launch("produce", "format-multi-generic-topic",
+                "--file", tempFile.toString(),
+                "--input", "%k %v %h %h %h");
+            assertEquals(0, result.exitCode());
+            assertTrue(result.getOutput().contains("1 messages sent successfully"));
+        } finally {
+            Files.deleteIfExists(tempFile);
+        }
+
+        // Verify all three headers with different keys are present
+        List<ConsumerRecord<String, String>> records = consumeRecords("format-multi-generic-topic", 1);
+        assertEquals(1, records.size());
+
+        ConsumerRecord<String, String> record = records.get(0);
+        assertEquals("key1", record.key());
+        assertEquals("value1", record.value());
+
+        // Verify all three headers are present
+        Header typeHeader = record.headers().lastHeader("type");
+        assertNotNull(typeHeader);
+        assertEquals("json", new String(typeHeader.value(), StandardCharsets.UTF_8));
+
+        Header versionHeader = record.headers().lastHeader("version");
+        assertNotNull(versionHeader);
+        assertEquals("1.0", new String(versionHeader.value(), StandardCharsets.UTF_8));
+
+        Header sourceHeader = record.headers().lastHeader("source");
+        assertNotNull(sourceHeader);
+        assertEquals("cli", new String(sourceHeader.value(), StandardCharsets.UTF_8));
     }
 
     /**

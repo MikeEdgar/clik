@@ -3,6 +3,7 @@ package io.streamshub.clik.kafka;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
@@ -112,13 +113,14 @@ class GroupServiceTest extends ClikTestBase {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = { "consumer", "classic" })
+    @ValueSource(strings = { "Consumer", "Classic" })
     void testDescribeConsumerGroup(String groupProtocol) throws Exception {
         // Create test topic
         topicService.createTopic(admin(), "describe-topic", 3, 1, null);
 
         // Create consumer group
-        createConsumerGroup("describe-group", "describe-topic", groupProtocol).join();
+        createConsumerGroup("describe-group", "describe-topic", groupProtocol.toLowerCase(Locale.ROOT))
+                .join();
 
         GroupInfo group = groupService.describeGroup(admin(), "describe-group");
         assertNotNull(group);

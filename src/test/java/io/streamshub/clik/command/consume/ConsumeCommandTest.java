@@ -313,6 +313,40 @@ class ConsumeCommandTest extends ClikMainTestBase {
     }
 
     @Test
+    void testConsumeWithPropertyOverride() throws Exception {
+        // Create topic and produce messages
+        topicService.createTopic(admin(), "property-override-topic", 1, 1, Collections.emptyMap());
+        produceMessages("property-override-topic", "msg1", "msg2");
+
+        // Consume with property override
+        // Note: This is a smoke test that verifies the --property flag is accepted.
+        // It does not verify the property was actually applied to the Kafka client.
+        LaunchResult result = launcher.launch("consume", "property-override-topic",
+                "--from-beginning",
+                "--timeout", "3000",
+                "--property", "max.poll.records=1");
+        assertEquals(0, result.exitCode());
+
+        String output = result.getOutput();
+        assertTrue(output.contains("msg1"));
+        assertTrue(output.contains("msg2"));
+    }
+
+    @Test
+    void testConsumeGroupWithPartitionError() throws Exception {
+        // Create topic with multiple partitions
+        topicService.createTopic(admin(), "group-partition-error-topic", 3, 1, Collections.emptyMap());
+
+        // Try to use --group with --partition (should fail)
+        LaunchResult result = launcher.launch("consume", "group-partition-error-topic",
+                "--group", "test-group",
+                "--partition", "0",
+                "--from-beginning");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("--groupId cannot be used with --partition"));
+    }
+
+    @Test
     void testConsumeWithHeadersJson() throws Exception {
         // Create topic and produce messages with headers
         topicService.createTopic(admin(), "headers-json-topic", 1, 1, Collections.emptyMap());
