@@ -23,12 +23,12 @@ jobs:
             artifact-name: clik-linux-amd64
             executable-pattern: "target/*-runner"
 
-          # macOS x86_64 (Intel)
-          - os: macos
-            arch: amd64
-            runner: macos-15-intel
-            artifact-name: clik-macos-amd64
-            executable-pattern: "target/*-runner"
+          # # macOS x86_64 (Intel) - Not supported by Mandrel GraalVM
+          # - os: macos
+          #   arch: amd64
+          #   runner: macos-15-intel
+          #   artifact-name: clik-macos-amd64
+          #   executable-pattern: "target/*-runner"
 
           # macOS ARM64 (Apple Silicon)
           - os: macos
