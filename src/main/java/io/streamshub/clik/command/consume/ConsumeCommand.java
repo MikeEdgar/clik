@@ -13,7 +13,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -39,6 +38,8 @@ import com.github.freva.asciitable.HorizontalAlign;
 
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.KafkaRecord;
+import io.streamshub.clik.support.LifecycleHandler;
+import io.streamshub.clik.support.OutputFormatter;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.CommandSpec;
 
@@ -51,7 +52,6 @@ public class ConsumeCommand implements Callable<Integer> {
     private static final String OUTPUT_TABLE = "table";
     private static final String OUTPUT_JSON = "json";
     private static final String OUTPUT_YAML = "yaml";
-    private static final String OUTPUT_VALUE = "value";
 
     @Inject
     Logger logger;
@@ -103,7 +103,7 @@ public class ConsumeCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"-o", "--output"},
-            description = "Output format: table, json, yaml, value (default: table)",
+            description = "Output format: table, json, yaml, or custom format string (e.g., '%k=%v' or '%v', default: table)",
             defaultValue = "table"
     )
     String outputFormat;
@@ -129,6 +129,9 @@ public class ConsumeCommand implements Callable<Integer> {
 
     @Inject
     KafkaClientFactory clientFactory;
+
+    @Inject
+    LifecycleHandler lifecycle;
 
     private PrintWriter out() {
         return commandSpec.commandLine().getOut();
@@ -173,10 +176,14 @@ public class ConsumeCommand implements Callable<Integer> {
         // Validate output format
         if (!validOutputFormat()) {
             err().println("Error: Invalid output format: " + outputFormat);
-            err().println("Valid formats: table, json, yaml, value");
+            err().println("Valid formats: table, json, yaml, or a format string (e.g., '%k=%v' or '%v')");
             return 1;
         }
 
+        return lifecycle.supply(this::execute).join();
+    }
+
+    private int execute() {
         try (Consumer<byte[], byte[]> consumer = clientFactory.createConsumer(properties, groupId)) {
             configureConsumer(consumer);
 
@@ -185,9 +192,7 @@ public class ConsumeCommand implements Callable<Integer> {
             } else {
                 List<KafkaRecord> messages = consumeOnce(consumer);
                 if (messages.isEmpty()) {
-                    if (!outputFormat.equalsIgnoreCase(OUTPUT_VALUE)) {
-                        out().println("No messages consumed");
-                    }
+                    err().println("No messages consumed");
                 } else {
                     printMessages(messages);
                 }
@@ -203,8 +208,26 @@ public class ConsumeCommand implements Callable<Integer> {
     }
 
     private boolean validOutputFormat() {
-        return Stream.of(OUTPUT_TABLE, OUTPUT_JSON, OUTPUT_YAML, OUTPUT_VALUE)
-            .anyMatch(outputFormat.toLowerCase()::equals);
+        // Check if it's a predefined format first
+        if (Stream.of(OUTPUT_TABLE, OUTPUT_JSON, OUTPUT_YAML)
+                .anyMatch(outputFormat.toLowerCase()::equals)) {
+            return true;
+        }
+
+        // Otherwise try to parse as format string
+        // Format strings must contain at least one % placeholder
+        if (outputFormat.contains("%")) {
+            try {
+                OutputFormatter.withFormat(outputFormat);
+                return true;
+            } catch (IllegalArgumentException e) {
+                // Invalid format string - validation will fail
+                return false;
+            }
+        }
+
+        // Not a predefined format and not a valid format string
+        return false;
     }
 
     private void configureConsumer(Consumer<byte[], byte[]> consumer) {
@@ -252,7 +275,6 @@ public class ConsumeCommand implements Callable<Integer> {
             // Default for named group: let Kafka manage offsets
             consumer.seekToEnd(consumer.assignment());
         }
-
     }
 
     private void subscribeAllPartitions(Consumer<byte[], byte[]> consumer) {
@@ -307,31 +329,35 @@ public class ConsumeCommand implements Callable<Integer> {
     }
 
     private int consumeContinuously(Consumer<byte[], byte[]> consumer) {
-        AtomicBoolean running = new AtomicBoolean(true);
-        AtomicInteger count = new AtomicInteger(0);
+        int count = 0;
 
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> running.set(false)));
+        // Check if we're using a format string and parse it once for efficiency
+        boolean isPredefinedFormat = Stream.of(OUTPUT_TABLE, OUTPUT_JSON, OUTPUT_YAML)
+                .anyMatch(outputFormat::equalsIgnoreCase);
 
-        while (running.get()) {
+        OutputFormatter formatter = !isPredefinedFormat ? OutputFormatter.withFormat(outputFormat) : null;
+
+        while (lifecycle.isRunning() && (maxMessages == null || count < maxMessages)) {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
 
             for (ConsumerRecord<byte[], byte[]> rec : records) {
+                KafkaRecord msg = KafkaRecord.from(rec);
+
                 if (outputFormat.equalsIgnoreCase(OUTPUT_TABLE)) {
-                    printTableRow(KafkaRecord.from(rec));
+                    printTableRow(msg);
+                } else if (formatter != null) {
+                    // Format string mode - use pre-parsed formatter
+                    out().println(formatter.format(msg));
                 } else {
-                    printMessages(List.of(KafkaRecord.from(rec)));
+                    // Predefined format (json, yaml, value)
+                    printMessages(List.of(msg));
                 }
 
-                if (maxMessages != null && count.incrementAndGet() >= maxMessages) {
-                    running.set(false);
-                    break;
-                }
+                count++;
             }
         }
 
-        if (!outputFormat.equalsIgnoreCase(OUTPUT_VALUE)) {
-            err().println("\n" + count.get() + " messages consumed");
-        }
+        err().println("\n" + count + " messages consumed");
         return 0;
     }
 
@@ -346,9 +372,16 @@ public class ConsumeCommand implements Callable<Integer> {
             case OUTPUT_YAML:
                 printYaml(messages);
                 break;
-            case OUTPUT_VALUE:
-                messages.forEach(m -> out().println(m.valueString(null)));
+            default:
+                printFormatString(messages);
                 break;
+        }
+    }
+
+    private void printFormatString(List<KafkaRecord> messages) {
+        OutputFormatter formatter = OutputFormatter.withFormat(outputFormat);
+        for (KafkaRecord msg : messages) {
+            out().println(formatter.format(msg));
         }
     }
 
