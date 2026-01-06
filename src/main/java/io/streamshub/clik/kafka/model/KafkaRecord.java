@@ -154,6 +154,10 @@ public record KafkaRecord(
             this.partition = partition;
         }
 
+        public void setOffset(Long offset) {
+            this.offset = offset;
+        }
+
         public KafkaRecord build() {
             return new KafkaRecord(partition, offset, key, value, timestamp, headers);
         }

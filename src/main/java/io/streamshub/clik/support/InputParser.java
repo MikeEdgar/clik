@@ -5,15 +5,38 @@ import java.util.List;
 import io.streamshub.clik.kafka.model.KafkaRecord;
 
 /**
- * Represents a parsed format string ready to match against input lines.
- * The format string has been tokenized into literals and placeholders,
- * and validated for correctness.
+ * Parser for format strings used in the --input option.
+ * Delegates format string parsing to FormatStringParser.
+ *
+ * Format strings define how to parse structured input lines into Kafka message components.
+ *
+ * Supported placeholders:
+ * - Simple: %k (key), %v (value), %h (header), %T (timestamp), %p (partition), %% (literal %)
+ * - Parameterized: %{base64:k}, %{hex:v}, %{h.name}, %{base64:h.signature}
+ * - Unicode escapes: {@literal \}uXXXX for any unicode character
+ *
+ * Examples:
+ * - "%k %v" - key and value separated by space
+ * - "%{base64:k}\u0009%v" - base64 key and value separated by tab
+ * - "%k %v %{h.type}" - key, value, and a named header
  */
-public class ParsedFormat {
+public class InputParser {
     private final List<FormatToken> tokens;
 
-    public ParsedFormat(List<FormatToken> tokens) {
+    private InputParser(List<FormatToken> tokens) {
         this.tokens = List.copyOf(tokens);
+    }
+
+    /**
+     * Parse a format string into an InputParser ready to match input lines.
+     *
+     * @param format The format string
+     * @return InputParser ready to parse input lines
+     * @throws IllegalArgumentException if the format string is invalid
+     */
+    public static InputParser withFormat(String format) {
+        List<FormatToken> tokens = FormatStringParser.parseFormatString(format);
+        return new InputParser(tokens);
     }
 
     /**
@@ -23,7 +46,7 @@ public class ParsedFormat {
      * @return Parsed message components
      * @throws IllegalArgumentException if the line doesn't match the format
      */
-    public KafkaRecord matchLine(String line) {
+    public KafkaRecord parse(String line) {
         KafkaRecord.Builder components = KafkaRecord.builder();
         int linePos = 0;
 
@@ -106,6 +129,11 @@ public class ParsedFormat {
                 } catch (NumberFormatException e) {
                     throw new IllegalArgumentException("Invalid partition: " + value, e);
                 }
+            }
+
+            case OFFSET -> {
+                // Offset is ignored in the input file/stream.
+                break;
             }
         }
     }

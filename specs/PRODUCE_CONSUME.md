@@ -152,6 +152,13 @@ cat data.txt | clik produce my-topic --input "%k %v %{h.content-type} %T %p"
 - `%{base64:h.signature}` - Base64-encoded named header
 - `\uXXXX` - Unicode character (e.g., `\u0009` for tab)
 
+**Important Notes on %h (Generic Header):**
+- In producer INPUT parsing, `%h` matches exactly ONE header as `key=value`
+- This is different from consumer OUTPUT where `%h` outputs ALL headers
+- To parse multiple headers, use multiple placeholders: `%h %h %h`
+- Or use named placeholders: `%{h.type} %{h.version} %{h.encoding}`
+- This asymmetry exists because input parsing requires delimiters between placeholders
+
 **Important Notes:**
 - Input modes (`--value`, `--file`, `--interactive`, stdin) are mutually exclusive
 - `--input` format string cannot be used with `--value`
@@ -197,7 +204,7 @@ clik consume <topic> [OPTIONS]
 | `--from-end` | Start from latest offset | - |
 | `--from-offset <offset>` | Start from specific offset (requires --partition) | - |
 | `-p, --partition <num>` | Consume from specific partition only | all partitions |
-| `-o, --output <format>` | Output format: table, json, yaml, value | table |
+| `-o, --output <format>` | Output format: table, json, yaml, value, or custom format string | table |
 | `--max-messages <num>` | Maximum messages to consume | unlimited |
 | `--timeout <ms>` | Timeout in milliseconds for one-time consumption | 5000 |
 
@@ -230,6 +237,18 @@ clik consume my-topic --from-beginning -o json
 
 # Output values only (no metadata)
 clik consume my-topic --from-beginning -o value
+
+# Custom format string (partition:offset key=value)
+clik consume my-topic --from-beginning -o "%p:%o %k=%v"
+
+# CSV format
+clik consume my-topic --from-beginning -o '"%k","%v",%p,%o,%T'
+
+# JSON-like custom format
+clik consume my-topic --from-beginning -o '{"key":"%k","value":"%v","partition":%p}'
+
+# Tab-separated values
+clik consume my-topic --from-beginning -o "%k\u0009%v\u0009%T"
 ```
 
 **Output (table format):**
@@ -281,6 +300,105 @@ Test message
 Another message
 ```
 
+**Output (custom format string `%p:%o %k=%v`):**
+```
+0:42 user123=Hello World
+0:43 =Test message
+1:28 user456=Another message
+```
+
+**Output (CSV format `"%k","%v",%p,%o,%T`):**
+```
+"user123","Hello World",0,42,1704326400000
+"","Test message",0,43,1704326401000
+"user456","Another message",1,28,1704326385000
+```
+
+### Consumer Format String Syntax
+
+Format strings allow custom output formatting for consumed messages. The syntax is similar to the producer's `--input` option but for **output** instead of input.
+
+**Important:** For output formatting, encoding prefixes (like `base64:` or `hex:`) **encode** the data before printing, which is the opposite of input parsing where they decode.
+
+**Supported Placeholders:**
+
+| Placeholder | Description | Example Output |
+|-------------|-------------|----------------|
+| `%k` | Message key (UTF-8 string) | `user123` |
+| `%v` | Message value (UTF-8 string) | `Hello World` |
+| `%o` | Offset | `42` |
+| `%p` | Partition number | `0` |
+| `%T` | Timestamp (epoch milliseconds) | `1704326400000` |
+| `%h` | All remaining headers as `key=value` pairs (excludes headers already output) | `type=json version=1.0` |
+| `%{h.name}` | All headers with this name (space-separated if multiple, marks as output) | `tag=v1 tag=v2` |
+| `%{base64:k}` | Base64-encoded key | `dGVzdC1rZXk=` |
+| `%{hex:v}` | Hex-encoded value | `48656c6c6f` |
+| `%{base64:h.sig}` | Base64-encoded header | `sig=U2lnbmF0dXJl` |
+| `%%` | Literal percent character | `%` |
+| `\uXXXX` | Unicode character (e.g., `\u0009` for tab) | `\t` |
+
+**Header Output Behavior:**
+
+Output formatting maintains state to prevent duplicate header output:
+
+1. **Named headers** (`%{h.name}`): Outputs ALL headers with the specified name
+   - Multiple values appear as space-separated `name=value` pairs
+   - Example: `%{h.tag}` with two "tag" headers outputs: `tag=v1 tag=v2`
+   - After output, these headers are marked and excluded from subsequent `%h`
+
+2. **Generic headers** (`%h`): Outputs all headers NOT yet output by named placeholders
+   - Only outputs headers that haven't been output earlier in the format string
+   - Can appear multiple times; each outputs remaining headers
+   - Example format `%{h.type} %h` on record with headers `type=json, version=1.0, encoding=utf8`:
+     - First placeholder outputs: `type=json`
+     - Second placeholder outputs: `version=1.0 encoding=utf8`
+
+3. **Encoding support**: Both named and generic headers support encoding
+   - `%{base64:h.signature}` - Base64-encode the signature header value
+   - `%{hex:h}` - Hex-encode all remaining header values
+
+**Examples:**
+```bash
+# Output specific header followed by remaining headers
+clik consume my-topic -o "%v | priority: %{h.priority} | other: %h"
+
+# Output multiple headers with same name
+clik consume my-topic -o "%v tags=[%{h.tag}]"
+# If record has tag=important, tag=urgent: "value tags=[tag=important tag=urgent]"
+
+# Prevent duplicate header output
+clik consume my-topic -o "%{h.type} %h"
+# type header appears only once (in first placeholder, not in %h)
+```
+
+**Format String Examples:**
+
+```bash
+# Simple key-value output
+clik consume my-topic --from-beginning -o "%k=%v"
+
+# With partition and offset
+clik consume my-topic --from-beginning -o "%p:%o %k %v"
+
+# Tab-separated values
+clik consume my-topic --from-beginning -o "%k\u0009%v"
+
+# CSV with timestamp
+clik consume my-topic --from-beginning -o '"%k","%v",%T'
+
+# JSON-like format
+clik consume my-topic --from-beginning -o '{"key":"%k","value":"%v"}'
+
+# With headers
+clik consume my-topic --from-beginning -o "%v [%{h.content-type}]"
+
+# Base64 encode binary values
+clik consume my-topic --from-beginning -o "%{base64:k} %{base64:v}"
+
+# Hex encode for debugging
+clik consume my-topic --from-beginning -o "%k = %{hex:v}"
+```
+
 **Behavior:**
 
 1. Load configuration from current context
@@ -315,7 +433,13 @@ Another message
 - Multiple offset options specified
 - `--from-offset` without `--partition`
 - Invalid partition number
-- Invalid output format
+- Invalid output format (unknown predefined format or invalid format string)
+- Format string validation errors:
+  - No placeholders in format string
+  - Unknown placeholder (e.g., `%x`)
+  - Unclosed placeholder (e.g., `%{base64:k`)
+  - Invalid encoding type
+  - Empty header name (e.g., `%{h.}`)
 - Consumer configuration errors
 - Network/broker errors
 
@@ -336,15 +460,52 @@ io.streamshub.clik/
 │       └── ConsumedMessage.java          # Model for consumed messages
 ├── support/
 │   ├── Encoding.java                     # Binary encoding utilities (base64, hex)
-│   ├── FormatParser.java                 # Format string parser
+│   ├── FormatStringParser.java           # Shared format string parser (base class)
+│   ├── InputParser.java                  # Producer input line parser
+│   ├── OutputFormatter.java              # Consumer output formatter
 │   ├── FormatToken.java                  # Sealed interface for format tokens
-│   ├── LiteralToken.java                 # Literal text token
-│   ├── PlaceholderToken.java             # Placeholder token with encoding
-│   ├── PlaceholderType.java              # Enum for placeholder types
-│   ├── ParsedFormat.java                 # Parsed format for matching input lines
-│   └── MessageComponents.java            # Parsed message components
+│   ├── LiteralToken.java                 # Literal text in format strings
+│   ├── PlaceholderToken.java             # Placeholder token (with type, encoding, name)
+│   └── PlaceholderType.java              # Enum: KEY, VALUE, HEADER, TIMESTAMP, PARTITION, OFFSET
 └── Clik.java                             # Updated with produce/consume subcommands
 ```
+
+### KafkaRecord Model
+
+The `KafkaRecord` class is an immutable record representing Kafka message components:
+
+```java
+public record KafkaRecord(
+    ByteArray key,
+    ByteArray value,
+    List<Header> headers,
+    Long timestamp,
+    Integer partition,
+    Long offset
+) {
+    // Nested immutable byte array wrapper
+    public record ByteArray(byte[] bytes) { }
+
+    // Header record
+    public record Header(String key, ByteArray value) { }
+
+    // Convenience methods
+    public String keyString(String defaultValue);
+    public String valueString(String defaultValue);
+    public Header firstHeader(String key);         // First header with key
+    public List<Header> headers(String key);       // All headers with key
+
+    // Builder for construction
+    public static Builder builder() { }
+}
+```
+
+**Key features**:
+- Immutable design with defensive copying of byte arrays
+- Supports multiple headers with same key (Kafka allows duplicates)
+- Null-safe convenience methods for string conversion
+- Builder pattern for flexible construction
+- Used by both InputParser (producer) and OutputFormatter (consumer)
 
 ### Core Services
 
@@ -757,4 +918,48 @@ clik consume my-topic --partition 0 --from-offset 1000
 ```bash
 # Monitor topic for new messages (like tail -f)
 clik consume my-topic --follow
+```
+
+### Appendix C: Format String Use Cases
+
+**Data export to CSV:**
+```bash
+# Export to CSV file
+clik consume my-topic --from-beginning -o '"%k","%v",%p,%o,%T' > export.csv
+```
+
+**Log-style output:**
+```bash
+# Timestamp key: value format
+clik consume my-topic --from-beginning -o "[%T] %k: %v"
+```
+
+**Debugging with partition and offset:**
+```bash
+# Show partition and offset with each message
+clik consume my-topic --from-beginning -o "%p:%o %v"
+```
+
+**JSON Lines format:**
+```bash
+# Each message as JSON object (JSONL)
+clik consume my-topic --from-beginning -o '{"key":"%k","value":"%v","ts":%T}' > data.jsonl
+```
+
+**Binary data inspection:**
+```bash
+# Hex dump of message values
+clik consume my-topic --from-beginning -o "%k = %{hex:v}"
+
+# Base64 encoded for safe transmission
+clik consume my-topic --from-beginning -o "%{base64:k} %{base64:v}"
+```
+
+**Header extraction:**
+```bash
+# Show message with specific header
+clik consume my-topic --from-beginning -o "%v (type: %{h.content-type})"
+
+# Show all headers
+clik consume my-topic --from-beginning -o "%v | headers: %h"
 ```

@@ -550,4 +550,187 @@ class ConsumeCommandTest extends ClikMainTestBase {
         }
         return count;
     }
+
+    // ========== Format String Tests ==========
+
+    @Test
+    void testConsumeWithSimpleFormatString() throws Exception {
+        // Create topic and produce messages
+        topicService.createTopic(admin(), "format-simple-topic", 1, 1, Collections.emptyMap());
+        produceMessages("format-simple-topic", "value1", "value2");
+
+        // Consume with simple format string
+        LaunchResult result = launcher.launch("consume", "format-simple-topic",
+                "--from-beginning",
+                "--output", "%p:%o %v",
+                "--timeout", "3000");
+        assertEquals(0, result.exitCode());
+
+        String output = result.getOutput();
+        assertTrue(output.contains("0:0 value1"));
+        assertTrue(output.contains("0:1 value2"));
+    }
+
+    @Test
+    void testConsumeWithKeyValueFormat() throws Exception {
+        // Create topic and produce messages with keys
+        topicService.createTopic(admin(), "format-kv-topic", 1, 1, Collections.emptyMap());
+
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            producer.send(new ProducerRecord<>("format-kv-topic", "key1", "value1")).get();
+            producer.send(new ProducerRecord<>("format-kv-topic", "key2", "value2")).get();
+        }
+
+        // Consume with key=value format
+        LaunchResult result = launcher.launch("consume", "format-kv-topic",
+                "--from-beginning",
+                "--output", "%k=%v",
+                "--timeout", "3000");
+        assertEquals(0, result.exitCode());
+
+        String output = result.getOutput();
+        assertTrue(output.contains("key1=value1"));
+        assertTrue(output.contains("key2=value2"));
+    }
+
+    @Test
+    void testConsumeWithBase64EncodedFormat() throws Exception {
+        // Create topic and produce messages
+        topicService.createTopic(admin(), "format-base64-topic", 1, 1, Collections.emptyMap());
+        produceMessages("format-base64-topic", "test");
+
+        // Consume with base64 encoded value
+        LaunchResult result = launcher.launch("consume", "format-base64-topic",
+                "--from-beginning",
+                "--output", "%{base64:v}",
+                "--timeout", "3000");
+        assertEquals(0, result.exitCode());
+
+        String output = result.getOutput();
+        // "test" in base64 is "dGVzdA=="
+        assertTrue(output.contains("dGVzdA=="));
+    }
+
+    @Test
+    void testConsumeWithHeadersInFormat() throws Exception {
+        // Create topic and produce messages with headers
+        topicService.createTopic(admin(), "format-headers-topic", 1, 1, Collections.emptyMap());
+
+        RecordHeaders headers = new RecordHeaders();
+        headers.add("type", "test".getBytes(StandardCharsets.UTF_8));
+        headers.add("version", "1.0".getBytes(StandardCharsets.UTF_8));
+
+        produceMessagesWithHeaders("format-headers-topic", headers, "message1");
+
+        // Consume with headers in format
+        LaunchResult result = launcher.launch("consume", "format-headers-topic",
+                "--from-beginning",
+                "--output", "%v headers=%h",
+                "--timeout", "3000");
+        assertEquals(0, result.exitCode());
+
+        String output = result.getOutput();
+        assertTrue(output.contains("message1 headers=type=test version=1.0"));
+    }
+
+    @Test
+    void testConsumeWithNamedHeaderInFormat() throws Exception {
+        // Create topic and produce messages with headers
+        topicService.createTopic(admin(), "format-named-header-topic", 1, 1, Collections.emptyMap());
+
+        RecordHeaders headers = new RecordHeaders();
+        headers.add("content-type", "application/json".getBytes(StandardCharsets.UTF_8));
+
+        produceMessagesWithHeaders("format-named-header-topic", headers, "json-data");
+
+        // Consume with named header in format
+        LaunchResult result = launcher.launch("consume", "format-named-header-topic",
+                "--from-beginning",
+                "--output", "%v [%{h.content-type}]",
+                "--timeout", "3000");
+        assertEquals(0, result.exitCode());
+
+        String output = result.getOutput();
+        assertTrue(output.contains("json-data [content-type=application/json]"));
+    }
+
+    @Test
+    void testConsumeWithJsonLikeFormat() throws Exception {
+        // Create topic and produce messages
+        topicService.createTopic(admin(), "format-json-topic", 1, 1, Collections.emptyMap());
+        produceMessages("format-json-topic", "data");
+
+        // Consume with JSON-like custom format
+        LaunchResult result = launcher.launch("consume", "format-json-topic",
+                "--from-beginning",
+                "--output", "{\"partition\":%p,\"offset\":%o,\"value\":\"%v\"}",
+                "--timeout", "3000");
+        assertEquals(0, result.exitCode());
+
+        String output = result.getOutput();
+        assertTrue(output.contains("{\"partition\":0,\"offset\":0,\"value\":\"data\"}"));
+    }
+
+    @Test
+    void testConsumeWithCsvFormat() throws Exception {
+        // Create topic and produce messages
+        topicService.createTopic(admin(), "format-csv-topic", 1, 1, Collections.emptyMap());
+
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            producer.send(new ProducerRecord<>("format-csv-topic", "key1", "value1")).get();
+        }
+
+        // Consume with CSV format
+        LaunchResult result = launcher.launch("consume", "format-csv-topic",
+                "--from-beginning",
+                "--output", "\"%k\",\"%v\",%p,%o",
+                "--timeout", "3000");
+        assertEquals(0, result.exitCode());
+
+        String output = result.getOutput();
+        assertTrue(output.contains("\"key1\",\"value1\",0,0"));
+    }
+
+    @Test
+    void testConsumeWithInvalidFormatString() {
+        // Try to consume with invalid format string (no placeholders)
+        LaunchResult result = launcher.launch("consume", "some-topic",
+                "--from-beginning",
+                "--output", "just literal text",
+                "--timeout", "2000");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("Invalid output format"));
+    }
+
+    @Test
+    void testConsumeWithMalformedFormatString() {
+        // Try to consume with malformed format string
+        LaunchResult result = launcher.launch("consume", "some-topic",
+                "--from-beginning",
+                "--output", "%{unclosed",
+                "--timeout", "2000");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("Invalid output format"));
+    }
+
+    @Test
+    void testConsumeFormatStringWithUnknownPlaceholder() {
+        // Try to consume with unknown placeholder
+        LaunchResult result = launcher.launch("consume", "some-topic",
+                "--from-beginning",
+                "--output", "%x %v",
+                "--timeout", "2000");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("Invalid output format"));
+    }
 }

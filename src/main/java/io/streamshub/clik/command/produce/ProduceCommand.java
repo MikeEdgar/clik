@@ -26,8 +26,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.KafkaRecord;
 import io.streamshub.clik.support.Encoding;
-import io.streamshub.clik.support.FormatParser;
-import io.streamshub.clik.support.ParsedFormat;
+import io.streamshub.clik.support.InputParser;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.CommandSpec;
 
@@ -262,9 +261,9 @@ public class ProduceCommand implements Callable<Integer> {
 
         if (inputFormat != null) {
             // Parse format string once
-            ParsedFormat format;
+            InputParser format;
             try {
-                format = FormatParser.parse(inputFormat);
+                format = InputParser.withFormat(inputFormat);
             } catch (IllegalArgumentException e) {
                 err().println("Error: Invalid format string: " + e.getMessage());
                 return 1;
@@ -274,7 +273,7 @@ public class ProduceCommand implements Callable<Integer> {
             messages.forEach(line -> {
                 try {
                     // Parse line according to format
-                    KafkaRecord components = format.matchLine(line);
+                    KafkaRecord components = format.parse(line);
 
                     // Create producer record from parsed components
                     ProducerRecord<byte[], byte[]> rec = new ProducerRecord<>(

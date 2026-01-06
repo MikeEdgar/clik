@@ -27,5 +27,10 @@ public enum PlaceholderType {
     /**
      * Target partition (%p)
      */
-    PARTITION
+    PARTITION,
+
+    /**
+     * Message offset (%o)
+     */
+    OFFSET
 }

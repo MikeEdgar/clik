@@ -10,14 +10,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class FormatParserTest {
+class InputParserTest {
 
     // ========== Format String Parsing Tests ==========
 
     @Test
     void testSimplePlaceholders() {
-        ParsedFormat format = FormatParser.parse("%k %v");
-        KafkaRecord components = format.matchLine("key1 value1");
+        InputParser format = InputParser.withFormat("%k %v");
+        KafkaRecord components = format.parse("key1 value1");
 
         assertEquals("key1", components.keyString(null));
         assertEquals("value1", components.valueString(null));
@@ -25,8 +25,8 @@ class FormatParserTest {
 
     @Test
     void testAllSimplePlaceholders() {
-        ParsedFormat format = FormatParser.parse("%k %v %T %p");
-        KafkaRecord components = format.matchLine("mykey myvalue 1735401600000 2");
+        InputParser format = InputParser.withFormat("%k %v %T %p");
+        KafkaRecord components = format.parse("mykey myvalue 1735401600000 2");
 
         assertEquals("mykey", components.keyString(null));
         assertEquals("myvalue", components.valueString(null));
@@ -37,8 +37,8 @@ class FormatParserTest {
     @Test
     void testBase64EncodedKey() {
         // "test-key" in base64
-        ParsedFormat format = FormatParser.parse("%{base64:k} %v");
-        KafkaRecord components = format.matchLine("dGVzdC1rZXk= value1");
+        InputParser format = InputParser.withFormat("%{base64:k} %v");
+        KafkaRecord components = format.parse("dGVzdC1rZXk= value1");
 
         assertEquals("test-key", components.keyString(null));
         assertEquals("value1", components.valueString(null));
@@ -47,8 +47,8 @@ class FormatParserTest {
     @Test
     void testHexEncodedValue() {
         // "Hello" in hex
-        ParsedFormat format = FormatParser.parse("%k %{hex:v}");
-        KafkaRecord components = format.matchLine("key1 48656c6c6f");
+        InputParser format = InputParser.withFormat("%k %{hex:v}");
+        KafkaRecord components = format.parse("key1 48656c6c6f");
 
         assertEquals("key1", components.keyString(null));
         assertEquals("Hello", components.valueString(null));
@@ -56,8 +56,8 @@ class FormatParserTest {
 
     @Test
     void testNamedHeader() {
-        ParsedFormat format = FormatParser.parse("%k %v %{h.content-type}");
-        KafkaRecord components = format.matchLine("key1 value1 content-type=application/json");
+        InputParser format = InputParser.withFormat("%k %v %{h.content-type}");
+        KafkaRecord components = format.parse("key1 value1 content-type=application/json");
 
         assertEquals("key1", components.keyString(null));
         assertEquals("value1", components.valueString(null));
@@ -66,8 +66,8 @@ class FormatParserTest {
 
     @Test
     void testGenericHeader() {
-        ParsedFormat format = FormatParser.parse("%k %v %h");
-        KafkaRecord components = format.matchLine("key1 value1 my-header=data");
+        InputParser format = InputParser.withFormat("%k %v %h");
+        KafkaRecord components = format.parse("key1 value1 my-header=data");
 
         assertEquals("key1", components.keyString(null));
         assertEquals("value1", components.valueString(null));
@@ -77,8 +77,8 @@ class FormatParserTest {
     @Test
     void testBase64EncodedHeader() {
         // "signature" in base64
-        ParsedFormat format = FormatParser.parse("%k %v %{base64:h.sig}");
-        KafkaRecord components = format.matchLine("key1 value1 sig=U2lnbmF0dXJl");
+        InputParser format = InputParser.withFormat("%k %v %{base64:h.sig}");
+        KafkaRecord components = format.parse("key1 value1 sig=U2lnbmF0dXJl");
 
         assertEquals("key1", components.keyString(null));
         assertEquals("Signature", components.firstHeader("sig").valueString(null));
@@ -86,8 +86,8 @@ class FormatParserTest {
 
     @Test
     void testMultipleNamedHeaders() {
-        ParsedFormat format = FormatParser.parse("%k %v %{h.type} %{h.version}");
-        KafkaRecord components = format.matchLine("key1 value1 type=json version=1.0");
+        InputParser format = InputParser.withFormat("%k %v %{h.type} %{h.version}");
+        KafkaRecord components = format.parse("key1 value1 type=json version=1.0");
 
         assertEquals("json", components.firstHeader("type").valueString(null));
         assertEquals("1.0", components.firstHeader("version").valueString(null));
@@ -95,8 +95,8 @@ class FormatParserTest {
 
     @Test
     void testEscapedPercent() {
-        ParsedFormat format = FormatParser.parse("%k%% %v");
-        KafkaRecord components = format.matchLine("key% value");
+        InputParser format = InputParser.withFormat("%k%% %v");
+        KafkaRecord components = format.parse("key% value");
 
         assertEquals("key", components.keyString(null));
         assertEquals("value", components.valueString(null));
@@ -104,8 +104,8 @@ class FormatParserTest {
 
     @Test
     void testUnicodeEscapeTab() {
-        ParsedFormat format = FormatParser.parse("%k\u0009%v");
-        KafkaRecord components = format.matchLine("key1\tvalue1");
+        InputParser format = InputParser.withFormat("%k\u0009%v");
+        KafkaRecord components = format.parse("key1\tvalue1");
 
         assertEquals("key1", components.keyString(null));
         assertEquals("value1", components.valueString(null));
@@ -113,8 +113,8 @@ class FormatParserTest {
 
     @Test
     void testUnicodeEscapeSpace() {
-        ParsedFormat format = FormatParser.parse("%k\u0020%v");
-        KafkaRecord components = format.matchLine("key1 value1");
+        InputParser format = InputParser.withFormat("%k\u0020%v");
+        KafkaRecord components = format.parse("key1 value1");
 
         assertEquals("key1", components.keyString(null));
         assertEquals("value1", components.valueString(null));
@@ -123,8 +123,8 @@ class FormatParserTest {
     @Test
     void testMixedEncodings() {
         // hex key, base64 value, plain header
-        ParsedFormat format = FormatParser.parse("%{hex:k} %{base64:v} %{h.type}");
-        KafkaRecord components = format.matchLine("6b6579 VGVzdA== type=data");
+        InputParser format = InputParser.withFormat("%{hex:k} %{base64:v} %{h.type}");
+        KafkaRecord components = format.parse("6b6579 VGVzdA== type=data");
 
         assertEquals("key", components.keyString(null));
         assertEquals("Test", components.valueString(null));
@@ -133,8 +133,8 @@ class FormatParserTest {
 
     @Test
     void testDuplicateNamedHeaders() {
-        ParsedFormat format = FormatParser.parse("%k %v %{h.tag} %{h.tag}");
-        KafkaRecord record = format.matchLine("key1 value1 tag=v1 tag=v2");
+        InputParser format = InputParser.withFormat("%k %v %{h.tag} %{h.tag}");
+        KafkaRecord record = format.parse("key1 value1 tag=v1 tag=v2");
 
         assertEquals("key1", record.keyString(null));
         assertEquals("value1", record.valueString(null));
@@ -148,8 +148,8 @@ class FormatParserTest {
 
     @Test
     void testMultipleGenericHeaders() {
-        ParsedFormat format = FormatParser.parse("%k %v %h %h");
-        KafkaRecord record = format.matchLine("key1 value1 type=json version=1.0");
+        InputParser format = InputParser.withFormat("%k %v %h %h");
+        KafkaRecord record = format.parse("key1 value1 type=json version=1.0");
 
         assertEquals("key1", record.keyString(null));
         assertEquals("value1", record.valueString(null));
@@ -162,8 +162,8 @@ class FormatParserTest {
 
     @Test
     void testMixedDuplicateHeaders() {
-        ParsedFormat format = FormatParser.parse("%k %v %{h.tag} %h %{h.tag}");
-        KafkaRecord record = format.matchLine("key1 value1 tag=v1 type=json tag=v2");
+        InputParser format = InputParser.withFormat("%k %v %{h.tag} %h %{h.tag}");
+        KafkaRecord record = format.parse("key1 value1 tag=v1 type=json tag=v2");
 
         assertEquals("key1", record.keyString(null));
         assertEquals("value1", record.valueString(null));
@@ -184,8 +184,8 @@ class FormatParserTest {
     @Test
     void testDuplicateHeadersWithEncoding() {
         // "plain" in base64 is "cGxhaW4="
-        ParsedFormat format = FormatParser.parse("%k %v %{h.data} %{base64:h.data}");
-        KafkaRecord record = format.matchLine("key1 value1 data=plain data=cGxhaW4=");
+        InputParser format = InputParser.withFormat("%k %v %{h.data} %{base64:h.data}");
+        KafkaRecord record = format.parse("key1 value1 data=plain data=cGxhaW4=");
 
         assertEquals("key1", record.keyString(null));
         assertEquals("value1", record.valueString(null));
@@ -201,24 +201,24 @@ class FormatParserTest {
 
     @Test
     void testNullFormatString() {
-        assertThrows(IllegalArgumentException.class, () -> FormatParser.parse(null));
+        assertThrows(IllegalArgumentException.class, () -> InputParser.withFormat(null));
     }
 
     @Test
     void testEmptyFormatString() {
-        assertThrows(IllegalArgumentException.class, () -> FormatParser.parse(""));
+        assertThrows(IllegalArgumentException.class, () -> InputParser.withFormat(""));
     }
 
     @Test
     void testFormatStringWithoutPlaceholders() {
-        assertThrows(IllegalArgumentException.class, () -> FormatParser.parse("just literal text"));
+        assertThrows(IllegalArgumentException.class, () -> InputParser.withFormat("just literal text"));
     }
 
     @Test
     void testUnknownSimplePlaceholder() {
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> FormatParser.parse("%x"));
+            () -> InputParser.withFormat("%x"));
         assertTrue(ex.getMessage().contains("Unknown placeholder"));
     }
 
@@ -226,7 +226,7 @@ class FormatParserTest {
     void testUnknownEncoding() {
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> FormatParser.parse("%{unknown:k}"));
+            () -> InputParser.withFormat("%{unknown:k}"));
         assertTrue(ex.getMessage().contains("Unknown encoding"));
     }
 
@@ -234,7 +234,7 @@ class FormatParserTest {
     void testUnclosedPlaceholder() {
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> FormatParser.parse("%{base64:k"));
+            () -> InputParser.withFormat("%{base64:k"));
         assertTrue(ex.getMessage().contains("Unclosed placeholder"));
     }
 
@@ -242,7 +242,7 @@ class FormatParserTest {
     void testEmptyHeaderName() {
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> FormatParser.parse("%{h.}"));
+            () -> InputParser.withFormat("%{h.}"));
         assertTrue(ex.getMessage().contains("Empty header name"));
     }
 
@@ -250,7 +250,7 @@ class FormatParserTest {
     void testNamedNonHeaderPlaceholder() {
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> FormatParser.parse("%{k.name}"));
+            () -> InputParser.withFormat("%{k.name}"));
         assertTrue(ex.getMessage().contains("Only header placeholders can have names"));
     }
 
@@ -258,7 +258,7 @@ class FormatParserTest {
     void testInvalidUnicodeEscape() {
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> FormatParser.parse("%k\\uXXXX%v"));
+            () -> InputParser.withFormat("%k\\uXXXX%v"));
         assertTrue(ex.getMessage().contains("Invalid unicode escape"));
     }
 
@@ -266,7 +266,7 @@ class FormatParserTest {
     void testIncompletePercent() {
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> FormatParser.parse("%k %"));
+            () -> InputParser.withFormat("%k %"));
         assertTrue(ex.getMessage().contains("incomplete placeholder"));
     }
 
@@ -274,73 +274,73 @@ class FormatParserTest {
 
     @Test
     void testMissingDelimiter() {
-        ParsedFormat format = FormatParser.parse("%k %v");
+        InputParser format = InputParser.withFormat("%k %v");
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> format.matchLine("keyvalue")); // missing space delimiter
+            () -> format.parse("keyvalue")); // missing space delimiter
         assertTrue(ex.getMessage().contains("delimiter") || ex.getMessage().contains("not found"));
     }
 
     @Test
     void testWrongLiteralAtPosition() {
-        ParsedFormat format = FormatParser.parse("%k:%v");
+        InputParser format = InputParser.withFormat("%k:%v");
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> format.matchLine("key value")); // has space instead of colon
+            () -> format.parse("key value")); // has space instead of colon
         assertTrue(ex.getMessage().contains("Expected"));
     }
 
     @Test
     void testInvalidHeaderFormat() {
-        ParsedFormat format = FormatParser.parse("%k %v %h");
+        InputParser format = InputParser.withFormat("%k %v %h");
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> format.matchLine("key value noequals")); // header missing =
+            () -> format.parse("key value noequals")); // header missing =
         assertTrue(ex.getMessage().contains("Invalid header format"));
     }
 
     @Test
     void testHeaderNameMismatch() {
-        ParsedFormat format = FormatParser.parse("%k %v %{h.expected}");
+        InputParser format = InputParser.withFormat("%k %v %{h.expected}");
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> format.matchLine("key value actual=value")); // wrong header name
+            () -> format.parse("key value actual=value")); // wrong header name
         assertTrue(ex.getMessage().contains("Expected header 'expected'"));
     }
 
     @Test
     void testInvalidTimestamp() {
-        ParsedFormat format = FormatParser.parse("%k %v %T");
+        InputParser format = InputParser.withFormat("%k %v %T");
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> format.matchLine("key value not-a-number"));
+            () -> format.parse("key value not-a-number"));
         assertTrue(ex.getMessage().contains("Invalid timestamp"));
     }
 
     @Test
     void testInvalidPartition() {
-        ParsedFormat format = FormatParser.parse("%k %v %p");
+        InputParser format = InputParser.withFormat("%k %v %p");
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> format.matchLine("key value not-a-number"));
+            () -> format.parse("key value not-a-number"));
         assertTrue(ex.getMessage().contains("Invalid partition"));
     }
 
     @Test
     void testInvalidBase64InInput() {
-        ParsedFormat format = FormatParser.parse("%{base64:k} %v");
+        InputParser format = InputParser.withFormat("%{base64:k} %v");
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> format.matchLine("Invalid!@#$ value"));
+            () -> format.parse("Invalid!@#$ value"));
         assertTrue(ex.getMessage().contains("Invalid base64"));
     }
 
     @Test
     void testInvalidHexInInput() {
-        ParsedFormat format = FormatParser.parse("%{hex:k} %v");
+        InputParser format = InputParser.withFormat("%{hex:k} %v");
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> format.matchLine("gg value")); // invalid hex characters
+            () -> format.parse("gg value")); // invalid hex characters
         assertTrue(ex.getMessage().contains("Invalid hex"));
     }
 
@@ -348,8 +348,8 @@ class FormatParserTest {
 
     @Test
     void testValueWithSpaces() {
-        ParsedFormat format = FormatParser.parse("%k %v");
-        KafkaRecord components = format.matchLine("key value with multiple spaces");
+        InputParser format = InputParser.withFormat("%k %v");
+        KafkaRecord components = format.parse("key value with multiple spaces");
 
         assertEquals("key", components.keyString(null));
         assertEquals("value with multiple spaces", components.valueString(null));
@@ -357,8 +357,8 @@ class FormatParserTest {
 
     @Test
     void testLastPlaceholderConsumesRestOfLine() {
-        ParsedFormat format = FormatParser.parse("%k:%v");
-        KafkaRecord components = format.matchLine("mykey:value with : colons : inside");
+        InputParser format = InputParser.withFormat("%k:%v");
+        KafkaRecord components = format.parse("mykey:value with : colons : inside");
 
         assertEquals("mykey", components.keyString(null));
         assertEquals("value with : colons : inside", components.valueString(null));
@@ -366,8 +366,8 @@ class FormatParserTest {
 
     @Test
     void testEmptyValue() {
-        ParsedFormat format = FormatParser.parse("%k %v");
-        KafkaRecord components = format.matchLine("key ");
+        InputParser format = InputParser.withFormat("%k %v");
+        KafkaRecord components = format.parse("key ");
 
         assertEquals("key", components.keyString(null));
         assertEquals("", components.valueString(null));
