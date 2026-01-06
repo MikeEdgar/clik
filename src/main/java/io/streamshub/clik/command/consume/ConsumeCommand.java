@@ -13,7 +13,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -39,6 +38,7 @@ import com.github.freva.asciitable.HorizontalAlign;
 
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.KafkaRecord;
+import io.streamshub.clik.support.LifecycleHandler;
 import io.streamshub.clik.support.OutputFormatter;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.CommandSpec;
@@ -130,6 +130,9 @@ public class ConsumeCommand implements Callable<Integer> {
     @Inject
     KafkaClientFactory clientFactory;
 
+    @Inject
+    LifecycleHandler lifecycle;
+
     private PrintWriter out() {
         return commandSpec.commandLine().getOut();
     }
@@ -177,6 +180,10 @@ public class ConsumeCommand implements Callable<Integer> {
             return 1;
         }
 
+        return lifecycle.supply(this::execute).join();
+    }
+
+    private int execute() {
         try (Consumer<byte[], byte[]> consumer = clientFactory.createConsumer(properties, groupId)) {
             configureConsumer(consumer);
 
@@ -268,7 +275,6 @@ public class ConsumeCommand implements Callable<Integer> {
             // Default for named group: let Kafka manage offsets
             consumer.seekToEnd(consumer.assignment());
         }
-
     }
 
     private void subscribeAllPartitions(Consumer<byte[], byte[]> consumer) {
@@ -323,10 +329,7 @@ public class ConsumeCommand implements Callable<Integer> {
     }
 
     private int consumeContinuously(Consumer<byte[], byte[]> consumer) {
-        AtomicBoolean running = new AtomicBoolean(true);
-        AtomicInteger count = new AtomicInteger(0);
-
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> running.set(false)));
+        int count = 0;
 
         // Check if we're using a format string and parse it once for efficiency
         boolean isPredefinedFormat = Stream.of(OUTPUT_TABLE, OUTPUT_JSON, OUTPUT_YAML)
@@ -334,7 +337,7 @@ public class ConsumeCommand implements Callable<Integer> {
 
         OutputFormatter formatter = !isPredefinedFormat ? OutputFormatter.withFormat(outputFormat) : null;
 
-        while (running.get()) {
+        while (lifecycle.isRunning() && (maxMessages == null || count < maxMessages)) {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
 
             for (ConsumerRecord<byte[], byte[]> rec : records) {
@@ -350,14 +353,11 @@ public class ConsumeCommand implements Callable<Integer> {
                     printMessages(List.of(msg));
                 }
 
-                if (maxMessages != null && count.incrementAndGet() >= maxMessages) {
-                    running.set(false);
-                    break;
-                }
+                count++;
             }
         }
 
-        err().println("\n" + count.get() + " messages consumed");
+        err().println("\n" + count + " messages consumed");
         return 0;
     }
 

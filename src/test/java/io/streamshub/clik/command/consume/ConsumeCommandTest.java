@@ -122,7 +122,7 @@ class ConsumeCommandTest extends ClikMainTestBase {
 
         // Output should show "No messages consumed" since we start from end
         // and no new messages were produced after the consume started
-        String output = result.getOutput();
+        String output = result.getErrorOutput();
         assertTrue(output.contains("No messages consumed"));
     }
 
@@ -288,7 +288,7 @@ class ConsumeCommandTest extends ClikMainTestBase {
                 "--timeout", "2000");
         assertEquals(0, result.exitCode());
 
-        String output = result.getOutput();
+        String output = result.getErrorOutput();
         assertTrue(output.contains("No messages consumed"));
     }
 
