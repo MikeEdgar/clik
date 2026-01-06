@@ -262,10 +262,10 @@ class ConsumeCommandTest extends ClikMainTestBase {
         topicService.createTopic(admin(), "value-topic", 1, 1, Collections.emptyMap());
         produceMessages("value-topic", "value-msg1", "value-msg2");
 
-        // Consume in value-only format
+        // Consume in value-only format using custom format string
         LaunchResult result = launcher.launch("consume", "value-topic",
                 "--from-beginning",
-                "-o", "value",
+                "-o", "%v",
                 "--timeout", "3000");
         assertEquals(0, result.exitCode());
 

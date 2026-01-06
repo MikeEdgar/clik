@@ -52,7 +52,6 @@ public class ConsumeCommand implements Callable<Integer> {
     private static final String OUTPUT_TABLE = "table";
     private static final String OUTPUT_JSON = "json";
     private static final String OUTPUT_YAML = "yaml";
-    private static final String OUTPUT_VALUE = "value";
 
     @Inject
     Logger logger;
@@ -104,7 +103,7 @@ public class ConsumeCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"-o", "--output"},
-            description = "Output format: table, json, yaml, value, or custom format string (e.g., '%k=%v', default: table)",
+            description = "Output format: table, json, yaml, or custom format string (e.g., '%k=%v' or '%v', default: table)",
             defaultValue = "table"
     )
     String outputFormat;
@@ -174,7 +173,7 @@ public class ConsumeCommand implements Callable<Integer> {
         // Validate output format
         if (!validOutputFormat()) {
             err().println("Error: Invalid output format: " + outputFormat);
-            err().println("Valid formats: table, json, yaml, value, or a format string (e.g., '%k=%v')");
+            err().println("Valid formats: table, json, yaml, or a format string (e.g., '%k=%v' or '%v')");
             return 1;
         }
 
@@ -186,9 +185,7 @@ public class ConsumeCommand implements Callable<Integer> {
             } else {
                 List<KafkaRecord> messages = consumeOnce(consumer);
                 if (messages.isEmpty()) {
-                    if (!outputFormat.equalsIgnoreCase(OUTPUT_VALUE)) {
-                        out().println("No messages consumed");
-                    }
+                    err().println("No messages consumed");
                 } else {
                     printMessages(messages);
                 }
@@ -205,7 +202,7 @@ public class ConsumeCommand implements Callable<Integer> {
 
     private boolean validOutputFormat() {
         // Check if it's a predefined format first
-        if (Stream.of(OUTPUT_TABLE, OUTPUT_JSON, OUTPUT_YAML, OUTPUT_VALUE)
+        if (Stream.of(OUTPUT_TABLE, OUTPUT_JSON, OUTPUT_YAML)
                 .anyMatch(outputFormat.toLowerCase()::equals)) {
             return true;
         }
@@ -332,9 +329,9 @@ public class ConsumeCommand implements Callable<Integer> {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> running.set(false)));
 
         // Check if we're using a format string and parse it once for efficiency
-        String lowerFormat = outputFormat.toLowerCase();
-        boolean isPredefinedFormat = Stream.of(OUTPUT_TABLE, OUTPUT_JSON, OUTPUT_YAML, OUTPUT_VALUE)
-                .anyMatch(lowerFormat::equals);
+        boolean isPredefinedFormat = Stream.of(OUTPUT_TABLE, OUTPUT_JSON, OUTPUT_YAML)
+                .anyMatch(outputFormat::equalsIgnoreCase);
+
         OutputFormatter formatter = !isPredefinedFormat ? OutputFormatter.withFormat(outputFormat) : null;
 
         while (running.get()) {
@@ -360,37 +357,25 @@ public class ConsumeCommand implements Callable<Integer> {
             }
         }
 
-        if (!outputFormat.equalsIgnoreCase(OUTPUT_VALUE) && formatter == null) {
-            err().println("\n" + count.get() + " messages consumed");
-        }
+        err().println("\n" + count.get() + " messages consumed");
         return 0;
     }
 
     private void printMessages(List<KafkaRecord> messages) {
-        // Check if it's a predefined format
-        String lowerFormat = outputFormat.toLowerCase();
-        if (Stream.of(OUTPUT_TABLE, OUTPUT_JSON, OUTPUT_YAML, OUTPUT_VALUE)
-                .anyMatch(lowerFormat::equals)) {
-            // Use predefined format printer
-            switch (lowerFormat) {
-                case OUTPUT_TABLE:
-                    printTable(messages);
-                    break;
-                case OUTPUT_JSON:
-                    printJson(messages);
-                    break;
-                case OUTPUT_YAML:
-                    printYaml(messages);
-                    break;
-                case OUTPUT_VALUE:
-                    messages.forEach(m -> out().println(m.valueString(null)));
-                    break;
-            }
-            return;
+        switch (outputFormat.toLowerCase()) {
+            case OUTPUT_TABLE:
+                printTable(messages);
+                break;
+            case OUTPUT_JSON:
+                printJson(messages);
+                break;
+            case OUTPUT_YAML:
+                printYaml(messages);
+                break;
+            default:
+                printFormatString(messages);
+                break;
         }
-
-        // Otherwise it's a format string
-        printFormatString(messages);
     }
 
     private void printFormatString(List<KafkaRecord> messages) {

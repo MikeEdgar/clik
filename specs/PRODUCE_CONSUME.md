@@ -204,7 +204,7 @@ clik consume <topic> [OPTIONS]
 | `--from-end` | Start from latest offset | - |
 | `--from-offset <offset>` | Start from specific offset (requires --partition) | - |
 | `-p, --partition <num>` | Consume from specific partition only | all partitions |
-| `-o, --output <format>` | Output format: table, json, yaml, value, or custom format string | table |
+| `-o, --output <format>` | Output format: table, json, yaml, or custom format string | table |
 | `--max-messages <num>` | Maximum messages to consume | unlimited |
 | `--timeout <ms>` | Timeout in milliseconds for one-time consumption | 5000 |
 
@@ -235,8 +235,8 @@ clik consume my-topic --from-beginning --max-messages 10
 # Output as JSON
 clik consume my-topic --from-beginning -o json
 
-# Output values only (no metadata)
-clik consume my-topic --from-beginning -o value
+# Output values only (no metadata) using custom format
+clik consume my-topic --from-beginning -o "%v"
 
 # Custom format string (partition:offset key=value)
 clik consume my-topic --from-beginning -o "%p:%o %k=%v"
@@ -293,7 +293,7 @@ clik consume my-topic --from-beginning -o "%k\u0009%v\u0009%T"
   timestamp: 1704326401000
 ```
 
-**Output (value format):**
+**Output (custom format string `%v` - values only):**
 ```
 Hello World
 Test message
@@ -887,8 +887,8 @@ clik produce my-topic --file messages.txt --key test-run-1
 
 **Data migration verification:**
 ```bash
-# Export messages from one topic
-clik consume source-topic --from-beginning -o value > exported.txt
+# Export messages from one topic (values only)
+clik consume source-topic --from-beginning -o "%v" > exported.txt
 
 # Import to another topic
 clik produce target-topic --file exported.txt
