@@ -1,14 +1,11 @@
 <?xml version="1.0"?>
-<project
-    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd"
-    xmlns="http://maven.apache.org/POM/4.0.0"
-    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>io.streamshub</groupId>
   <artifactId>clik</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>0.1.0</version>
 
   <properties>
     <compiler-plugin.version>3.14.1</compiler-plugin.version>
@@ -25,7 +22,7 @@
   <scm>
     <connection>scm:git:git://github.com/MikeEdgar/clik.git</connection>
     <developerConnection>scm:git:git@github.com:MikeEdgar/clik.git</developerConnection>
-    <tag>HEAD</tag>
+    <tag>v0.1.0</tag>
   </scm>
 
   <licenses>
@@ -153,7 +150,7 @@
           <pushChanges>false</pushChanges>
           <localCheckout>true</localCheckout>
           <remoteTagging>false</remoteTagging>
-          <arguments>-DskipTests -DskipITs -Dmaven.deploy.skip=true ${release.arguments}</arguments>
+          <arguments>-DskipTests -DskipITs -Dmaven.deploy.skip=true</arguments>
         </configuration>
       </plugin>
     </plugins>
