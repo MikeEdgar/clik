@@ -22,6 +22,12 @@
     <surefire-plugin.version>3.5.4</surefire-plugin.version>
   </properties>
 
+  <scm>
+    <connection>scm:git:git://github.com/MikeEdgar/clik.git</connection>
+    <developerConnection>scm:git:git@github.com:MikeEdgar/clik.git</developerConnection>
+    <tag>HEAD</tag>
+  </scm>
+
   <licenses>
     <license>
       <name>The Apache Software License, Version 2.0</name>
@@ -135,6 +141,19 @@
             <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
             <maven.home>${maven.home}</maven.home>
           </systemPropertyVariables>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-release-plugin</artifactId>
+        <configuration>
+          <autoVersionSubmodules>true</autoVersionSubmodules>
+          <tagNameFormat>v@{project.version}</tagNameFormat>
+          <useReleaseProfile>false</useReleaseProfile>
+          <pushChanges>false</pushChanges>
+          <localCheckout>true</localCheckout>
+          <remoteTagging>false</remoteTagging>
+          <arguments>-DskipTests -DskipITs -Dmaven.deploy.skip=true ${release.arguments}</arguments>
         </configuration>
       </plugin>
     </plugins>

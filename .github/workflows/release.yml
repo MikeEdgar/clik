@@ -1,0 +1,175 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-natives:
+    name: Build ${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux AMD64
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+            artifact-name: clik-linux-amd64
+            executable-pattern: "target/*-runner"
+
+          # macOS x86_64 (Intel)
+          - os: macos
+            arch: amd64
+            runner: macos-15-intel
+            artifact-name: clik-macos-amd64
+            executable-pattern: "target/*-runner"
+
+          # macOS ARM64 (Apple Silicon)
+          - os: macos
+            arch: arm64
+            runner: macos-15
+            artifact-name: clik-macos-arm64
+            executable-pattern: "target/*-runner"
+
+          # Windows AMD64
+          - os: windows
+            arch: amd64
+            runner: windows-latest
+            artifact-name: clik-windows-amd64.exe
+            executable-pattern: "target/*-runner.exe"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up GraalVM
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '21'
+          distribution: 'mandrel'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-${{ matrix.arch }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-maven-
+
+      # Extract version from tag (remove 'v' prefix)
+      - name: Set version
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      # Non-Windows: Build native image
+      - name: Build native image
+        if: matrix.os != 'windows'
+        run: ./mvnw -B --no-transfer-progress package -Pnative -DskipTests
+
+      # Windows: Build native image
+      - name: Build native image (Windows)
+        if: matrix.os == 'windows'
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          mvnw.cmd -B --no-transfer-progress package -Pnative -DskipTests
+
+      # Rename executable to include version and platform
+      - name: Rename executable (Unix)
+        if: matrix.os != 'windows'
+        shell: bash
+        run: |
+          EXECUTABLE=$(ls ${{ matrix.executable-pattern }})
+          mv "$EXECUTABLE" "${{ matrix.artifact-name }}"
+          chmod +x "${{ matrix.artifact-name }}"
+
+      - name: Rename executable (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $executable = Get-Item ${{ matrix.executable-pattern }}
+          Move-Item $executable.FullName "${{ matrix.artifact-name }}"
+
+      # Generate SHA256 checksum
+      - name: Generate checksum (Unix)
+        if: matrix.os != 'windows'
+        shell: bash
+        run: |
+          sha256sum "${{ matrix.artifact-name }}" > "${{ matrix.artifact-name }}.sha256"
+
+      - name: Generate checksum (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 "${{ matrix.artifact-name }}").Hash.ToLower()
+          "$hash  ${{ matrix.artifact-name }}" | Out-File -Encoding ASCII "${{ matrix.artifact-name }}.sha256"
+
+      # Upload artifacts for the release job
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact-name }}
+          path: |
+            ${{ matrix.artifact-name }}
+            ${{ matrix.artifact-name }}.sha256
+          if-no-files-found: error
+
+  create-release:
+    name: Create GitHub Release
+    needs: build-natives
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Download all artifacts
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      # Consolidate artifacts into single directory
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f -exec mv {} release-assets/ \;
+          cd release-assets
+          ls -la
+
+      # Create combined SHA256SUMS file
+      - name: Create SHA256SUMS
+        shell: bash
+        run: |
+          cd release-assets
+          cat *.sha256 > SHA256SUMS
+          echo "SHA256SUMS contents:"
+          cat SHA256SUMS
+
+      # Extract version from tag
+      - name: Get version
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      # Create GitHub release and upload assets
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ steps.version.outputs.VERSION }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release-assets/clik-*
+            release-assets/SHA256SUMS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
