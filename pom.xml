@@ -10,7 +10,7 @@
   <properties>
     <compiler-plugin.version>3.14.1</compiler-plugin.version>
     <maven.compiler.parameters>true</maven.compiler.parameters>
-    <maven.compiler.release>21</maven.compiler.release>
+    <maven.compiler.release>25</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
@@ -167,6 +167,9 @@
       </activation>
       <properties>
         <quarkus.package.type>native</quarkus.package.type>
+        <quarkus.native.builder-image>
+          quay.io/quarkus/ubi-quarkus-mandrel-builder-image:jdk-${maven.compiler.release}
+        </quarkus.native.builder-image>
       </properties>
       <build>
         <plugins>
