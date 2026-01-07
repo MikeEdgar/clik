@@ -102,13 +102,13 @@ echo -e "key1 value1\nkey2 value2" | clik produce my-topic --input "%k %v"
 cat data.txt | clik produce my-topic --input "%{base64:k} %v"
 
 # Format string with headers and timestamp
-cat data.txt | clik produce my-topic --input "%k %v %{h.type} %T"
+cat data.txt | clik produce my-topic --input "%k %v %{h[type]} %T"
 
 # Format string with tab delimiter (using unicode escape)
 cat data.tsv | clik produce my-topic --input "%k\u0009%v"
 
 # Format string with all fields
-cat data.txt | clik produce my-topic --input "%k %v %{h.content-type} %T %p"
+cat data.txt | clik produce my-topic --input "%k %v %{h[content-type]} %T %p"
 ```
 
 **Output:**
@@ -148,15 +148,15 @@ cat data.txt | clik produce my-topic --input "%k %v %{h.content-type} %T %p"
 - `%%` - Literal percent character
 - `%{base64:k}` - Base64-encoded key
 - `%{hex:v}` - Hex-encoded value
-- `%{h.name}` - Named header (matches specific header name)
-- `%{base64:h.signature}` - Base64-encoded named header
+- `%{h[name]}` - Named header (matches specific header name)
+- `%{base64:h[signature]}` - Base64-encoded named header
 - `\uXXXX` - Unicode character (e.g., `\u0009` for tab)
 
 **Important Notes on %h (Generic Header):**
 - In producer INPUT parsing, `%h` matches exactly ONE header as `key=value`
 - This is different from consumer OUTPUT where `%h` outputs ALL headers
 - To parse multiple headers, use multiple placeholders: `%h %h %h`
-- Or use named placeholders: `%{h.type} %{h.version} %{h.encoding}`
+- Or use named placeholders: `%{h[type]} %{h[version]} %{h[encoding]}`
 - This asymmetry exists because input parsing requires delimiters between placeholders
 
 **Important Notes:**
@@ -330,10 +330,10 @@ Format strings allow custom output formatting for consumed messages. The syntax 
 | `%p` | Partition number | `0` |
 | `%T` | Timestamp (epoch milliseconds) | `1704326400000` |
 | `%h` | All remaining headers as `key=value` pairs (excludes headers already output) | `type=json version=1.0` |
-| `%{h.name}` | All headers with this name (space-separated if multiple, marks as output) | `tag=v1 tag=v2` |
+| `%{h[name]}` | All headers with this name (space-separated if multiple, marks as output) | `tag=v1 tag=v2` |
 | `%{base64:k}` | Base64-encoded key | `dGVzdC1rZXk=` |
 | `%{hex:v}` | Hex-encoded value | `48656c6c6f` |
-| `%{base64:h.sig}` | Base64-encoded header | `sig=U2lnbmF0dXJl` |
+| `%{base64:h[sig]}` | Base64-encoded header | `sig=U2lnbmF0dXJl` |
 | `%%` | Literal percent character | `%` |
 | `\uXXXX` | Unicode character (e.g., `\u0009` for tab) | `\t` |
 
@@ -341,33 +341,33 @@ Format strings allow custom output formatting for consumed messages. The syntax 
 
 Output formatting maintains state to prevent duplicate header output:
 
-1. **Named headers** (`%{h.name}`): Outputs ALL headers with the specified name
+1. **Named headers** (`%{h[name]}`): Outputs ALL headers with the specified name
    - Multiple values appear as space-separated `name=value` pairs
-   - Example: `%{h.tag}` with two "tag" headers outputs: `tag=v1 tag=v2`
+   - Example: `%{h[tag]}` with two "tag" headers outputs: `tag=v1 tag=v2`
    - After output, these headers are marked and excluded from subsequent `%h`
 
 2. **Generic headers** (`%h`): Outputs all headers NOT yet output by named placeholders
    - Only outputs headers that haven't been output earlier in the format string
    - Can appear multiple times; each outputs remaining headers
-   - Example format `%{h.type} %h` on record with headers `type=json, version=1.0, encoding=utf8`:
+   - Example format `%{h[type]} %h` on record with headers `type=json, version=1.0, encoding=utf8`:
      - First placeholder outputs: `type=json`
      - Second placeholder outputs: `version=1.0 encoding=utf8`
 
 3. **Encoding support**: Both named and generic headers support encoding
-   - `%{base64:h.signature}` - Base64-encode the signature header value
+   - `%{base64:h[signature]}` - Base64-encode the signature header value
    - `%{hex:h}` - Hex-encode all remaining header values
 
 **Examples:**
 ```bash
 # Output specific header followed by remaining headers
-clik consume my-topic -o "%v | priority: %{h.priority} | other: %h"
+clik consume my-topic -o "%v | priority: %{h[priority]} | other: %h"
 
 # Output multiple headers with same name
-clik consume my-topic -o "%v tags=[%{h.tag}]"
+clik consume my-topic -o "%v tags=[%{h[tag]}]"
 # If record has tag=important, tag=urgent: "value tags=[tag=important tag=urgent]"
 
 # Prevent duplicate header output
-clik consume my-topic -o "%{h.type} %h"
+clik consume my-topic -o "%{h[type]} %h"
 # type header appears only once (in first placeholder, not in %h)
 ```
 
@@ -390,7 +390,7 @@ clik consume my-topic --from-beginning -o '"%k","%v",%T'
 clik consume my-topic --from-beginning -o '{"key":"%k","value":"%v"}'
 
 # With headers
-clik consume my-topic --from-beginning -o "%v [%{h.content-type}]"
+clik consume my-topic --from-beginning -o "%v [%{h[content-type]}]"
 
 # Base64 encode binary values
 clik consume my-topic --from-beginning -o "%{base64:k} %{base64:v}"
@@ -439,7 +439,7 @@ clik consume my-topic --from-beginning -o "%k = %{hex:v}"
   - Unknown placeholder (e.g., `%x`)
   - Unclosed placeholder (e.g., `%{base64:k`)
   - Invalid encoding type
-  - Empty header name (e.g., `%{h.}`)
+  - Empty header name (e.g., `%{h[]}`)
 - Consumer configuration errors
 - Network/broker errors
 
@@ -635,7 +635,7 @@ public class ConsumedMessage {
 **Format String (17 tests):**
 30. `testProduceWithInputFormatKeyValue()` - Format: %k %v
 31. `testProduceWithInputFormatBase64Key()` - Format: %{base64:k} %v
-32. `testProduceWithInputFormatNamedHeader()` - Format: %k %v %{h.name}
+32. `testProduceWithInputFormatNamedHeader()` - Format: %k %v %{h[name]}
 33. `testProduceWithInputFormatGenericHeader()` - Format: %k %v %h
 34. `testProduceWithInputFormatTimestamp()` - Format: %k %v %T
 35. `testProduceWithInputFormatPartition()` - Format: %k %v %p
@@ -806,7 +806,7 @@ No messages consumed
 - [x] Design and implement format string parser
 - [x] Add --input option for structured input parsing
 - [x] Support simple placeholders (%k, %v, %h, %T, %p, %%)
-- [x] Support parameterized placeholders (%{base64:k}, %{hex:v}, %{h.name})
+- [x] Support parameterized placeholders (%{base64:k}, %{hex:v}, %{h[name]})
 - [x] Support unicode escapes (\uXXXX)
 - [x] Add format string validation and error handling
 - [x] Add FormatParser unit tests (35 tests)
@@ -958,7 +958,7 @@ clik consume my-topic --from-beginning -o "%{base64:k} %{base64:v}"
 **Header extraction:**
 ```bash
 # Show message with specific header
-clik consume my-topic --from-beginning -o "%v (type: %{h.content-type})"
+clik consume my-topic --from-beginning -o "%v (type: %{h[content-type]})"
 
 # Show all headers
 clik consume my-topic --from-beginning -o "%v | headers: %h"

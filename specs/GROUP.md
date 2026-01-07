@@ -322,10 +322,10 @@ clik group alter <groupId> [OPTIONS]
 |------|-------------|---------|
 | `--to-earliest [topic[:partition]]` | Reset to earliest available offset | - |
 | `--to-latest [topic[:partition]]` | Reset to latest offset (skip all messages) | - |
-| `--to-offset <offset>:topic:partition` | Set to specific offset | - |
-| `--shift-by <offset>:topic:partition` | Shift current offset by N (positive or negative) | - |
-| `--to-datetime <timestamp>[:topic[:partition]]` | Reset to first offset at or after ISO-8601 timestamp | - |
-| `--by-duration <duration>[:topic[:partition]]` | Shift back by ISO-8601 duration (e.g., PT1H for 1 hour) | - |
+| `--to-offset <offset>=topic:partition` | Set to specific offset | - |
+| `--shift-by <offset>=topic:partition` | Shift current offset by N (positive or negative) | - |
+| `--to-datetime <timestamp>[=topic[:partition]]` | Reset to first offset at or after ISO-8601 timestamp | - |
+| `--by-duration <duration>[=topic[:partition]]` | Shift by ISO-8601 duration (e.g., PT1H for 1 hour forward, PT-1H for 1 hour back) | - |
 | `--delete [topic[:partition]]` | Delete offsets from group | - |
 | `-y, --yes` | Automatically confirm alteration without prompting | false |
 
@@ -339,8 +339,8 @@ The command supports different topic:partition specifications depending on the o
 - **Topic:partition**: Apply to specific partition (e.g., `--to-earliest mytopic:0`)
 
 **For `--to-offset` and `--shift-by`:**
-- **Required format**: `offset:topic:partition` (all three components required)
-- Example: `--to-offset 1000:mytopic:0`
+- **Required format**: `offset=topic:partition` (offset separated from topic:partition by `=`)
+- Example: `--to-offset 1000=mytopic:0`
 
 **Note:** For `--to-earliest` and `--to-latest`, the topic:partition parameter is completely optional. If omitted, the command automatically applies to all partitions in the group:
 
@@ -366,19 +366,22 @@ clik group alter my-group --to-earliest mytopic:0 --yes
 clik group alter my-group --to-latest "" --yes
 
 # Set specific partition to offset 1000
-clik group alter my-group --to-offset 1000:mytopic:0 --yes
+clik group alter my-group --to-offset 1000=mytopic:0 --yes
 
 # Shift partition 0 forward by 100
-clik group alter my-group --shift-by 100:mytopic:0 --yes
+clik group alter my-group --shift-by 100=mytopic:0 --yes
 
 # Shift partition 0 back by 50
-clik group alter my-group --shift-by -50:mytopic:0 --yes
+clik group alter my-group --shift-by -50=mytopic:0 --yes
 
 # Reset to specific timestamp (ISO-8601 format)
-clik group alter my-group --to-datetime 2026-01-01T00:00:00Z: --yes
+clik group alter my-group --to-datetime 2026-01-01T00:00:00Z --yes
 
-# Reset specific topic to 1 hour ago
-clik group alter my-group --by-duration PT1H:mytopic --yes
+# Shift specific topic forward by 1 hour
+clik group alter my-group --by-duration PT1H=mytopic --yes
+
+# Shift specific topic back by 1 hour (reprocess last hour)
+clik group alter my-group --by-duration PT-1H=mytopic --yes
 
 # Delete offsets for specific partition
 clik group alter my-group --delete mytopic:0 --yes
@@ -447,11 +450,12 @@ Altered offsets for 3 partition(s) and deleted offsets for 2 partition(s) in gro
 - `2026-03-01T12:00:00.000Z` - With milliseconds
 
 **Durations (--by-duration):**
-- `PT1H` - 1 hour ago
-- `PT30M` - 30 minutes ago
-- `PT2H30M` - 2 hours and 30 minutes ago
-- `P1D` - 1 day ago
-- `P1DT12H` - 1 day and 12 hours ago
+- `PT1H` - 1 hour forward (skip ahead 1 hour)
+- `PT30M` - 30 minutes forward
+- `PT-1H` - 1 hour back (reprocess last hour)
+- `PT-30M` - 30 minutes back
+- `P1D` - 1 day forward
+- `P-1D` - 1 day back
 
 ## Integration with Context Management
 

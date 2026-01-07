@@ -64,25 +64,25 @@ public class AlterGroupCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"--to-offset"},
-            description = "Set to specific offset (format: offset:topic:partition)"
+            description = "Set to specific offset (format: offset=topic:partition)"
     )
     List<String> toOffset = new ArrayList<>();
 
     @CommandLine.Option(
             names = {"--shift-by"},
-            description = "Shift offset by N (format: offset:topic:partition)"
+            description = "Shift offset by N (format: offset=topic:partition)"
     )
     List<String> shiftBy = new ArrayList<>();
 
     @CommandLine.Option(
             names = {"--to-datetime"},
-            description = "Reset to datetime in ISO-8601 format (optionally specify topic[:partition], e.g., '2026-01-01T00:00:00Z:mytopic:0')"
+            description = "Reset to datetime in ISO-8601 format (optionally specify topic[:partition], e.g., '2026-01-01T00:00:00Z=mytopic:0')"
     )
     List<String> toDatetime = new ArrayList<>();
 
     @CommandLine.Option(
             names = {"--by-duration"},
-            description = "Shift back by duration in ISO-8601 format (e.g., 'PT1H:mytopic' for 1 hour)"
+            description = "Shift by duration in ISO-8601 format (e.g., 'PT1H=mytopic' for 1 hour forward, 'PT-1H=mytopic' for 1 hour back)"
     )
     List<String> byDuration = new ArrayList<>();
 
@@ -156,10 +156,10 @@ public class AlterGroupCommand implements Callable<Integer> {
             err().println("Available options:");
             err().println("  --to-earliest [topic[:partition]]    Reset to earliest offset");
             err().println("  --to-latest [topic[:partition]]      Reset to latest offset");
-            err().println("  --to-offset offset:topic:partition   Set to specific offset");
-            err().println("  --shift-by offset:topic:partition    Shift offset by N");
-            err().println("  --to-datetime datetime[:topic[:partition]]  Reset to timestamp");
-            err().println("  --by-duration duration[:topic[:partition]]  Shift by duration");
+            err().println("  --to-offset offset=topic:partition   Set to specific offset");
+            err().println("  --shift-by offset=topic:partition    Shift offset by N");
+            err().println("  --to-datetime datetime[=topic[:partition]]  Reset to timestamp");
+            err().println("  --by-duration duration[=topic[:partition]]  Shift by duration");
             err().println("  --delete [topic[:partition]]         Delete offsets");
             return 1;
         }
@@ -384,14 +384,14 @@ public class AlterGroupCommand implements Callable<Integer> {
             String durationStr = parsed.value();
             try {
                 Duration duration = Duration.parse(durationStr);
-                long timestamp = Instant.now().minus(duration).toEpochMilli();
+                long timestamp = Instant.now().plus(duration).toEpochMilli();
                 Map<TopicPartition, Long> timestampOffsets = getOffsetsForTimestamp(admin, parsed.partitions(), timestamp);
                 for (Map.Entry<TopicPartition, Long> entry : timestampOffsets.entrySet()) {
                     offsetsToAlter.put(entry.getKey(), new OffsetAndMetadata(entry.getValue()));
                 }
             } catch (DateTimeParseException e) {
                 err().println("Error: Invalid ISO-8601 duration format: " + durationStr);
-                err().println("Expected format: PT1H (1 hour), PT30M (30 minutes), etc.");
+                err().println("Expected format: PT1H (1 hour), PT-1H (negative 1 hour), PT30M (30 minutes), etc.");
                 return true;
             }
         }
@@ -437,16 +437,16 @@ public class AlterGroupCommand implements Callable<Integer> {
     }
 
     /**
-     * Parse offset specification (offset:topic:partition)
+     * Parse offset specification (offset=topic:partition)
      * @param spec The offset specification string
      * @param groupPartitions Available partitions in the group
      * @param allowNegative Whether to allow negative offset values (for shift-by)
      */
     private PartitionOffsetSpec<Long> parseOffsetSpec(String spec, Set<TopicPartition> groupPartitions, boolean allowNegative) {
-        String[] parts = spec.split(":", 3);
-        if (parts.length < 3) {
+        String[] parts = spec.split("=", 2);
+        if (parts.length < 2) {
             throw new IllegalArgumentException(
-                    "Invalid format: expected 'offset:topic:partition', got: " + spec);
+                    "Invalid format: expected 'offset=topic:partition', got: " + spec);
         }
 
         try {
@@ -455,7 +455,7 @@ public class AlterGroupCommand implements Callable<Integer> {
                 throw new IllegalArgumentException("Offset must be non-negative: " + offset);
             }
 
-            Set<TopicPartition> partitions = parseTopicPartitionSpec(parts[1] + ':' + parts[2], groupPartitions);
+            Set<TopicPartition> partitions = parseTopicPartitionSpec(parts[1], groupPartitions);
             return new PartitionOffsetSpec<>(partitions, offset);
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid offset number: " + parts[0]);
@@ -463,26 +463,19 @@ public class AlterGroupCommand implements Callable<Integer> {
     }
 
     /**
-     * Parse datetime/duration specification (datetime[:topic[:partition]])
+     * Parse datetime/duration specification (datetime[=topic[:partition]])
      */
     private PartitionOffsetSpec<String> parseDatetimeSpec(String spec, Set<TopicPartition> groupPartitions) {
-        // Find the topic:partition part by looking for the last occurrence that matches a topic name
-        // This handles ISO-8601 timestamps which contain colons
-        String datetime = spec;
-        String topicPartSpec = "";
+        String[] parts = spec.split("=", 2);
+        String datetime = parts[0];
+        Set<TopicPartition> partitions;
 
-        // Try to find topic:partition suffix
-        for (TopicPartition tp : groupPartitions) {
-            String topic = tp.topic();
-            int topicIndex = spec.lastIndexOf(":" + topic);
-            if (topicIndex > 0) {
-                datetime = spec.substring(0, topicIndex);
-                topicPartSpec = spec.substring(topicIndex + 1);
-                break;
-            }
+        if (parts.length == 2) {
+            partitions = parseTopicPartitionSpec(parts[1], groupPartitions);
+        } else {
+            partitions = groupPartitions;
         }
 
-        Set<TopicPartition> partitions = parseTopicPartitionSpec(topicPartSpec, groupPartitions);
         return new PartitionOffsetSpec<>(partitions, datetime);
     }
 

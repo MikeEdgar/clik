@@ -56,7 +56,7 @@ class InputParserTest {
 
     @Test
     void testNamedHeader() {
-        InputParser format = InputParser.withFormat("%k %v %{h.content-type}");
+        InputParser format = InputParser.withFormat("%k %v %{h[content-type]}");
         KafkaRecord components = format.parse("key1 value1 content-type=application/json");
 
         assertEquals("key1", components.keyString(null));
@@ -77,7 +77,7 @@ class InputParserTest {
     @Test
     void testBase64EncodedHeader() {
         // "signature" in base64
-        InputParser format = InputParser.withFormat("%k %v %{base64:h.sig}");
+        InputParser format = InputParser.withFormat("%k %v %{base64:h[sig]}");
         KafkaRecord components = format.parse("key1 value1 sig=U2lnbmF0dXJl");
 
         assertEquals("key1", components.keyString(null));
@@ -86,7 +86,7 @@ class InputParserTest {
 
     @Test
     void testMultipleNamedHeaders() {
-        InputParser format = InputParser.withFormat("%k %v %{h.type} %{h.version}");
+        InputParser format = InputParser.withFormat("%k %v %{h[type]} %{h[version]}");
         KafkaRecord components = format.parse("key1 value1 type=json version=1.0");
 
         assertEquals("json", components.firstHeader("type").valueString(null));
@@ -123,7 +123,7 @@ class InputParserTest {
     @Test
     void testMixedEncodings() {
         // hex key, base64 value, plain header
-        InputParser format = InputParser.withFormat("%{hex:k} %{base64:v} %{h.type}");
+        InputParser format = InputParser.withFormat("%{hex:k} %{base64:v} %{h[type]}");
         KafkaRecord components = format.parse("6b6579 VGVzdA== type=data");
 
         assertEquals("key", components.keyString(null));
@@ -133,7 +133,7 @@ class InputParserTest {
 
     @Test
     void testDuplicateNamedHeaders() {
-        InputParser format = InputParser.withFormat("%k %v %{h.tag} %{h.tag}");
+        InputParser format = InputParser.withFormat("%k %v %{h[tag]} %{h[tag]}");
         KafkaRecord record = format.parse("key1 value1 tag=v1 tag=v2");
 
         assertEquals("key1", record.keyString(null));
@@ -162,7 +162,7 @@ class InputParserTest {
 
     @Test
     void testMixedDuplicateHeaders() {
-        InputParser format = InputParser.withFormat("%k %v %{h.tag} %h %{h.tag}");
+        InputParser format = InputParser.withFormat("%k %v %{h[tag]} %h %{h[tag]}");
         KafkaRecord record = format.parse("key1 value1 tag=v1 type=json tag=v2");
 
         assertEquals("key1", record.keyString(null));
@@ -184,7 +184,7 @@ class InputParserTest {
     @Test
     void testDuplicateHeadersWithEncoding() {
         // "plain" in base64 is "cGxhaW4="
-        InputParser format = InputParser.withFormat("%k %v %{h.data} %{base64:h.data}");
+        InputParser format = InputParser.withFormat("%k %v %{h[data]} %{base64:h[data]}");
         KafkaRecord record = format.parse("key1 value1 data=plain data=cGxhaW4=");
 
         assertEquals("key1", record.keyString(null));
@@ -242,7 +242,7 @@ class InputParserTest {
     void testEmptyHeaderName() {
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> InputParser.withFormat("%{h.}"));
+            () -> InputParser.withFormat("%{h[]}"));
         assertTrue(ex.getMessage().contains("Empty header name"));
     }
 
@@ -301,7 +301,7 @@ class InputParserTest {
 
     @Test
     void testHeaderNameMismatch() {
-        InputParser format = InputParser.withFormat("%k %v %{h.expected}");
+        InputParser format = InputParser.withFormat("%k %v %{h[expected]}");
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
             () -> format.parse("key value actual=value")); // wrong header name

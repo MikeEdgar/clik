@@ -114,7 +114,7 @@ class OutputFormatterTest {
 
     @Test
     void testNamedHeader() {
-        OutputFormatter formatter = OutputFormatter.withFormat("%k %v %{h.content-type}");
+        OutputFormatter formatter = OutputFormatter.withFormat("%k %v %{h[content-type]}");
         KafkaRecord.Builder builder = KafkaRecord.builder();
         builder.setKey(bytes("key1"));
         builder.setValue(bytes("value1"));
@@ -153,7 +153,7 @@ class OutputFormatterTest {
 
     @Test
     void testDuplicateNamedHeaders() {
-        OutputFormatter formatter = OutputFormatter.withFormat("%k %v %{h.tag}");
+        OutputFormatter formatter = OutputFormatter.withFormat("%k %v %{h[tag]}");
         KafkaRecord.Builder builder = KafkaRecord.builder();
         builder.setKey(bytes("key1"));
         builder.setValue(bytes("value1"));
@@ -168,7 +168,7 @@ class OutputFormatterTest {
 
     @Test
     void testBase64EncodedHeader() {
-        OutputFormatter formatter = OutputFormatter.withFormat("%k %v %{base64:h.sig}");
+        OutputFormatter formatter = OutputFormatter.withFormat("%k %v %{base64:h[sig]}");
         KafkaRecord.Builder builder = KafkaRecord.builder();
         builder.setKey(bytes("key1"));
         builder.setValue(bytes("value1"));
@@ -182,7 +182,7 @@ class OutputFormatterTest {
 
     @Test
     void testHexEncodedHeader() {
-        OutputFormatter formatter = OutputFormatter.withFormat("%k %{hex:h.checksum}");
+        OutputFormatter formatter = OutputFormatter.withFormat("%k %{hex:h[checksum]}");
         byte[] checksumBytes = new byte[]{(byte) 0xA1, (byte) 0xB2, (byte) 0xC3, (byte) 0xD4};
         KafkaRecord.Builder builder = KafkaRecord.builder();
         builder.setKey(bytes("key1"));
@@ -249,7 +249,7 @@ class OutputFormatterTest {
 
     @Test
     void testMissingHeader() {
-        OutputFormatter formatter = OutputFormatter.withFormat("%k %v %{h.missing}");
+        OutputFormatter formatter = OutputFormatter.withFormat("%k %v %{h[missing]}");
         KafkaRecord record = record("key1", "value1");
 
         String output = formatter.format(record);
@@ -298,7 +298,7 @@ class OutputFormatterTest {
 
     @Test
     void testComplexFormat() {
-        OutputFormatter formatter = OutputFormatter.withFormat("[%T] %p:%o %k=%v %{h.named-header} headers=%h");
+        OutputFormatter formatter = OutputFormatter.withFormat("[%T] %p:%o %k=%v %{h[named-header]} headers=%h");
         KafkaRecord.Builder builder = KafkaRecord.builder();
         builder.setTimestamp(1735401600000L);
         builder.setPartition(3);
@@ -389,7 +389,7 @@ class OutputFormatterTest {
     void testEmptyHeaderName() {
         IllegalArgumentException ex = assertThrows(
             IllegalArgumentException.class,
-            () -> OutputFormatter.withFormat("%{h.}"));
+            () -> OutputFormatter.withFormat("%{h[]}"));
         assertTrue(ex.getMessage().contains("Empty header name"));
     }
 

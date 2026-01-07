@@ -48,7 +48,7 @@ class FormatStringParser {
                     tokens.add(new LiteralToken("%"));
                     i += 2;
                 } else if (next == '{') {
-                    // Parameterized placeholder: %{encoding:type} or %{type.name}
+                    // Parameterized placeholder: %{encoding:type} or %{h[name]}
                     PlaceholderToken token = parseParameterizedPlaceholder(format, i);
                     tokens.add(token);
                     hasPlaceholder = true;
@@ -126,7 +126,7 @@ class FormatStringParser {
     }
 
     /**
-     * Parse a parameterized placeholder like %{base64:k}, %{hex:v}, or %{h.name}.
+     * Parse a parameterized placeholder like %{base64:k}, %{hex:v}, or %{h[name]}.
      */
     static PlaceholderToken parseParameterizedPlaceholder(String format, int startPos) {
         int endPos = format.indexOf('}', startPos);
@@ -151,7 +151,7 @@ class FormatStringParser {
             } else {
                 // Check if this looks like an encoding attempt but is invalid
                 String afterColon = content.substring(colonPos + 1);
-                if (!afterColon.startsWith("h.")) {
+                if (!afterColon.startsWith("h[")) {
                     // This is likely an invalid encoding like %{unknown:k}
                     throw new IllegalArgumentException(
                         "Unknown encoding: " + potentialEncoding + " at position " + startPos);
@@ -161,9 +161,14 @@ class FormatStringParser {
         }
 
         // Parse the placeholder type and optional name
-        if (remainder.startsWith("h.")) {
-            // Named header: %{h.name} or %{base64:h.name}
-            String headerName = remainder.substring(2);
+        if (remainder.startsWith("h[")) {
+            // Named header: %{h[name]} or %{base64:h[name]}
+            int closeBracket = remainder.indexOf(']');
+            if (closeBracket == -1) {
+                throw new IllegalArgumentException(
+                    "Unclosed header name bracket at position " + startPos);
+            }
+            String headerName = remainder.substring(2, closeBracket);
             if (headerName.isEmpty()) {
                 throw new IllegalArgumentException(
                     "Empty header name at position " + startPos);

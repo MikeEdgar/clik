@@ -651,7 +651,7 @@ class ConsumeCommandTest extends ClikMainTestBase {
         // Consume with named header in format
         LaunchResult result = launcher.launch("consume", "format-named-header-topic",
                 "--from-beginning",
-                "--output", "%v [%{h.content-type}]",
+                "--output", "%v [%{h[content-type]}]",
                 "--timeout", "3000");
         assertEquals(0, result.exitCode());
 
