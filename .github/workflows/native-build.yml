@@ -79,7 +79,7 @@ jobs:
       # Upload test results on failure
       - name: Upload test results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-results-${{ matrix.os }}-${{ matrix.arch }}
           path: |
@@ -90,7 +90,7 @@ jobs:
 
       # Upload native executable for verification
       - name: Upload native executable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: native-${{ matrix.os }}-${{ matrix.arch }}
           path: ${{ matrix.executable-pattern }}
