@@ -25,6 +25,7 @@ import picocli.CommandLine.IVersionProvider;
                 ProduceCommand.class,
                 ConsumeCommand.class,
                 CommandLine.HelpCommand.class,
+                picocli.AutoComplete.GenerateCompletion.class
         }
 )
 public class Clik {
