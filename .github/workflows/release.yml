@@ -114,7 +114,7 @@ jobs:
 
       # Upload artifacts for the release job
       - name: Upload executable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact-name }}
           path: |
