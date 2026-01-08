@@ -7,6 +7,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.Scanner;
 import java.util.Set;
 import java.util.Stack;
 import java.util.concurrent.Callable;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -232,7 +234,7 @@ public class AlterGroupCommand implements Callable<Integer> {
             return 1;
         }
 
-        if (processByDuration(admin, offsetsToAlter, groupPartitions)) {
+        if (processByDuration(admin, offsetsToAlter, groupPartitions, currentOffsets)) {
             return 1;
         }
 
@@ -378,16 +380,38 @@ public class AlterGroupCommand implements Callable<Integer> {
      * Process --by-duration
      * @return true when the duration format cannot be parsed, otherwise false.
      */
-    private boolean processByDuration(Admin admin, Map<TopicPartition, OffsetAndMetadata> offsetsToAlter, Set<TopicPartition> groupPartitions) {
+    private boolean processByDuration(Admin admin, Map<TopicPartition, OffsetAndMetadata> offsetsToAlter, Set<TopicPartition> groupPartitions, Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
+        var latestOffsets = getLatestOffsets(admin, groupPartitions);
+        var currentTimestamps = getTimestampsForOffsets(currentOffsets, latestOffsets);
+
         for (String spec : byDuration) {
             var parsed = parseDatetimeSpec(spec, groupPartitions);
             String durationStr = parsed.value();
             try {
                 Duration duration = Duration.parse(durationStr);
-                long timestamp = Instant.now().plus(duration).toEpochMilli();
-                Map<TopicPartition, Long> timestampOffsets = getOffsetsForTimestamp(admin, parsed.partitions(), timestamp);
+                var specs = parsed.partitions()
+                        .stream()
+                        .collect(Collectors.toMap(Function.identity(), p -> OffsetSpec.forTimestamp(
+                                currentTimestamps.get(p).plus(duration).toEpochMilli()
+                        )));
+                Map<TopicPartition, Long> timestampOffsets = getOffsets(admin, specs);
+
                 for (Map.Entry<TopicPartition, Long> entry : timestampOffsets.entrySet()) {
-                    offsetsToAlter.put(entry.getKey(), new OffsetAndMetadata(entry.getValue()));
+                    var partition = entry.getKey();
+                    var newOffset = entry.getValue();
+                    if (newOffset >= 0) {
+                        offsetsToAlter.put(partition, new OffsetAndMetadata(newOffset));
+                    } else {
+                        err().printf("""
+                                Warning: no offset found when adjusting timestamp %s \
+                                (for offset %d) by %s in partition %s. No change made to \
+                                the committed offset for this partition.
+                                """,
+                                currentTimestamps.get(partition),
+                                currentOffsets.get(partition).offset(),
+                                duration,
+                                partition);
+                    }
                 }
             } catch (DateTimeParseException e) {
                 err().println("Error: Invalid ISO-8601 duration format: " + durationStr);
@@ -492,11 +516,11 @@ public class AlterGroupCommand implements Callable<Integer> {
     }
 
     private Map<TopicPartition, Long> getOffsets(Admin admin, Set<TopicPartition> partitions, OffsetSpec spec) {
-        Map<TopicPartition, OffsetSpec> offsetSpecs = new HashMap<>();
-        for (TopicPartition tp : partitions) {
-            offsetSpecs.put(tp, spec);
-        }
+        var offsetSpecs = partitions.stream().collect(Collectors.toMap(Function.identity(), p -> spec));
+        return getOffsets(admin, offsetSpecs);
+    }
 
+    private Map<TopicPartition, Long> getOffsets(Admin admin, Map<TopicPartition, OffsetSpec> offsetSpecs) {
         ListOffsetsResult result = admin.listOffsets(offsetSpecs);
         Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> offsets = result.all()
                 .toCompletionStage()
@@ -508,6 +532,67 @@ public class AlterGroupCommand implements Callable<Integer> {
             offsetMap.put(entry.getKey(), entry.getValue().offset());
         }
         return offsetMap;
+    }
+
+    private Map<TopicPartition, Instant> getTimestampsForOffsets(
+            Map<TopicPartition, OffsetAndMetadata> currentOffsets,
+            Map<TopicPartition, Long> latestOffsets) {
+
+        Map<TopicPartition, Instant> timestamps = HashMap.newHashMap(currentOffsets.size());
+        Set<TopicPartition> assignments = new HashSet<>(currentOffsets.keySet());
+        final Instant now = Instant.now();
+
+        for (var offset : currentOffsets.entrySet()) {
+            var partition = offset.getKey();
+
+            if (offset.getValue().offset() >= latestOffsets.get(partition)) {
+                timestamps.put(partition, now);
+                assignments.remove(partition);
+            }
+        }
+
+        if (assignments.isEmpty()) {
+            return timestamps;
+        }
+
+        try (var consumer = clientFactory.createConsumer(Collections.emptyMap(), null)) {
+            Instant deadline = Instant.now().plusSeconds(10);
+
+            while (!assignments.isEmpty() && Instant.now().isBefore(deadline)) {
+                consumer.assign(assignments);
+
+                for (var partition : assignments) {
+                    consumer.seek(partition, currentOffsets.get(partition).offset());
+                }
+
+                var timeout = Duration.between(Instant.now(), deadline);
+                var result = consumer.poll(timeout.isNegative() ? Duration.ZERO : timeout);
+                List<TopicPartition> missing = new ArrayList<>();
+
+                assignments.forEach(topicPartition -> {
+                    var records = result.records(topicPartition);
+
+                    if (records.isEmpty()) {
+                        missing.add(topicPartition);
+                    } else {
+                        var rec = records.get(0);
+                        Instant ts = Instant.ofEpochMilli(rec.timestamp());
+                        timestamps.put(topicPartition, ts);
+                    }
+                });
+
+                assignments.retainAll(missing);
+            }
+        }
+
+        // Check if all partitions were retrieved
+        if (!assignments.isEmpty()) {
+            throw new IllegalStateException(
+                "Failed to retrieve timestamps for partitions: " + assignments +
+                ". Timeout after 10 seconds.");
+        }
+
+        return timestamps;
     }
 
     private void printResults(String groupId, int alteredCount, int deletedCount) {

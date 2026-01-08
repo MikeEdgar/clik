@@ -429,6 +429,8 @@ Altered offsets for 3 partition(s) and deleted offsets for 2 partition(s) in gro
 - **Strategies can't be mixed on same partition**: Don't use multiple strategies on the same partition
 - **Timestamp strategy**: Uses `--to-datetime` for absolute timestamps, `--by-duration` for relative
 - **Negative shifts**: `--shift-by` accepts negative values to shift backwards
+- **Caught-up consumers with --by-duration**: When a consumer's committed offset equals or exceeds the latest offset in a partition (consumer is caught up), the current date and time is used as the reference point for duration shifts. This allows shifting backward to reprocess recent messages even when the consumer has processed all available data.
+- **Out-of-range duration shifts**: If a duration shift would move to a timestamp before the earliest message or after the latest message, a warning is displayed and no change is made to that partition's offset.
 
 **Error Conditions:**
 
