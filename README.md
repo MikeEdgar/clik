@@ -65,6 +65,29 @@ clik group alter my-group --by-duration PT-1H --yes
 clik group delete old-group --yes
 ```
 
+### 🔒 [ACL Management](specs/ACL.md)
+Manage Kafka Access Control Lists (ACLs) to secure your cluster resources. Grant or deny access to topics, consumer groups, and cluster operations.
+
+```bash
+# Grant read access to a user on a topic
+clik acl create --topic my-topic --operation READ --principal User:alice
+
+# Grant write access with a prefixed pattern
+clik acl create --topic orders --pattern-type PREFIXED --operation WRITE --principal User:producer
+
+# List all ACLs
+clik acl list
+
+# List ACLs for a specific resource
+clik acl list --topic my-topic
+
+# Delete ACL with confirmation
+clik acl delete --topic my-topic --principal User:alice --operation READ
+
+# Delete all ACLs for a principal
+clik acl delete --principal User:olduser --yes
+```
+
 ### 📨 [Message Production](specs/PRODUCE_CONSUME.md)
 Produce messages from files, stdin, or interactively with support for keys, headers, and timestamps.
 
@@ -220,6 +243,7 @@ Most commands support multiple output formats via the `-o, --output` flag:
 - [Context Management](specs/CONTEXT.md) - Managing cluster configurations
 - [Topic Management](specs/TOPIC.md) - CRUD operations for topics
 - [Consumer Group Management](specs/GROUP.md) - Monitoring and managing consumer groups
+- [ACL Management](specs/ACL.md) - Managing Access Control Lists for security
 - [Message Production & Consumption](specs/PRODUCE_CONSUME.md) - Producing and consuming messages
 
 ### Development

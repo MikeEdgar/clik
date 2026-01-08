@@ -516,7 +516,7 @@ public class AlterGroupCommand implements Callable<Integer> {
     }
 
     private Map<TopicPartition, Long> getOffsets(Admin admin, Set<TopicPartition> partitions, OffsetSpec spec) {
-        var offsetSpecs = partitions.stream().collect(Collectors.toMap(Function.identity(), p -> spec));
+        var offsetSpecs = partitions.stream().collect(Collectors.toMap(Function.identity(), _ -> spec));
         return getOffsets(admin, offsetSpecs);
     }
 
