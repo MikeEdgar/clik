@@ -23,10 +23,10 @@ public class Operation {
                 converter = Candidates.class,
                 completionCandidates = Candidates.class
         )
-        String value;
+        String operation;
 
         public String value() {
-            return value;
+            return operation;
         }
     }
 
@@ -44,10 +44,10 @@ public class Operation {
                 converter = Candidates.class,
                 completionCandidates = Candidates.class
         )
-        String value;
+        String operation;
 
         public String value() {
-            return value;
+            return operation;
         }
     }
 }

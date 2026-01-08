@@ -22,10 +22,10 @@ public class PatternType {
                 converter = Candidates.class,
                 completionCandidates = Candidates.class
         )
-        String value;
+        String patternType;
 
         public String value() {
-            return value;
+            return patternType;
         }
     }
 
@@ -47,10 +47,10 @@ public class PatternType {
                 converter = Candidates.class,
                 completionCandidates = Candidates.class
         )
-        String value;
+        String patternType;
 
         public String value() {
-            return value;
+            return patternType;
         }
     }
 }

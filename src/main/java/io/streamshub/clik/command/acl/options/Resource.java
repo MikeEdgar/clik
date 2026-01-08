@@ -69,29 +69,5 @@ public record Resource(String type, String name) {
                 return Resource.UNSPECIFIED;
             }
         }
-
-        public String topic() {
-            return topic;
-        }
-
-        public String group() {
-            return group;
-        }
-
-        public String cluster() {
-            return cluster;
-        }
-
-        public String transactionalId() {
-            return transactionalId;
-        }
-
-        public String delegationToken() {
-            return delegationToken;
-        }
-
-        public String userResource() {
-            return userResource;
-        }
     }
 }

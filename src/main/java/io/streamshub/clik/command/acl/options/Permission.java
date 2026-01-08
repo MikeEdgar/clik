@@ -23,10 +23,10 @@ public class Permission {
                 converter = Candidates.class,
                 completionCandidates = Candidates.class
         )
-        String value;
+        String permission;
 
         public String value() {
-            return value;
+            return permission;
         }
     }
 
@@ -47,10 +47,10 @@ public class Permission {
                 converter = Candidates.class,
                 completionCandidates = Candidates.class
         )
-        String value;
+        String permission;
 
         public String value() {
-            return value;
+            return permission;
         }
     }
 }
