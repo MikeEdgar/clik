@@ -1,6 +1,7 @@
 package io.streamshub.clik.command.group;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -16,8 +17,11 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.jboss.logging.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import io.quarkus.test.junit.TestProfile;
 import io.quarkus.test.junit.main.LaunchResult;
@@ -403,7 +407,7 @@ class GroupCommandTest extends ClikMainTestBase {
 
         // Alter specific partition to offset 10
         LaunchResult result = launcher.launch("group", "alter", "alter-offset-group",
-                "--to-offset", "10:alter-offset-topic:0", "--yes");
+                "--to-offset", "10=alter-offset-topic:0", "--yes");
 
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Altered offsets"));
@@ -432,8 +436,8 @@ class GroupCommandTest extends ClikMainTestBase {
 
         // Shift partition 0 forward by 5, partition 2 back by 3, leave partition 1 unchanged
         LaunchResult result = launcher.launch("group", "alter", "shift-group",
-                "--shift-by", "5:shift-topic:0",
-                "--shift-by", "-3:shift-topic:2",
+                "--shift-by", "5=shift-topic:0",
+                "--shift-by", "-3=shift-topic:2",
                 "--yes");
 
         assertEquals(0, result.exitCode());
@@ -455,6 +459,99 @@ class GroupCommandTest extends ClikMainTestBase {
         long before2 = offsetsBefore.get(partition2).offset();
         long after2 = offsetsAfter.get(partition2).offset();
         assertEquals(before2 - 3, after2, "Partition 2 should be shifted back by 3");
+    }
+
+    @Test
+    void testAlterGroupToDatetime() throws Exception {
+        // Create topic
+        topicService.createTopic(admin(), "datetime-topic", 1, 1, Collections.emptyMap());
+
+        // Produce messages with specific timestamps
+        var baseTimestamp = Instant.now().minus(Duration.ofHours(1)); // 1 hour ago
+        produceMessagesWithTimestamps("datetime-topic", 50, baseTimestamp.toEpochMilli(), 60000); // 1 message per minute
+
+        // Create consumer group
+        var consumer = createConsumerGroup("datetime-group", "datetime-topic").join();
+        consumer.commitSync();
+        // Close so that the group may be altered
+        close(consumer);
+
+        // Reset to timestamp 30 minutes ago (should be around message 30)
+        long targetTimestamp = baseTimestamp.plus(Duration.ofMinutes(30)).toEpochMilli(); // 30 minutes after base
+        String isoTimestamp = Instant.ofEpochMilli(targetTimestamp).toString();
+
+        LaunchResult result = launcher.launch("group", "alter", "datetime-group",
+                "--to-datetime", isoTimestamp, "--yes");
+
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("Altered offsets"));
+
+        // Verify offsets were set to approximately the target timestamp
+        var offsets = groupService.getGroupOffsetMap(admin(), "datetime-group");
+        var offsetValue = offsets.values().iterator().next().offset();
+        assertEquals(30, offsetValue);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "30, PT30M, 60",
+        "90, PT-1800S, 60",
+        "119, PT-1H, 59", // 119 - 60 = 59
+        "120, PT-1H, 61", // 120 is "next" offset, so the calculation uses "now" and "now" - 60 > 60, so 61 is next
+    })
+    void testAlterGroupByDuration(int startOffset, String duration, int expectedOffset) throws Exception {
+        // Create topic
+        topicService.createTopic(admin(), "duration-topic", 1, 1, Collections.emptyMap());
+
+        // Produce messages with timestamps spread over 2 hours
+        var baseTimestamp = Instant.now().minus(Duration.ofHours(2)); // 2 hours ago
+        produceMessagesWithTimestamps("duration-topic", 120, baseTimestamp.toEpochMilli(), 60000); // 1 message per minute
+
+        var consumer = createConsumerGroup("duration-group", "duration-topic").join();
+        for (var partition : consumer.assignment()) {
+            consumer.seek(partition, startOffset);
+        }
+        consumer.commitSync();
+        close(consumer);
+
+        LaunchResult result = launcher.launch("group", "alter", "duration-group",
+                "--by-duration", duration, "--yes");
+
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getOutput().contains("Altered offsets"));
+
+        // Verify offset was shifted
+        var offsets = groupService.getGroupOffsetMap(admin(), "duration-group");
+        var offsetValue = offsets.values().iterator().next().offset();
+        assertEquals(expectedOffset, offsetValue);
+    }
+
+    @Test
+    void testAlterGroupByDurationOffsetNotFound() throws Exception {
+        // Create topic
+        topicService.createTopic(admin(), "duration-topic", 1, 1, Collections.emptyMap());
+
+        // Produce messages with timestamps spread over 2 hours
+        var baseTimestamp = Instant.now().minus(Duration.ofHours(2)); // 2 hours ago
+        produceMessagesWithTimestamps("duration-topic", 120, baseTimestamp.toEpochMilli(), 60000); // 1 message per minute
+
+        var consumer = createConsumerGroup("duration-group", "duration-topic").join();
+        for (var partition : consumer.assignment()) {
+            consumer.seek(partition, 120);
+        }
+        consumer.commitSync();
+        close(consumer);
+
+        LaunchResult result = launcher.launch("group", "alter", "duration-group",
+                "--by-duration", "PT1H", "--yes");
+
+        assertEquals(0, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("Warning: no offset found when adjusting timestamp"));
+
+        // Verify offset was unchanged
+        var offsets = groupService.getGroupOffsetMap(admin(), "duration-group");
+        var offsetValue = offsets.values().iterator().next().offset();
+        assertEquals(120, offsetValue);
     }
 
     @Test
@@ -604,6 +701,31 @@ class GroupCommandTest extends ClikMainTestBase {
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
             for (int i = 0; i < count; i++) {
                 producer.send(new ProducerRecord<>(topic, "key-" + i, "value-" + i)).get();
+            }
+        }
+    }
+
+    private void produceMessagesWithTimestamps(String topic, int count, long baseTimestamp, long incrementMs) throws Exception {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
+            for (int i = 0; i < count; i++) {
+                long timestamp = baseTimestamp + (i * incrementMs);
+                ProducerRecord<String, String> rec = new ProducerRecord<>(
+                    topic,
+                    null, // partition
+                    timestamp,
+                    "key-" + i,
+                    "value-" + i
+                );
+                var recMeta = producer.send(rec).get();
+                Logger.getLogger(getClass()).debugf("partition:%d offset:%d ts:%s",
+                        recMeta.partition(),
+                        recMeta.offset(),
+                        Instant.ofEpochMilli(recMeta.timestamp()));
             }
         }
     }

@@ -817,7 +817,7 @@ class ProduceCommandTest extends ClikMainTestBase {
 
         try {
             LaunchResult result = launcher.launch("produce", "format-header-topic", "--file", tempFile.toString(),
-                    "--input", "%k %v %{h.content-type}");
+                    "--input", "%k %v %{h[content-type]}");
             assertEquals(0, result.exitCode());
             assertTrue(result.getOutput().contains("1 messages sent successfully"));
         } finally {
@@ -932,7 +932,7 @@ class ProduceCommandTest extends ClikMainTestBase {
 
         try {
             LaunchResult result = launcher.launch("produce", "format-mixed-topic", "--file", tempFile.toString(),
-                    "--input", "%{hex:k} %{base64:v} %{base64:h.sig}");
+                    "--input", "%{hex:k} %{base64:v} %{base64:h[sig]}");
             assertEquals(0, result.exitCode());
             assertTrue(result.getOutput().contains("1 messages sent successfully"));
         } finally {
@@ -1134,7 +1134,7 @@ class ProduceCommandTest extends ClikMainTestBase {
 
         try {
             LaunchResult result = launcher.launch("produce", "format-multi-header-topic", "--file", tempFile.toString(),
-                    "--input", "%k %v %{h.type} %{h.version}");
+                    "--input", "%k %v %{h[type]} %{h[version]}");
             assertEquals(0, result.exitCode());
             assertTrue(result.getOutput().contains("1 messages sent successfully"));
         } finally {
@@ -1165,7 +1165,7 @@ class ProduceCommandTest extends ClikMainTestBase {
 
         try {
             LaunchResult result = launcher.launch("produce", "format-all-fields-topic", "--file", tempFile.toString(),
-                    "--input", "%k %v %{h.type} %T %p");
+                    "--input", "%k %v %{h[type]} %T %p");
             assertEquals(0, result.exitCode());
             assertTrue(result.getOutput().contains("1 messages sent successfully"));
         } finally {
@@ -1199,7 +1199,7 @@ class ProduceCommandTest extends ClikMainTestBase {
         try {
             LaunchResult result = launcher.launch("produce", "format-dup-headers-topic",
                 "--file", tempFile.toString(),
-                "--input", "%k %v %{h.tag} %{h.tag} %{h.tag}");
+                "--input", "%k %v %{h[tag]} %{h[tag]} %{h[tag]}");
             assertEquals(0, result.exitCode());
             assertTrue(result.getOutput().contains("1 messages sent successfully"));
         } finally {

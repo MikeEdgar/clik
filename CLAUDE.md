@@ -194,7 +194,7 @@ Clik implements message production and consumption commands for Kafka topics. Se
 - Format string support for structured input parsing:
   - `--input <format>` parses each line according to format string
   - Simple placeholders: `%k` (key), `%v` (value), `%h` (header), `%T` (timestamp), `%p` (partition), `%%` (literal %)
-  - Parameterized placeholders: `%{base64:k}`, `%{hex:v}`, `%{h.name}`
+  - Parameterized placeholders: `%{base64:k}`, `%{hex:v}`, `%{h[name]}`
   - Unicode escapes: `\uXXXX` for special delimiters
   - Format strings cannot be used with global metadata options
 - String serialization for simplicity (MVP scope)
@@ -252,10 +252,10 @@ echo "base64:SGVsbG8gV29ybGQ=" | clik produce my-topic --key "hex:6b6579"
 echo -e "key1 value1\nkey2 value2" | clik produce my-topic --input "%k %v"
 
 # Produce with format string (tab-delimited with headers)
-cat data.tsv | clik produce my-topic --input "%k\u0009%v\u0009%{h.type}"
+cat data.tsv | clik produce my-topic --input "%k\u0009%v\u0009%{h[type]}"
 
 # Produce with format string (all fields)
-cat data.txt | clik produce my-topic --input "%{hex:k} %{base64:v} %{h.sig} %T %p"
+cat data.txt | clik produce my-topic --input "%{hex:k} %{base64:v} %{h[sig]} %T %p"
 
 # Consume from beginning (one-time read)
 clik consume my-topic --from-beginning
@@ -520,7 +520,7 @@ See `specs/PRODUCE_CONSUME.md` for detailed specification.
 - Designed and implemented format string parser
 - Added `--input` option for structured input parsing
 - Support for simple placeholders (`%k`, `%v`, `%h`, `%T`, `%p`, `%%`)
-- Support for parameterized placeholders (`%{base64:k}`, `%{hex:v}`, `%{h.name}`)
+- Support for parameterized placeholders (`%{base64:k}`, `%{hex:v}`, `%{h[name]}`)
 - Support for unicode escapes (`\uXXXX`)
 - Added format string validation and error handling
 - Added FormatParser unit tests (35 tests)
