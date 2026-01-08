@@ -38,6 +38,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -74,7 +75,7 @@ abstract class CommonTestBase {
                     .forEach(path -> {
                         try {
                             Files.delete(path);
-                        } catch (IOException e) {
+                        } catch (IOException _) {
                             // Ignore
                         }
                     });
@@ -94,7 +95,7 @@ abstract class CommonTestBase {
                     .entrySet()
                     .stream()
                     .map(e -> {
-                        return e.getValue().toCompletionStage().handle((nothing, error) -> {
+                        return e.getValue().toCompletionStage().handle((_, error) -> {
                             if (error == null || error instanceof UnknownTopicOrPartitionException) {
                                 return (Void) null;
                             }
@@ -107,7 +108,7 @@ abstract class CommonTestBase {
 
                 topicNames = admin.listTopics().names().toCompletionStage().toCompletableFuture().join();
             }
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         } catch (Exception e) {
             fail(e);
@@ -162,7 +163,7 @@ abstract class CommonTestBase {
             .entrySet()
             .stream()
             .map(e -> {
-                return e.getValue().toCompletionStage().handle((nothing, error) -> {
+                return e.getValue().toCompletionStage().handle((_, error) -> {
                     if (error == null ||
                             error instanceof GroupIdNotFoundException ||
                             error instanceof GroupNotEmptyException) {
@@ -186,7 +187,20 @@ abstract class CommonTestBase {
                 deleteConsumerGroups(allGroups);
                 allGroups = allGroups(admin);
             }
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
+            Thread.currentThread().interrupt();
+        } catch (Exception e) {
+            fail(e);
+        }
+    }
+
+    public void deleteAcls() {
+        try {
+            while (!admin.describeAcls(AclBindingFilter.ANY).values().get().isEmpty()) {
+                var result = admin.deleteAcls(Collections.singleton(AclBindingFilter.ANY)).all().get();
+                LOGGER.debugf("Deleted ACLs: %s", result);
+            }
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
         } catch (Exception e) {
             fail(e);
@@ -199,7 +213,7 @@ abstract class CommonTestBase {
             var removal = new MemberToRemove(consumer.groupMetadata().groupInstanceId().orElseThrow());
             consumer.close(CloseOptions.timeout(Duration.ofSeconds(5)));
             admin.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions(List.of(removal)));
-        } catch (Exception e) {
+        } catch (Exception _) {
             // Ignore cleanup errors
         }
     }
@@ -224,14 +238,12 @@ abstract class CommonTestBase {
 
         consumers.clear();
 
-        if (admin != null) {
-            try {
-                deleteConsumerGroups();
-                deleteTopics();
-            } finally {
-                admin.close();
-                admin = null;
-            }
+        try (var _ = admin()) {
+            deleteAcls();
+            deleteConsumerGroups();
+            deleteTopics();
+        } finally {
+            admin = null;
         }
 
         // Clean up config directory always
@@ -341,7 +353,7 @@ abstract class CommonTestBase {
                     yield false;
                 }
             };
-        } catch (CompletionException e) {
+        } catch (CompletionException _) {
             return false;
         }
     }

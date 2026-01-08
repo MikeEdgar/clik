@@ -68,17 +68,18 @@ The codebase follows a standard Maven project layout:
   - `command/context/` - Context management commands
   - `command/topic/` - Topic management commands
   - `command/group/` - Consumer group management commands
+  - `command/acl/` - ACL management commands
   - `command/produce/` - Message producer command
   - `command/consume/` - Message consumer command
   - `config/` - Configuration services (ContextService, ConfigurationLoader, ContextValidator)
-  - `kafka/` - Kafka services (KafkaClientFactory, TopicService, GroupService)
-  - `kafka/model/` - Data models (TopicInfo, GroupInfo, ConsumedMessage, etc.)
+  - `kafka/` - Kafka services (KafkaClientFactory, TopicService, GroupService, AclService)
+  - `kafka/model/` - Data models (TopicInfo, GroupInfo, AclInfo, ConsumedMessage, etc.)
   - `support/` - Utility classes (Encoding, FormatParser, format tokens, MessageComponents)
   - `version/` - Application version provider
 - `src/main/resources/` - Configuration files and resources
 - `src/test/java/` - Test code
 - `src/test/resources/` - Test fixtures and resources
-- `specs/` - Feature specifications (CONTEXT.md, TOPIC.md, GROUP.md, PRODUCE_CONSUME.md)
+- `specs/` - Feature specifications (CONTEXT.md, TOPIC.md, GROUP.md, ACL.md, PRODUCE_CONSUME.md)
 
 ### Main Entry Point
 
@@ -480,6 +481,80 @@ See `specs/GROUP.md` for detailed specification.
 - Group rebalancing controls
 - Consumer group export/import
 
+### ACL Management (✅ COMPLETED)
+
+See `specs/ACL.md` for detailed specification.
+
+**Implemented Commands:**
+- `clik acl create` - Create ACL bindings with resource-specific shortcuts
+- `clik acl list` - List ACLs with flexible filtering and multiple output formats
+- `clik acl delete` - Delete ACLs with confirmation prompts
+
+**Key Features:**
+- Resource-specific shortcuts (--topic, --group, --cluster, --transactional-id, --delegation-token, --user-resource)
+- All pattern types supported (LITERAL, PREFIXED, MATCH, ANY)
+- Permission types (ALLOW, DENY)
+- All ACL operations (READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE, etc.)
+- Multiple output formats (table, yaml, json)
+- Flexible filtering for list and delete operations
+- Safety confirmation prompts with preview for delete operations
+- Host-based access control
+- Integration with context management
+
+**Key Services:**
+- `AclService` - CRUD operations for ACLs using Kafka Admin API
+- `AclInfo` - Data model with @RegisterForReflection for native builds
+
+**Option Mixins:**
+- `Resource.Options` - Mutually exclusive resource type selection (--topic, --group, etc.)
+- `Operation.ValueOption` / `FilterOption` - ACL operation options for create vs list/delete
+- `Permission.ValueOption` / `FilterOption` - Permission type options
+- `PatternType.ValueOption` / `FilterOption` - Pattern type options
+
+**Common Use Cases:**
+```bash
+# Grant read access to a user on a topic
+clik acl create --topic my-topic --operation READ --principal User:alice
+
+# Grant write access with prefixed pattern
+clik acl create --topic orders --pattern-type PREFIXED --operation WRITE --principal User:producer
+
+# Deny write access to all users
+clik acl create --topic sensitive --operation WRITE --principal User:* --permission DENY
+
+# List all ACLs
+clik acl list
+
+# List ACLs for a specific resource
+clik acl list --topic my-topic
+
+# List ACLs for a principal
+clik acl list --principal User:alice
+
+# Delete ACL with confirmation
+clik acl delete --topic my-topic --principal User:alice --operation READ
+
+# Delete all ACLs for a principal (auto-confirm)
+clik acl delete --principal User:olduser --yes
+```
+
+**Phase 1: Core ACL Operations (✅ COMPLETED)**
+- All three commands implemented: create, list, delete
+- Support for all Kafka resource types
+- Support for all pattern types and operations
+- Flexible filtering for list and delete
+- Multiple output formats (table, yaml, json)
+- Confirmation prompts with preview for delete
+- Integration with context management
+- Comprehensive test coverage (31 integration tests in AclCommandTest, AclCommandIT)
+- Option mixins for code reusability
+
+**Future Enhancements:**
+- ACL templates or presets for common scenarios
+- Bulk ACL operations from YAML/JSON file
+- ACL migration between clusters
+- ACL diff/compare between environments
+
 ### Producer and Consumer (✅ COMPLETED)
 
 See `specs/PRODUCE_CONSUME.md` for detailed specification.
@@ -536,12 +611,16 @@ See `specs/PRODUCE_CONSUME.md` for detailed specification.
 
 ### Overall Test Coverage
 
-**Total Tests: 286 passing (1 skipped)**
+**Total Tests: 317 passing (1 skipped)**
 - Unit tests: 121 tests (ContextService, ConfigurationLoader, ContextValidator, TopicService, GroupService, KafkaClientFactory, Encoding, FormatParser)
   - 60 existing service tests
   - 26 Encoding tests
   - 35 FormatParser tests
-- Integration tests: 165 tests (29 ContextCommandTest + 27 TopicCommandTest + 28 GroupCommandTest + 54 ProduceCommandTest + 14 ConsumeCommandTest + 13 ConsumeCommandIT + native IT variants)
-  - ProduceCommandTest expanded: 54 passing tests (1 skipped for stdin handling)
+- Integration tests: 196 tests (29 ContextCommandTest + 27 TopicCommandTest + 28 GroupCommandTest + 31 AclCommandTest + 54 ProduceCommandTest + 14 ConsumeCommandTest + 13 ConsumeCommandIT + native IT variants)
+  - ContextCommandTest: 29 tests
+  - TopicCommandTest: 27 tests
+  - GroupCommandTest: 28 tests
+  - AclCommandTest: 31 tests
+  - ProduceCommandTest: 54 passing tests (1 skipped for stdin handling)
   - ConsumeCommandTest: 14 tests
 - All tests passing in both JVM and native modes

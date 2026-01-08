@@ -1,5 +1,6 @@
 package io.streamshub.clik;
 
+import io.streamshub.clik.command.acl.AclCommand;
 import io.streamshub.clik.command.consume.ConsumeCommand;
 import io.streamshub.clik.command.context.ContextCommand;
 import io.streamshub.clik.command.group.GroupCommand;
@@ -19,6 +20,7 @@ import picocli.CommandLine.IVersionProvider;
         versionProvider = Clik.Version.class,
         description = "Command line interface for Apache Kafka",
         subcommands = {
+                AclCommand.class,
                 ContextCommand.class,
                 TopicCommand.class,
                 GroupCommand.class,
