@@ -108,7 +108,7 @@ clik consume my-topic --from-beginning -o json > messages.json
 
 ### Releases
 
-Download the latest release for your OS from the [here](releases).
+Download the latest release for your OS from the [here](https://github.com/MikeEdgar/clik/releases).
 
 ### Build and Run
 
