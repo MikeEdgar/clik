@@ -233,7 +233,7 @@ See [CLAUDE.md](CLAUDE.md) for build instructions, development commands, and arc
 
 ## License
 
-[License information to be added]
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ## Contributing
 
