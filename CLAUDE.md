@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Clik is a command-line interface (CLI) for Apache Kafka built with Quarkus and Picocli. The project uses Quarkus 3.30.4 with Java 21 and Kafka clients 4.1.1.
+Clik is a command-line interface (CLI) for Apache Kafka built with Quarkus and Picocli. The project uses Quarkus, Java, and Kafka clients.
 
 ## Build and Development Commands
 
@@ -47,17 +47,17 @@ Clik is a command-line interface (CLI) for Apache Kafka built with Quarkus and P
 java -jar target/quarkus-app/quarkus-run.jar
 
 # Run native executable (after native build)
-./target/clik-0.1.0-SNAPSHOT-runner
+./target/clik-*-runner
 ```
 
 ## Architecture
 
 ### Technology Stack
 
-- **Framework**: Quarkus 3.30.4 (Jakarta EE with CDI dependency injection)
+- **Framework**: Quarkus (Jakarta EE with CDI dependency injection)
 - **CLI Framework**: Picocli (integrated via quarkus-picocli)
-- **Kafka Client**: Apache Kafka 4.1.1
-- **Data Formats**: JSON-P (Jakarta JSON Processing), SnakeYAML, yaml-json converter
+- **Kafka Client**: Apache Kafka
+- **Data Formats**: JSON, YAML (Jackson / SnakeYAML)
 - **Utilities**: ascii-table for tabular output
 - **Build Tool**: Maven with wrapper
 
