@@ -1,17 +1,19 @@
 package io.streamshub.clik.command.context;
 
-import io.streamshub.clik.config.ContextService;
-import jakarta.inject.Inject;
-import picocli.CommandLine;
-
 import java.util.Scanner;
 import java.util.concurrent.Callable;
+
+import jakarta.inject.Inject;
+
+import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.config.ContextService;
+import picocli.CommandLine;
 
 @CommandLine.Command(
         name = "delete",
         description = "Delete a context"
 )
-public class DeleteContextCommand implements Callable<Integer> {
+public class DeleteContextCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0",
@@ -31,32 +33,32 @@ public class DeleteContextCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         if (!contextService.contextExists(name)) {
-            System.err.println("Error: Context \"" + name + "\" does not exist.");
-            System.err.println();
-            System.err.println("Run 'clik context list' to see available contexts.");
+            err().println("Error: Context \"" + name + "\" does not exist.");
+            err().println();
+            err().println("Run 'clik context list' to see available contexts.");
             return 1;
         }
 
         // Prompt for confirmation unless --yes
         if (!autoConfirm) {
-            System.out.print("Delete context \"" + name + "\"? This cannot be undone. [y/N]: ");
+            out().print("Delete context \"" + name + "\"? This cannot be undone. [y/N]: ");
             String response;
             try (Scanner scanner = new Scanner(System.in)) {
                 response = scanner.nextLine().trim().toLowerCase();
             }
 
             if (!response.equals("y") && !response.equals("yes")) {
-                System.out.println("Delete cancelled.");
+                out().println("Delete cancelled.");
                 return 0;
             }
         }
 
         try {
             contextService.deleteContext(name);
-            System.out.println("Context \"" + name + "\" deleted.");
+            out().println("Context \"" + name + "\" deleted.");
             return 0;
         } catch (Exception e) {
-            System.err.println("Error: Failed to delete context: " + e.getMessage());
+            err().println("Error: Failed to delete context: " + e.getMessage());
             return 1;
         }
     }

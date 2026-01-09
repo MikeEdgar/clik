@@ -1,5 +1,14 @@
 package io.streamshub.clik.command.topic;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+
+import jakarta.inject.Inject;
+
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
@@ -7,24 +16,19 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import com.github.freva.asciitable.AsciiTable;
 import com.github.freva.asciitable.Column;
 import com.github.freva.asciitable.HorizontalAlign;
+
+import io.streamshub.clik.command.BaseCommand;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.TopicService;
 import io.streamshub.clik.kafka.model.PartitionInfo;
 import io.streamshub.clik.kafka.model.TopicInfo;
-import jakarta.inject.Inject;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import picocli.CommandLine;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.Callable;
 
 @CommandLine.Command(
         name = "describe",
         description = "Display detailed information about a topic"
 )
-public class DescribeTopicCommand implements Callable<Integer> {
+public class DescribeTopicCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0",
@@ -51,9 +55,9 @@ public class DescribeTopicCommand implements Callable<Integer> {
             TopicInfo topic = topicService.describeTopic(admin, name);
 
             if (topic == null) {
-                System.err.println("Error: Topic \"" + name + "\" not found.");
-                System.err.println();
-                System.err.println("Run 'clik topic list' to see available topics.");
+                err().println("Error: Topic \"" + name + "\" not found.");
+                err().println();
+                err().println("Run 'clik topic list' to see available topics.");
                 return 1;
             }
 
@@ -68,46 +72,46 @@ public class DescribeTopicCommand implements Callable<Integer> {
                     printJson(topic);
                     break;
                 default:
-                    System.err.println("Error: Unknown output format: " + outputFormat);
-                    System.err.println("Valid formats: table, yaml, json");
+                    err().println("Error: Unknown output format: " + outputFormat);
+                    err().println("Valid formats: table, yaml, json");
                     return 1;
             }
 
             return 0;
         } catch (IllegalStateException e) {
-            System.err.println("Error: " + e.getMessage());
+            err().println("Error: " + e.getMessage());
             return 1;
         } catch (Exception e) {
             // Check if it's an unknown topic exception
             Throwable cause = e.getCause();
             if (cause instanceof UnknownTopicOrPartitionException) {
-                System.err.println("Error: Topic \"" + name + "\" not found.");
-                System.err.println();
-                System.err.println("Run 'clik topic list' to see available topics.");
+                err().println("Error: Topic \"" + name + "\" not found.");
+                err().println();
+                err().println("Run 'clik topic list' to see available topics.");
                 return 1;
             }
-            System.err.println("Error: Failed to describe topic: " + e.getMessage());
+            err().println("Error: Failed to describe topic: " + e.getMessage());
             return 1;
         }
     }
 
     private void printTable(TopicInfo topic) {
-        System.out.println("Topic: " + topic.name());
-        System.out.println("Partitions: " + topic.partitions());
-        System.out.println("Replication Factor: " + topic.replicationFactor());
-        System.out.println("Internal: " + (topic.internal() ? "yes" : "no"));
-        System.out.println();
+        out().println("Topic: " + topic.name());
+        out().println("Partitions: " + topic.partitions());
+        out().println("Replication Factor: " + topic.replicationFactor());
+        out().println("Internal: " + (topic.internal() ? "yes" : "no"));
+        out().println();
 
         if (!topic.config().isEmpty()) {
-            System.out.println("Configuration:");
+            out().println("Configuration:");
             topic.config().entrySet().stream()
                     .sorted((e1, e2) -> e1.getKey().compareTo(e2.getKey()))
-                    .forEach(entry -> System.out.println("  " + entry.getKey() + " = " + entry.getValue()));
-            System.out.println();
+                    .forEach(entry -> out().println("  " + entry.getKey() + " = " + entry.getValue()));
+            out().println();
         }
 
         if (topic.partitionDetails() != null && !topic.partitionDetails().isEmpty()) {
-            System.out.println("Partition Details:");
+            out().println("Partition Details:");
             List<PartitionRow> rows = new ArrayList<>();
             for (PartitionInfo partition : topic.partitionDetails()) {
                 rows.add(new PartitionRow(
@@ -125,7 +129,7 @@ public class DescribeTopicCommand implements Callable<Integer> {
                     new Column().header("ISR").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.LEFT).with(r -> r.isr)
             ));
 
-            System.out.println(table);
+            out().println(table);
         }
     }
 
@@ -135,9 +139,9 @@ public class DescribeTopicCommand implements Callable<Integer> {
                     .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
                     .build();
             ObjectMapper yamlMapper = new ObjectMapper(yamlFactory);
-            System.out.print(yamlMapper.writeValueAsString(topic));
+            out().print(yamlMapper.writeValueAsString(topic));
         } catch (Exception e) {
-            System.err.println("Error: Failed to generate YAML output: " + e.getMessage());
+            err().println("Error: Failed to generate YAML output: " + e.getMessage());
         }
     }
 
@@ -145,9 +149,9 @@ public class DescribeTopicCommand implements Callable<Integer> {
         try {
             ObjectMapper jsonMapper = new ObjectMapper();
             jsonMapper.enable(SerializationFeature.INDENT_OUTPUT);
-            System.out.println(jsonMapper.writeValueAsString(topic));
+            out().println(jsonMapper.writeValueAsString(topic));
         } catch (Exception e) {
-            System.err.println("Error: Failed to generate JSON output: " + e.getMessage());
+            err().println("Error: Failed to generate JSON output: " + e.getMessage());
         }
     }
 

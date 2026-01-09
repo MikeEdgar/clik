@@ -1,20 +1,23 @@
 package io.streamshub.clik.command.topic;
 
-import io.streamshub.clik.kafka.KafkaClientFactory;
-import io.streamshub.clik.kafka.TopicService;
-import jakarta.inject.Inject;
-import org.apache.kafka.clients.admin.Admin;
-import picocli.CommandLine;
-
 import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.Callable;
+
+import jakarta.inject.Inject;
+
+import org.apache.kafka.clients.admin.Admin;
+
+import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.kafka.KafkaClientFactory;
+import io.streamshub.clik.kafka.TopicService;
+import picocli.CommandLine;
 
 @CommandLine.Command(
         name = "delete",
         description = "Delete one or more topics"
 )
-public class DeleteTopicCommand implements Callable<Integer> {
+public class DeleteTopicCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0..*",
@@ -42,14 +45,14 @@ public class DeleteTopicCommand implements Callable<Integer> {
             String topicList = names.size() == 1
                     ? "topic \"" + names.get(0) + "\""
                     : names.size() + " topics";
-            System.out.print("Delete " + topicList + "? This cannot be undone. [y/N]: ");
+            out().print("Delete " + topicList + "? This cannot be undone. [y/N]: ");
             String response;
             try (Scanner scanner = new Scanner(System.in)) {
                 response = scanner.nextLine().trim().toLowerCase();
             }
 
             if (!response.equals("y") && !response.equals("yes")) {
-                System.out.println("Delete cancelled.");
+                out().println("Delete cancelled.");
                 return 0;
             }
         }
@@ -58,17 +61,17 @@ public class DeleteTopicCommand implements Callable<Integer> {
             topicService.deleteTopics(admin, names);
 
             if (names.size() == 1) {
-                System.out.println("Topic \"" + names.get(0) + "\" deleted.");
+                out().println("Topic \"" + names.get(0) + "\" deleted.");
             } else {
-                System.out.println(names.size() + " topics deleted.");
+                out().println(names.size() + " topics deleted.");
             }
 
             return 0;
         } catch (IllegalStateException e) {
-            System.err.println("Error: " + e.getMessage());
+            err().println("Error: " + e.getMessage());
             return 1;
         } catch (Exception e) {
-            System.err.println("Error: Failed to delete topic(s): " + e.getMessage());
+            err().println("Error: Failed to delete topic(s): " + e.getMessage());
             return 1;
         }
     }

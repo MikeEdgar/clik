@@ -47,7 +47,7 @@ class KafkaClientFactoryTest extends ClikTestBase {
         for (String context : contexts) {
             try {
                 contextService.deleteContext(context);
-            } catch (Exception e) {
+            } catch (Exception _) {
                 // Ignore
             }
         }

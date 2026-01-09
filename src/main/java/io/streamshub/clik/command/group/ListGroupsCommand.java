@@ -1,20 +1,5 @@
 package io.streamshub.clik.command.group;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
-import com.github.freva.asciitable.AsciiTable;
-import com.github.freva.asciitable.Column;
-import com.github.freva.asciitable.ColumnData;
-import com.github.freva.asciitable.HorizontalAlign;
-import io.streamshub.clik.kafka.GroupService;
-import io.streamshub.clik.kafka.KafkaClientFactory;
-import io.streamshub.clik.kafka.model.GroupInfo;
-import jakarta.inject.Inject;
-import org.apache.kafka.clients.admin.Admin;
-import picocli.CommandLine;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -23,11 +8,30 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.function.Function;
 
+import jakarta.inject.Inject;
+
+import org.apache.kafka.clients.admin.Admin;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
+import com.github.freva.asciitable.AsciiTable;
+import com.github.freva.asciitable.Column;
+import com.github.freva.asciitable.ColumnData;
+import com.github.freva.asciitable.HorizontalAlign;
+
+import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.kafka.GroupService;
+import io.streamshub.clik.kafka.KafkaClientFactory;
+import io.streamshub.clik.kafka.model.GroupInfo;
+import picocli.CommandLine;
+
 @CommandLine.Command(
         name = "list",
         description = "List all Kafka consumer groups"
 )
-public class ListGroupsCommand implements Callable<Integer> {
+public class ListGroupsCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"-o", "--output"},
@@ -54,7 +58,7 @@ public class ListGroupsCommand implements Callable<Integer> {
             Collection<GroupInfo> groups = groupService.listGroups(admin, typeFilter);
 
             if (groups.isEmpty()) {
-                System.out.println("No groups found.");
+                out().println("No groups found.");
                 return 0;
             }
 
@@ -76,17 +80,17 @@ public class ListGroupsCommand implements Callable<Integer> {
                     printJson(sortedGroups);
                     break;
                 default:
-                    System.err.println("Error: Unknown output format: " + outputFormat);
-                    System.err.println("Valid formats: table, yaml, json, name");
+                    err().println("Error: Unknown output format: " + outputFormat);
+                    err().println("Valid formats: table, yaml, json, name");
                     return 1;
             }
 
             return 0;
         } catch (IllegalStateException e) {
-            System.err.println("Error: " + e.getMessage());
+            err().println("Error: " + e.getMessage());
             return 1;
         } catch (Exception e) {
-            System.err.println("Error: Failed to list groups: " + e.getMessage());
+            err().println("Error: Failed to list groups: " + e.getMessage());
             return 1;
         }
     }
@@ -108,7 +112,7 @@ public class ListGroupsCommand implements Callable<Integer> {
                 })
         ));
 
-        System.out.println(table);
+        out().println(table);
     }
 
     private static <T> ColumnData<T> column(String name, HorizontalAlign dataAlign, Function<T, String> data) {
@@ -116,7 +120,7 @@ public class ListGroupsCommand implements Callable<Integer> {
     }
 
     private void printNames(List<GroupInfo> groups) {
-        groups.forEach(group -> System.out.println(group.groupId()));
+        groups.forEach(group -> out().println(group.groupId()));
     }
 
     private void printYaml(List<GroupInfo> groups) {
@@ -136,9 +140,9 @@ public class ListGroupsCommand implements Callable<Integer> {
                     .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
                     .build();
             ObjectMapper yamlMapper = new ObjectMapper(yamlFactory);
-            System.out.println(yamlMapper.writeValueAsString(groupList));
+            out().println(yamlMapper.writeValueAsString(groupList));
         } catch (Exception e) {
-            System.err.println("Error: Failed to generate YAML output: " + e.getMessage());
+            err().println("Error: Failed to generate YAML output: " + e.getMessage());
         }
     }
 
@@ -157,9 +161,9 @@ public class ListGroupsCommand implements Callable<Integer> {
 
             ObjectMapper jsonMapper = new ObjectMapper();
             jsonMapper.enable(SerializationFeature.INDENT_OUTPUT);
-            System.out.println(jsonMapper.writeValueAsString(groupList));
+            out().println(jsonMapper.writeValueAsString(groupList));
         } catch (Exception e) {
-            System.err.println("Error: Failed to generate JSON output: " + e.getMessage());
+            err().println("Error: Failed to generate JSON output: " + e.getMessage());
         }
     }
 }

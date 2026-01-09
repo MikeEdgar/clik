@@ -1,21 +1,24 @@
 package io.streamshub.clik.command.context;
 
+import java.util.Optional;
+import java.util.concurrent.Callable;
+
+import jakarta.inject.Inject;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
+
+import io.streamshub.clik.command.BaseCommand;
 import io.streamshub.clik.config.ContextConfig;
 import io.streamshub.clik.config.ContextService;
-import jakarta.inject.Inject;
 import picocli.CommandLine;
-
-import java.util.Optional;
-import java.util.concurrent.Callable;
 
 @CommandLine.Command(
         name = "current",
         description = "Display the current active context"
 )
-public class CurrentContextCommand implements Callable<Integer> {
+public class CurrentContextCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"--show-config"},
@@ -31,9 +34,9 @@ public class CurrentContextCommand implements Callable<Integer> {
         Optional<String> currentContext = contextService.getCurrentContext();
 
         if (currentContext.isEmpty()) {
-            System.err.println("Error: No current context set.");
-            System.err.println();
-            System.err.println("Run 'clik context use <name>' to set a context.");
+            err().println("Error: No current context set.");
+            err().println();
+            err().println("Run 'clik context use <name>' to set a context.");
             return 1;
         }
 
@@ -41,16 +44,16 @@ public class CurrentContextCommand implements Callable<Integer> {
 
         // Check if context still exists
         if (!contextService.contextExists(contextName)) {
-            System.err.println("Error: Current context \"" + contextName + "\" no longer exists.");
-            System.err.println();
-            System.err.println("Run 'clik context list' to see available contexts.");
+            err().println("Error: Current context \"" + contextName + "\" no longer exists.");
+            err().println();
+            err().println("Run 'clik context list' to see available contexts.");
             return 1;
         }
 
         if (showConfig) {
-            System.out.println("Current context: " + contextName);
-            System.out.println();
-            System.out.println("Configuration:");
+            out().println("Current context: " + contextName);
+            out().println();
+            out().println("Configuration:");
 
             try {
                 ContextConfig config = contextService.loadContext(contextName);
@@ -63,14 +66,14 @@ public class CurrentContextCommand implements Callable<Integer> {
                 // Indent the YAML output
                 String[] lines = yamlOutput.split("\n");
                 for (String line : lines) {
-                    System.out.println("  " + line);
+                    out().println("  " + line);
                 }
             } catch (Exception e) {
-                System.err.println("Error: Failed to load context configuration: " + e.getMessage());
+                err().println("Error: Failed to load context configuration: " + e.getMessage());
                 return 1;
             }
         } else {
-            System.out.println(contextName);
+            out().println(contextName);
         }
 
         return 0;

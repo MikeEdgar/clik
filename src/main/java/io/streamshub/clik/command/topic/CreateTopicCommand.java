@@ -1,20 +1,23 @@
 package io.streamshub.clik.command.topic;
 
-import io.streamshub.clik.kafka.KafkaClientFactory;
-import io.streamshub.clik.kafka.TopicService;
-import jakarta.inject.Inject;
-import org.apache.kafka.clients.admin.Admin;
-import picocli.CommandLine;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Callable;
+
+import jakarta.inject.Inject;
+
+import org.apache.kafka.clients.admin.Admin;
+
+import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.kafka.KafkaClientFactory;
+import io.streamshub.clik.kafka.TopicService;
+import picocli.CommandLine;
 
 @CommandLine.Command(
         name = "create",
         description = "Create a new Kafka topic"
 )
-public class CreateTopicCommand implements Callable<Integer> {
+public class CreateTopicCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0",
@@ -52,16 +55,16 @@ public class CreateTopicCommand implements Callable<Integer> {
     public Integer call() {
         try (Admin admin = clientFactory.createAdminClient()) {
             topicService.createTopic(admin, name, partitions, replicationFactor, configs);
-            System.out.println("Topic \"" + name + "\" created.");
+            out().println("Topic \"" + name + "\" created.");
             return 0;
         } catch (IllegalArgumentException e) {
-            System.err.println("Error: " + e.getMessage());
+            err().println("Error: " + e.getMessage());
             return 1;
         } catch (IllegalStateException e) {
-            System.err.println("Error: " + e.getMessage());
+            err().println("Error: " + e.getMessage());
             return 1;
         } catch (Exception e) {
-            System.err.println("Error: Failed to create topic: " + e.getMessage());
+            err().println("Error: Failed to create topic: " + e.getMessage());
             return 1;
         }
     }

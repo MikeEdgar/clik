@@ -1,5 +1,14 @@
 package io.streamshub.clik.command.group;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.stream.Collectors;
+
+import jakarta.inject.Inject;
+
+import org.apache.kafka.clients.admin.Admin;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
@@ -7,25 +16,20 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import com.github.freva.asciitable.AsciiTable;
 import com.github.freva.asciitable.Column;
 import com.github.freva.asciitable.HorizontalAlign;
+
+import io.streamshub.clik.command.BaseCommand;
 import io.streamshub.clik.kafka.GroupService;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.GroupInfo;
 import io.streamshub.clik.kafka.model.GroupMemberInfo;
 import io.streamshub.clik.kafka.model.OffsetLagInfo;
-import jakarta.inject.Inject;
-import org.apache.kafka.clients.admin.Admin;
 import picocli.CommandLine;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.Callable;
-import java.util.stream.Collectors;
 
 @CommandLine.Command(
         name = "describe",
         description = "Display detailed information about a consumer group"
 )
-public class DescribeGroupCommand implements Callable<Integer> {
+public class DescribeGroupCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0",
@@ -52,9 +56,9 @@ public class DescribeGroupCommand implements Callable<Integer> {
             GroupInfo group = groupService.describeGroup(admin, groupId);
 
             if (group == null) {
-                System.err.println("Error: Group \"" + groupId + "\" not found.");
-                System.err.println();
-                System.err.println("Run 'clik group list' to see available groups.");
+                err().println("Error: Group \"" + groupId + "\" not found.");
+                err().println();
+                err().println("Run 'clik group list' to see available groups.");
                 return 1;
             }
 
@@ -69,32 +73,32 @@ public class DescribeGroupCommand implements Callable<Integer> {
                     printJson(group);
                     break;
                 default:
-                    System.err.println("Error: Unknown output format: " + outputFormat);
-                    System.err.println("Valid formats: table, yaml, json");
+                    err().println("Error: Unknown output format: " + outputFormat);
+                    err().println("Valid formats: table, yaml, json");
                     return 1;
             }
 
             return 0;
         } catch (IllegalStateException e) {
-            System.err.println("Error: " + e.getMessage());
+            err().println("Error: " + e.getMessage());
             return 1;
         } catch (Exception e) {
-            System.err.println("Error: Failed to describe group: " + e.getMessage());
+            err().println("Error: Failed to describe group: " + e.getMessage());
             return 1;
         }
     }
 
     private void printTable(GroupInfo group) {
-        System.out.println("Group: " + group.groupId());
-        System.out.println("Type: " + group.type());
-        System.out.println("State: " + group.state());
+        out().println("Group: " + group.groupId());
+        out().println("Type: " + group.type());
+        out().println("State: " + group.state());
         if (group.protocol() != null) {
-            System.out.println("Protocol: " + group.protocol());
+            out().println("Protocol: " + group.protocol());
         }
-        System.out.println();
+        out().println();
 
         if (group.members() != null && !group.members().isEmpty()) {
-            System.out.println("Members:");
+            out().println("Members:");
             List<MemberRow> rows = new ArrayList<>();
             for (GroupMemberInfo member : group.members()) {
                 String partitions = formatPartitions(member);
@@ -113,12 +117,12 @@ public class DescribeGroupCommand implements Callable<Integer> {
                     new Column().header("PARTITIONS").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.LEFT).with(r -> r.partitions)
             ));
 
-            System.out.println(table);
-            System.out.println();
+            out().println(table);
+            out().println();
         }
 
         if (group.offsets() != null && !group.offsets().isEmpty()) {
-            System.out.println("Topic Lag:");
+            out().println("Topic Lag:");
             List<OffsetRow> rows = new ArrayList<>();
             for (OffsetLagInfo offset : group.offsets()) {
                 rows.add(new OffsetRow(
@@ -138,7 +142,7 @@ public class DescribeGroupCommand implements Callable<Integer> {
                     new Column().header("LAG").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.RIGHT).with(r -> r.lag)
             ));
 
-            System.out.println(table);
+            out().println(table);
         }
     }
 
@@ -163,9 +167,9 @@ public class DescribeGroupCommand implements Callable<Integer> {
                     .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
                     .build();
             ObjectMapper yamlMapper = new ObjectMapper(yamlFactory);
-            System.out.print(yamlMapper.writeValueAsString(group));
+            out().print(yamlMapper.writeValueAsString(group));
         } catch (Exception e) {
-            System.err.println("Error: Failed to generate YAML output: " + e.getMessage());
+            err().println("Error: Failed to generate YAML output: " + e.getMessage());
         }
     }
 
@@ -173,9 +177,9 @@ public class DescribeGroupCommand implements Callable<Integer> {
         try {
             ObjectMapper jsonMapper = new ObjectMapper();
             jsonMapper.enable(SerializationFeature.INDENT_OUTPUT);
-            System.out.println(jsonMapper.writeValueAsString(group));
+            out().println(jsonMapper.writeValueAsString(group));
         } catch (Exception e) {
-            System.err.println("Error: Failed to generate JSON output: " + e.getMessage());
+            err().println("Error: Failed to generate JSON output: " + e.getMessage());
         }
     }
 

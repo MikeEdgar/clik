@@ -16,7 +16,7 @@ class OutputFormatterTest {
         return s.getBytes(StandardCharsets.UTF_8);
     }
 
-    private static KafkaRecord record(String key, String value) {
+    private static KafkaRecord buildRecord(String key, String value) {
         KafkaRecord.Builder builder = KafkaRecord.builder();
         if (key != null) builder.setKey(bytes(key));
         if (value != null) builder.setValue(bytes(value));
@@ -28,9 +28,9 @@ class OutputFormatterTest {
     @Test
     void testSimpleKeyValue() {
         OutputFormatter formatter = OutputFormatter.withFormat("%k %v");
-        KafkaRecord record = record("test-key", "test-value");
+        KafkaRecord rec = buildRecord("test-key", "test-value");
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("test-key test-value", output);
     }
 
@@ -43,27 +43,27 @@ class OutputFormatterTest {
         builder.setKey(bytes("mykey"));
         builder.setValue(bytes("myvalue"));
         builder.setTimestamp(1735401600000L);
-        KafkaRecord record = builder.build();
+        KafkaRecord rec = builder.build();
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("2 100 mykey myvalue 1735401600000", output);
     }
 
     @Test
     void testKeyOnly() {
         OutputFormatter formatter = OutputFormatter.withFormat("%k");
-        KafkaRecord record = record("key1", null);
+        KafkaRecord rec = buildRecord("key1", null);
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("key1", output);
     }
 
     @Test
     void testValueOnly() {
         OutputFormatter formatter = OutputFormatter.withFormat("%v");
-        KafkaRecord record = record(null, "value1");
+        KafkaRecord rec = buildRecord(null, "value1");
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("value1", output);
     }
 
@@ -73,9 +73,9 @@ class OutputFormatterTest {
         KafkaRecord.Builder builder = KafkaRecord.builder();
         builder.setPartition(5);
         builder.setOffset(999L);
-        KafkaRecord record = builder.build();
+        KafkaRecord rec = builder.build();
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("5:999", output);
     }
 
@@ -84,9 +84,9 @@ class OutputFormatterTest {
     @Test
     void testBase64EncodedKey() {
         OutputFormatter formatter = OutputFormatter.withFormat("%{base64:k} %v");
-        KafkaRecord record = record("test-key", "value");
+        KafkaRecord rec = buildRecord("test-key", "value");
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         String expectedKey = Base64.getEncoder().encodeToString(bytes("test-key"));
         assertEquals(expectedKey + " value", output);
     }
@@ -94,18 +94,18 @@ class OutputFormatterTest {
     @Test
     void testHexEncodedValue() {
         OutputFormatter formatter = OutputFormatter.withFormat("%k %{hex:v}");
-        KafkaRecord record = record("key1", "Hello");
+        KafkaRecord rec = buildRecord("key1", "Hello");
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("key1 48656c6c6f", output);
     }
 
     @Test
     void testMixedEncodings() {
         OutputFormatter formatter = OutputFormatter.withFormat("%{hex:k} %{base64:v}");
-        KafkaRecord record = record("key", "Test");
+        KafkaRecord rec = buildRecord("key", "Test");
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         String expectedValue = Base64.getEncoder().encodeToString(bytes("Test"));
         assertEquals("6b6579 " + expectedValue, output);
     }
@@ -119,9 +119,9 @@ class OutputFormatterTest {
         builder.setKey(bytes("key1"));
         builder.setValue(bytes("value1"));
         builder.addHeader("content-type", bytes("application/json"));
-        KafkaRecord record = builder.build();
+        KafkaRecord rec = builder.build();
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("key1 value1 content-type=application/json", output);
     }
 
@@ -132,9 +132,9 @@ class OutputFormatterTest {
         builder.setKey(bytes("key1"));
         builder.setValue(bytes("value1"));
         builder.addHeader("type", bytes("test"));
-        KafkaRecord record = builder.build();
+        KafkaRecord rec = builder.build();
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("key1 value1 type=test", output);
     }
 
@@ -145,9 +145,9 @@ class OutputFormatterTest {
         builder.setValue(bytes("data"));
         builder.addHeader("type", bytes("json"));
         builder.addHeader("version", bytes("1.0"));
-        KafkaRecord record = builder.build();
+        KafkaRecord rec = builder.build();
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("data type=json version=1.0", output);
     }
 
@@ -159,9 +159,9 @@ class OutputFormatterTest {
         builder.setValue(bytes("value1"));
         builder.addHeader("tag", bytes("v1"));
         builder.addHeader("tag", bytes("v2"));
-        KafkaRecord record = builder.build();
+        KafkaRecord rec = builder.build();
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         // firstHeader() returns the first one
         assertEquals("key1 value1 tag=v1 tag=v2", output);
     }
@@ -173,9 +173,9 @@ class OutputFormatterTest {
         builder.setKey(bytes("key1"));
         builder.setValue(bytes("value1"));
         builder.addHeader("sig", bytes("Signature"));
-        KafkaRecord record = builder.build();
+        KafkaRecord rec = builder.build();
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         String expectedSig = Base64.getEncoder().encodeToString(bytes("Signature"));
         assertEquals("key1 value1 sig=" + expectedSig, output);
     }
@@ -187,9 +187,9 @@ class OutputFormatterTest {
         KafkaRecord.Builder builder = KafkaRecord.builder();
         builder.setKey(bytes("key1"));
         builder.addHeader("checksum", checksumBytes);
-        KafkaRecord record = builder.build();
+        KafkaRecord rec = builder.build();
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("key1 checksum=a1b2c3d4", output);
     }
 
@@ -199,9 +199,9 @@ class OutputFormatterTest {
         KafkaRecord.Builder builder = KafkaRecord.builder();
         builder.setKey(bytes("key1"));
         builder.addHeader("data", bytes("test"));
-        KafkaRecord record = builder.build();
+        KafkaRecord rec = builder.build();
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         String expectedValue = Base64.getEncoder().encodeToString(bytes("test"));
         assertEquals("key1 data=" + expectedValue, output);
     }
@@ -211,18 +211,18 @@ class OutputFormatterTest {
     @Test
     void testNullKey() {
         OutputFormatter formatter = OutputFormatter.withFormat("%k %v");
-        KafkaRecord record = record(null, "value1");
+        KafkaRecord rec = buildRecord(null, "value1");
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals(" value1", output);
     }
 
     @Test
     void testNullValue() {
         OutputFormatter formatter = OutputFormatter.withFormat("%k %v");
-        KafkaRecord record = record("key1", null);
+        KafkaRecord rec = buildRecord("key1", null);
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("key1 ", output);
     }
 
@@ -232,36 +232,36 @@ class OutputFormatterTest {
         KafkaRecord.Builder builder = KafkaRecord.builder();
         builder.setOffset(100L);
         builder.setValue(bytes("value"));
-        KafkaRecord record = builder.build();
+        KafkaRecord rec = builder.build();
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals(" 100 value", output);
     }
 
     @Test
     void testNullTimestamp() {
         OutputFormatter formatter = OutputFormatter.withFormat("%T %v");
-        KafkaRecord record = record(null, "value");
+        KafkaRecord rec = buildRecord(null, "value");
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals(" value", output);
     }
 
     @Test
     void testMissingHeader() {
         OutputFormatter formatter = OutputFormatter.withFormat("%k %v %{h[missing]}");
-        KafkaRecord record = record("key1", "value1");
+        KafkaRecord rec = buildRecord("key1", "value1");
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("key1 value1 ", output);
     }
 
     @Test
     void testNoHeaders() {
         OutputFormatter formatter = OutputFormatter.withFormat("%k %v %h");
-        KafkaRecord record = record("key1", "value1");
+        KafkaRecord rec = buildRecord("key1", "value1");
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("key1 value1 ", output);
     }
 
@@ -270,27 +270,27 @@ class OutputFormatterTest {
     @Test
     void testEscapedPercent() {
         OutputFormatter formatter = OutputFormatter.withFormat("%k%% %v");
-        KafkaRecord record = record("key", "value");
+        KafkaRecord rec = buildRecord("key", "value");
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("key% value", output);
     }
 
     @Test
     void testUnicodeEscapeTab() {
         OutputFormatter formatter = OutputFormatter.withFormat("%k\\u0009%v");
-        KafkaRecord record = record("key1", "value1");
+        KafkaRecord rec = buildRecord("key1", "value1");
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("key1\tvalue1", output);
     }
 
     @Test
     void testUnicodeEscapeNewline() {
         OutputFormatter formatter = OutputFormatter.withFormat("%k\\u000a%v");
-        KafkaRecord record = record("key1", "value1");
+        KafkaRecord rec = buildRecord("key1", "value1");
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("key1\nvalue1", output);
     }
 
@@ -307,9 +307,9 @@ class OutputFormatterTest {
         builder.setValue(bytes("myvalue"));
         builder.addHeader("named-header", bytes("test"));
         builder.addHeader("type", bytes("test"));
-        KafkaRecord record = builder.build();
+        KafkaRecord rec = builder.build();
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("[1735401600000] 3:50 mykey=myvalue named-header=test headers=type=test", output);
     }
 
@@ -320,9 +320,9 @@ class OutputFormatterTest {
         builder.setKey(bytes("test"));
         builder.setValue(bytes("data"));
         builder.setPartition(1);
-        KafkaRecord record = builder.build();
+        KafkaRecord rec = builder.build();
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("{\"key\":\"test\",\"value\":\"data\",\"partition\":1}", output);
     }
 
@@ -335,9 +335,9 @@ class OutputFormatterTest {
         builder.setPartition(0);
         builder.setOffset(10L);
         builder.setTimestamp(1234567890L);
-        KafkaRecord record = builder.build();
+        KafkaRecord rec = builder.build();
 
-        String output = formatter.format(record);
+        String output = formatter.format(rec);
         assertEquals("\"key\",\"value\",0,10,1234567890", output);
     }
 

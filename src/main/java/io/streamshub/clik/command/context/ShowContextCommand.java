@@ -1,22 +1,25 @@
 package io.streamshub.clik.command.context;
 
+import java.util.concurrent.Callable;
+
+import jakarta.inject.Inject;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
+
+import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.config.ConfigurationLoader;
 import io.streamshub.clik.config.ContextConfig;
 import io.streamshub.clik.config.ContextService;
-import io.streamshub.clik.config.ConfigurationLoader;
-import jakarta.inject.Inject;
 import picocli.CommandLine;
-
-import java.util.concurrent.Callable;
 
 @CommandLine.Command(
         name = "show",
         description = "Display detailed configuration for a specific context"
 )
-public class ShowContextCommand implements Callable<Integer> {
+public class ShowContextCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0",
@@ -40,9 +43,9 @@ public class ShowContextCommand implements Callable<Integer> {
     @Override
     public Integer call() {
         if (!contextService.contextExists(name)) {
-            System.err.println("Error: Context \"" + name + "\" does not exist.");
-            System.err.println();
-            System.err.println("Run 'clik context list' to see available contexts.");
+            err().println("Error: Context \"" + name + "\" does not exist.");
+            err().println();
+            err().println("Run 'clik context list' to see available contexts.");
             return 1;
         }
 
@@ -60,14 +63,14 @@ public class ShowContextCommand implements Callable<Integer> {
                     printProperties(config);
                     break;
                 default:
-                    System.err.println("Error: Unknown output format: " + outputFormat);
-                    System.err.println("Valid formats: yaml, json, properties");
+                    err().println("Error: Unknown output format: " + outputFormat);
+                    err().println("Valid formats: yaml, json, properties");
                     return 1;
             }
 
             return 0;
         } catch (Exception e) {
-            System.err.println("Error: Failed to load context: " + e.getMessage());
+            err().println("Error: Failed to load context: " + e.getMessage());
             return 1;
         }
     }
@@ -78,9 +81,9 @@ public class ShowContextCommand implements Callable<Integer> {
                     .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
                     .build();
             ObjectMapper yamlMapper = new ObjectMapper(yamlFactory);
-            System.out.print(yamlMapper.writeValueAsString(config));
+            out().print(yamlMapper.writeValueAsString(config));
         } catch (Exception e) {
-            System.err.println("Error: Failed to generate YAML output: " + e.getMessage());
+            err().println("Error: Failed to generate YAML output: " + e.getMessage());
         }
     }
 
@@ -88,14 +91,14 @@ public class ShowContextCommand implements Callable<Integer> {
         try {
             ObjectMapper jsonMapper = new ObjectMapper();
             jsonMapper.enable(SerializationFeature.INDENT_OUTPUT);
-            System.out.println(jsonMapper.writeValueAsString(config));
+            out().println(jsonMapper.writeValueAsString(config));
         } catch (Exception e) {
-            System.err.println("Error: Failed to generate JSON output: " + e.getMessage());
+            err().println("Error: Failed to generate JSON output: " + e.getMessage());
         }
     }
 
     private void printProperties(ContextConfig config) {
         String propertiesOutput = configLoader.toPropertiesFormat(config);
-        System.out.print(propertiesOutput);
+        out().print(propertiesOutput);
     }
 }

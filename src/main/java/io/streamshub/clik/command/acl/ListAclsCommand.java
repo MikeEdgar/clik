@@ -1,6 +1,5 @@
 package io.streamshub.clik.command.acl;
 
-import java.io.PrintWriter;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.function.Function;
@@ -19,6 +18,7 @@ import com.github.freva.asciitable.Column;
 import com.github.freva.asciitable.ColumnData;
 import com.github.freva.asciitable.HorizontalAlign;
 
+import io.streamshub.clik.command.BaseCommand;
 import io.streamshub.clik.command.acl.options.Operation;
 import io.streamshub.clik.command.acl.options.PatternType;
 import io.streamshub.clik.command.acl.options.Permission;
@@ -28,16 +28,12 @@ import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.AclInfo;
 import picocli.CommandLine;
 import picocli.CommandLine.Mixin;
-import picocli.CommandLine.Model.CommandSpec;
 
 @CommandLine.Command(
         name = "list",
         description = "List ACL bindings with optional filtering"
 )
-public class ListAclsCommand implements Callable<Integer> {
-
-    @CommandLine.Spec
-    CommandSpec commandSpec;
+public class ListAclsCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"-o", "--output"},
@@ -75,14 +71,6 @@ public class ListAclsCommand implements Callable<Integer> {
 
     @Inject
     AclService aclService;
-
-    private PrintWriter out() {
-        return commandSpec.commandLine().getOut();
-    }
-
-    private PrintWriter err() {
-        return commandSpec.commandLine().getErr();
-    }
 
     @Override
     public Integer call() {

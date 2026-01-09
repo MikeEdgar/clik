@@ -3,7 +3,6 @@ package io.streamshub.clik.command.produce;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -23,21 +22,18 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
+import io.streamshub.clik.command.BaseCommand;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.KafkaRecord;
 import io.streamshub.clik.support.Encoding;
 import io.streamshub.clik.support.InputParser;
 import picocli.CommandLine;
-import picocli.CommandLine.Model.CommandSpec;
 
 @CommandLine.Command(
         name = "produce",
         description = "Produce messages to a Kafka topic"
 )
-public class ProduceCommand implements Callable<Integer> {
-
-    @CommandLine.Spec
-    CommandSpec commandSpec;
+public class ProduceCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0",
@@ -101,14 +97,6 @@ public class ProduceCommand implements Callable<Integer> {
 
     @Inject
     KafkaClientFactory clientFactory;
-
-    private PrintWriter out() {
-        return commandSpec.commandLine().getOut();
-    }
-
-    private PrintWriter err() {
-        return commandSpec.commandLine().getErr();
-    }
 
     @Override
     public Integer call() {
@@ -243,11 +231,11 @@ public class ProduceCommand implements Callable<Integer> {
         // Try parsing as epoch milliseconds first
         try {
             return Long.parseLong(ts);
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             // Not a number, try parsing as ISO-8601
             try {
                 return OffsetDateTime.parse(ts).toInstant().toEpochMilli();
-            } catch (DateTimeParseException ex) {
+            } catch (DateTimeParseException _) {
                 throw new IllegalArgumentException(
                         "Invalid timestamp format: " + ts +
                                 ". Expected epoch milliseconds or ISO-8601 format (e.g., 2026-01-04T12:00:00Z)");

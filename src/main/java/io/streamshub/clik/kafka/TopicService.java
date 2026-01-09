@@ -1,8 +1,17 @@
 package io.streamshub.clik.kafka;
 
-import io.streamshub.clik.kafka.model.PartitionInfo;
-import io.streamshub.clik.kafka.model.TopicInfo;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
+
 import jakarta.enterprise.context.ApplicationScoped;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -15,18 +24,12 @@ import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TopicExistsException;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
+import io.streamshub.clik.kafka.model.PartitionInfo;
+import io.streamshub.clik.kafka.model.TopicInfo;
 
 @ApplicationScoped
 public class TopicService {
@@ -192,8 +195,8 @@ public class TopicService {
             PartitionInfo partition = new PartitionInfo(
                     kafkaPartition.partition(),
                     kafkaPartition.leader() != null ? kafkaPartition.leader().id() : -1,
-                    kafkaPartition.replicas().stream().map(node -> node.id()).toList(),
-                    kafkaPartition.isr().stream().map(node -> node.id()).toList()
+                    kafkaPartition.replicas().stream().map(Node::id).toList(),
+                    kafkaPartition.isr().stream().map(Node::id).toList()
             );
             partitions.add(partition);
         }

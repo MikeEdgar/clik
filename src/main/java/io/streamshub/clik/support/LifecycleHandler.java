@@ -44,7 +44,7 @@ public class LifecycleHandler {
             CompletableFuture.allOf(promises.toArray(CompletableFuture[]::new))
                 .get(5, TimeUnit.SECONDS);
             logger.debug("All pending promises completed");
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             logger.debug("Interrupted before pending promises were complete.");
             Thread.currentThread().interrupt();
         } catch (ExecutionException | TimeoutException e) {

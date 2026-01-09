@@ -1,6 +1,5 @@
 package io.streamshub.clik.command.acl;
 
-import java.io.PrintWriter;
 import java.util.Collection;
 import java.util.Objects;
 import java.util.Scanner;
@@ -12,6 +11,7 @@ import jakarta.inject.Inject;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.acl.AclBindingFilter;
 
+import io.streamshub.clik.command.BaseCommand;
 import io.streamshub.clik.command.acl.options.Operation;
 import io.streamshub.clik.command.acl.options.PatternType;
 import io.streamshub.clik.command.acl.options.Permission;
@@ -21,16 +21,12 @@ import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.AclInfo;
 import picocli.CommandLine;
 import picocli.CommandLine.Mixin;
-import picocli.CommandLine.Model.CommandSpec;
 
 @CommandLine.Command(
         name = "delete",
         description = "Delete ACL bindings matching filter"
 )
-public class DeleteAclCommand implements Callable<Integer> {
-
-    @CommandLine.Spec
-    CommandSpec commandSpec;
+public class DeleteAclCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"-y", "--yes"},
@@ -67,14 +63,6 @@ public class DeleteAclCommand implements Callable<Integer> {
 
     @Inject
     AclService aclService;
-
-    private PrintWriter out() {
-        return commandSpec.commandLine().getOut();
-    }
-
-    private PrintWriter err() {
-        return commandSpec.commandLine().getErr();
-    }
 
     @Override
     public Integer call() {

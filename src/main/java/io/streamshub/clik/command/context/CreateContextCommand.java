@@ -1,23 +1,25 @@
 package io.streamshub.clik.command.context;
 
-import io.streamshub.clik.config.ContextConfig;
-import io.streamshub.clik.config.ContextService;
-import io.streamshub.clik.config.ContextValidator;
-import io.streamshub.clik.config.ConfigurationLoader;
-import io.streamshub.clik.config.ValidationResult;
-import jakarta.inject.Inject;
-import picocli.CommandLine;
-
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Callable;
 
+import jakarta.inject.Inject;
+
+import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.config.ConfigurationLoader;
+import io.streamshub.clik.config.ContextConfig;
+import io.streamshub.clik.config.ContextService;
+import io.streamshub.clik.config.ContextValidator;
+import io.streamshub.clik.config.ValidationResult;
+import picocli.CommandLine;
+
 @CommandLine.Command(
         name = "create",
         description = "Create a new Kafka context"
 )
-public class CreateContextCommand implements Callable<Integer> {
+public class CreateContextCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0",
@@ -86,17 +88,17 @@ public class CreateContextCommand implements Callable<Integer> {
     public Integer call() {
         // Validate name
         if (!validator.isValidContextName(name)) {
-            System.err.println("Error: Invalid context name \"" + name + "\".");
-            System.err.println();
-            System.err.println("Context names must contain only letters, numbers, hyphens, and underscores.");
+            err().println("Error: Invalid context name \"" + name + "\".");
+            err().println();
+            err().println("Context names must contain only letters, numbers, hyphens, and underscores.");
             return 1;
         }
 
         // Check existence
         if (contextService.contextExists(name) && !overwrite) {
-            System.err.println("Error: Context \"" + name + "\" already exists.");
-            System.err.println();
-            System.err.println("Use --overwrite to replace it.");
+            err().println("Error: Context \"" + name + "\" already exists.");
+            err().println();
+            err().println("Use --overwrite to replace it.");
             return 1;
         }
 
@@ -105,17 +107,17 @@ public class CreateContextCommand implements Callable<Integer> {
         try {
             config = buildConfig();
         } catch (Exception e) {
-            System.err.println("Error: Failed to build configuration: " + e.getMessage());
+            err().println("Error: Failed to build configuration: " + e.getMessage());
             return 1;
         }
 
         // Validate
         ValidationResult result = validator.validateConfig(config);
         if (!result.valid()) {
-            System.err.println("Error: " + result.message());
-            System.err.println();
-            System.err.println("Provide servers with: --bootstrap-servers localhost:9092");
-            System.err.println("Or load from file with: --from-file kafka.properties");
+            err().println("Error: " + result.message());
+            err().println();
+            err().println("Provide servers with: --bootstrap-servers localhost:9092");
+            err().println("Or load from file with: --from-file kafka.properties");
             return 1;
         }
 
@@ -123,24 +125,24 @@ public class CreateContextCommand implements Callable<Integer> {
         try {
             contextService.createContext(name, config, overwrite);
         } catch (Exception e) {
-            System.err.println("Error: Failed to create context: " + e.getMessage());
+            err().println("Error: Failed to create context: " + e.getMessage());
             return 1;
         }
 
         // Verify connection if requested
         if (verify) {
-            System.out.println("Verifying connection to Kafka cluster...");
+            out().println("Verifying connection to Kafka cluster...");
             ValidationResult connResult = validator.verifyConnection(config);
             if (!connResult.valid()) {
-                System.err.println("Error: " + connResult.message());
-                System.err.println();
-                System.err.println("Context was created but connection verification failed.");
+                err().println("Error: " + connResult.message());
+                err().println();
+                err().println("Context was created but connection verification failed.");
                 return 1;
             }
-            System.out.println("Connection verified successfully.");
+            out().println("Connection verified successfully.");
         }
 
-        System.out.println("Context \"" + name + "\" created.");
+        out().println("Context \"" + name + "\" created.");
         return 0;
     }
 

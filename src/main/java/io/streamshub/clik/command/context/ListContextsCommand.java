@@ -1,17 +1,5 @@
 package io.streamshub.clik.command.context;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
-import com.github.freva.asciitable.AsciiTable;
-import com.github.freva.asciitable.Column;
-import com.github.freva.asciitable.HorizontalAlign;
-import io.streamshub.clik.config.ContextConfig;
-import io.streamshub.clik.config.ContextService;
-import jakarta.inject.Inject;
-import picocli.CommandLine;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -19,11 +7,26 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Callable;
 
+import jakarta.inject.Inject;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
+import com.github.freva.asciitable.AsciiTable;
+import com.github.freva.asciitable.Column;
+import com.github.freva.asciitable.HorizontalAlign;
+
+import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.config.ContextConfig;
+import io.streamshub.clik.config.ContextService;
+import picocli.CommandLine;
+
 @CommandLine.Command(
         name = "list",
         description = "List all available contexts"
 )
-public class ListContextsCommand implements Callable<Integer> {
+public class ListContextsCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"-o", "--output"},
@@ -47,7 +50,7 @@ public class ListContextsCommand implements Callable<Integer> {
         List<String> contexts = contextService.listContexts();
 
         if (contexts.isEmpty()) {
-            System.out.println("No contexts found.");
+            out().println("No contexts found.");
             return 0;
         }
 
@@ -67,8 +70,8 @@ public class ListContextsCommand implements Callable<Integer> {
                 printJson(contexts, currentContext);
                 break;
             default:
-                System.err.println("Error: Unknown output format: " + outputFormat);
-                System.err.println("Valid formats: table, yaml, json, name");
+                err().println("Error: Unknown output format: " + outputFormat);
+                err().println("Valid formats: table, yaml, json, name");
                 return 1;
         }
 
@@ -111,11 +114,11 @@ public class ListContextsCommand implements Callable<Integer> {
                 new Column().header("SECURITY").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.LEFT).with(r -> r.security)
         ));
 
-        System.out.println(table);
+        out().println(table);
     }
 
     private void printNames(List<String> contexts) {
-        contexts.forEach(System.out::println);
+        contexts.forEach(out()::println);
     }
 
     private void printYaml(List<String> contexts, Optional<String> currentContext) {
@@ -137,9 +140,9 @@ public class ListContextsCommand implements Callable<Integer> {
                     .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
                     .build();
             ObjectMapper yamlMapper = new ObjectMapper(yamlFactory);
-            System.out.println(yamlMapper.writeValueAsString(contextList));
+            out().println(yamlMapper.writeValueAsString(contextList));
         } catch (Exception e) {
-            System.err.println("Error: Failed to generate YAML output: " + e.getMessage());
+            err().println("Error: Failed to generate YAML output: " + e.getMessage());
         }
     }
 
@@ -160,9 +163,9 @@ public class ListContextsCommand implements Callable<Integer> {
         try {
             ObjectMapper jsonMapper = new ObjectMapper();
             jsonMapper.enable(SerializationFeature.INDENT_OUTPUT);
-            System.out.println(jsonMapper.writeValueAsString(contextList));
+            out().println(jsonMapper.writeValueAsString(contextList));
         } catch (Exception e) {
-            System.err.println("Error: Failed to generate JSON output: " + e.getMessage());
+            err().println("Error: Failed to generate JSON output: " + e.getMessage());
         }
     }
 

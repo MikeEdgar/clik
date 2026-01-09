@@ -1,7 +1,6 @@
 package io.streamshub.clik.command.consume;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -36,18 +35,18 @@ import com.github.freva.asciitable.Column;
 import com.github.freva.asciitable.ColumnData;
 import com.github.freva.asciitable.HorizontalAlign;
 
+import io.streamshub.clik.command.BaseCommand;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.KafkaRecord;
 import io.streamshub.clik.support.LifecycleHandler;
 import io.streamshub.clik.support.OutputFormatter;
 import picocli.CommandLine;
-import picocli.CommandLine.Model.CommandSpec;
 
 @CommandLine.Command(
         name = "consume",
         description = "Consume messages from a Kafka topic"
 )
-public class ConsumeCommand implements Callable<Integer> {
+public class ConsumeCommand extends BaseCommand implements Callable<Integer> {
 
     private static final String OUTPUT_TABLE = "table";
     private static final String OUTPUT_JSON = "json";
@@ -55,9 +54,6 @@ public class ConsumeCommand implements Callable<Integer> {
 
     @Inject
     Logger logger;
-
-    @CommandLine.Spec
-    CommandSpec commandSpec;
 
     @CommandLine.Parameters(
             index = "0",
@@ -132,14 +128,6 @@ public class ConsumeCommand implements Callable<Integer> {
 
     @Inject
     LifecycleHandler lifecycle;
-
-    private PrintWriter out() {
-        return commandSpec.commandLine().getOut();
-    }
-
-    private PrintWriter err() {
-        return commandSpec.commandLine().getErr();
-    }
 
     @Override
     public Integer call() {
@@ -220,7 +208,7 @@ public class ConsumeCommand implements Callable<Integer> {
             try {
                 OutputFormatter.withFormat(outputFormat);
                 return true;
-            } catch (IllegalArgumentException e) {
+            } catch (IllegalArgumentException _) {
                 // Invalid format string - validation will fail
                 return false;
             }

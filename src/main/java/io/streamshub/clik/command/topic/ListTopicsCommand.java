@@ -1,19 +1,5 @@
 package io.streamshub.clik.command.topic;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
-import com.github.freva.asciitable.AsciiTable;
-import com.github.freva.asciitable.Column;
-import com.github.freva.asciitable.HorizontalAlign;
-import io.streamshub.clik.kafka.KafkaClientFactory;
-import io.streamshub.clik.kafka.TopicService;
-import io.streamshub.clik.kafka.model.TopicInfo;
-import jakarta.inject.Inject;
-import org.apache.kafka.clients.admin.Admin;
-import picocli.CommandLine;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,11 +7,29 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Callable;
 
+import jakarta.inject.Inject;
+
+import org.apache.kafka.clients.admin.Admin;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
+import com.github.freva.asciitable.AsciiTable;
+import com.github.freva.asciitable.Column;
+import com.github.freva.asciitable.HorizontalAlign;
+
+import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.kafka.KafkaClientFactory;
+import io.streamshub.clik.kafka.TopicService;
+import io.streamshub.clik.kafka.model.TopicInfo;
+import picocli.CommandLine;
+
 @CommandLine.Command(
         name = "list",
         description = "List all Kafka topics"
 )
-public class ListTopicsCommand implements Callable<Integer> {
+public class ListTopicsCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"-o", "--output"},
@@ -53,7 +57,7 @@ public class ListTopicsCommand implements Callable<Integer> {
             Set<String> topicNames = topicService.listTopics(admin, includeInternal);
 
             if (topicNames.isEmpty()) {
-                System.out.println("No topics found.");
+                out().println("No topics found.");
                 return 0;
             }
 
@@ -75,17 +79,17 @@ public class ListTopicsCommand implements Callable<Integer> {
                     printJson(admin, sortedTopics);
                     break;
                 default:
-                    System.err.println("Error: Unknown output format: " + outputFormat);
-                    System.err.println("Valid formats: table, yaml, json, name");
+                    err().println("Error: Unknown output format: " + outputFormat);
+                    err().println("Valid formats: table, yaml, json, name");
                     return 1;
             }
 
             return 0;
         } catch (IllegalStateException e) {
-            System.err.println("Error: " + e.getMessage());
+            err().println("Error: " + e.getMessage());
             return 1;
         } catch (Exception e) {
-            System.err.println("Error: Failed to list topics: " + e.getMessage());
+            err().println("Error: Failed to list topics: " + e.getMessage());
             return 1;
         }
     }
@@ -114,14 +118,14 @@ public class ListTopicsCommand implements Callable<Integer> {
                     new Column().header("INTERNAL").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.CENTER).with(r -> r.internal)
             ));
 
-            System.out.println(table);
+            out().println(table);
         } catch (Exception e) {
-            System.err.println("Error: Failed to describe topics: " + e.getMessage());
+            err().println("Error: Failed to describe topics: " + e.getMessage());
         }
     }
 
     private void printNames(List<String> topicNames) {
-        topicNames.forEach(System.out::println);
+        topicNames.forEach(out()::println);
     }
 
     private void printYaml(Admin admin, List<String> topicNames) {
@@ -145,9 +149,9 @@ public class ListTopicsCommand implements Callable<Integer> {
                     .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
                     .build();
             ObjectMapper yamlMapper = new ObjectMapper(yamlFactory);
-            System.out.println(yamlMapper.writeValueAsString(topicList));
+            out().println(yamlMapper.writeValueAsString(topicList));
         } catch (Exception e) {
-            System.err.println("Error: Failed to generate YAML output: " + e.getMessage());
+            err().println("Error: Failed to generate YAML output: " + e.getMessage());
         }
     }
 
@@ -170,9 +174,9 @@ public class ListTopicsCommand implements Callable<Integer> {
 
             ObjectMapper jsonMapper = new ObjectMapper();
             jsonMapper.enable(SerializationFeature.INDENT_OUTPUT);
-            System.out.println(jsonMapper.writeValueAsString(topicList));
+            out().println(jsonMapper.writeValueAsString(topicList));
         } catch (Exception e) {
-            System.err.println("Error: Failed to generate JSON output: " + e.getMessage());
+            err().println("Error: Failed to generate JSON output: " + e.getMessage());
         }
     }
 

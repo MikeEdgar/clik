@@ -1,6 +1,5 @@
 package io.streamshub.clik.command.group;
 
-import java.io.PrintWriter;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
@@ -28,6 +27,7 @@ import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
+import io.streamshub.clik.command.BaseCommand;
 import io.streamshub.clik.kafka.GroupService;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import picocli.CommandLine;
@@ -39,10 +39,7 @@ import picocli.CommandLine.Model.OptionSpec;
         name = "alter",
         description = "Alter consumer group offsets"
 )
-public class AlterGroupCommand implements Callable<Integer> {
-
-    @CommandLine.Spec
-    CommandSpec commandSpec;
+public class AlterGroupCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0",
@@ -105,14 +102,6 @@ public class AlterGroupCommand implements Callable<Integer> {
 
     @Inject
     GroupService groupService;
-
-    private PrintWriter out() {
-        return commandSpec.commandLine().getOut();
-    }
-
-    private PrintWriter err() {
-        return commandSpec.commandLine().getErr();
-    }
 
     static class AllTopicsOptionProcessor implements CommandLine.IParameterPreprocessor {
         @Override
@@ -366,7 +355,7 @@ public class AlterGroupCommand implements Callable<Integer> {
                 for (Map.Entry<TopicPartition, Long> entry : timestampOffsets.entrySet()) {
                     offsetsToAlter.put(entry.getKey(), new OffsetAndMetadata(entry.getValue()));
                 }
-            } catch (DateTimeParseException e) {
+            } catch (DateTimeParseException _) {
                 err().println("Error: Invalid ISO-8601 datetime format: " + datetime);
                 err().println("Expected format: 2026-01-01T00:00:00Z");
                 return true;
@@ -413,7 +402,7 @@ public class AlterGroupCommand implements Callable<Integer> {
                                 partition);
                     }
                 }
-            } catch (DateTimeParseException e) {
+            } catch (DateTimeParseException _) {
                 err().println("Error: Invalid ISO-8601 duration format: " + durationStr);
                 err().println("Expected format: PT1H (1 hour), PT-1H (negative 1 hour), PT30M (30 minutes), etc.");
                 return true;
@@ -455,7 +444,7 @@ public class AlterGroupCommand implements Callable<Integer> {
             }
 
             return Set.of(tp);
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             throw new IllegalArgumentException("Invalid partition number: " + parts[1]);
         }
     }
@@ -481,7 +470,7 @@ public class AlterGroupCommand implements Callable<Integer> {
 
             Set<TopicPartition> partitions = parseTopicPartitionSpec(parts[1], groupPartitions);
             return new PartitionOffsetSpec<>(partitions, offset);
-        } catch (NumberFormatException e) {
+        } catch (NumberFormatException _) {
             throw new IllegalArgumentException("Invalid offset number: " + parts[0]);
         }
     }
