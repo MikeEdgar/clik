@@ -15,6 +15,8 @@ import java.util.stream.Stream;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.DumperOptions.ScalarStyle;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
@@ -38,9 +40,16 @@ public class ContextService {
     public ContextService(
             @ConfigProperty(name = "xdg.config.home", defaultValue = "${user.home}/.config")
             String xdgConfigHome) {
+
+        DumperOptions options = new DumperOptions();
+        options.setDefaultScalarStyle(ScalarStyle.LITERAL); // '|'
+
         YAMLFactory yamlFactory = YAMLFactory.builder()
+                .dumperOptions(options)
                 .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
+                .enable(YAMLGenerator.Feature.MINIMIZE_QUOTES)
                 .build();
+
         this.yamlMapper = new ObjectMapper(yamlFactory);
         this.xdgConfigHome = xdgConfigHome;
     }
@@ -83,7 +92,7 @@ public class ContextService {
 
         try {
             return Optional.of(loadContext(name));
-        } catch (Exception e) {
+        } catch (Exception _) {
             return Optional.empty();
         }
     }
@@ -160,7 +169,7 @@ public class ContextService {
             return Optional.ofNullable(rootConfig)
                     .map(RootConfig::currentContext)
                     .filter(Predicate.not(String::isEmpty));
-        } catch (IOException e) {
+        } catch (IOException _) {
             return Optional.empty();
         }
     }
@@ -273,7 +282,7 @@ public class ContextService {
                     PosixFilePermission.OWNER_EXECUTE
             );
             Files.setPosixFilePermissions(directory, perms);
-        } catch (UnsupportedOperationException | IOException e) {
+        } catch (UnsupportedOperationException | IOException _) {
             // Ignore on Windows or if POSIX not supported
         }
     }
@@ -285,7 +294,7 @@ public class ContextService {
                     PosixFilePermission.OWNER_WRITE
             );
             Files.setPosixFilePermissions(file, perms);
-        } catch (UnsupportedOperationException | IOException e) {
+        } catch (UnsupportedOperationException | IOException _) {
             // Ignore on Windows or if POSIX not supported
         }
     }
