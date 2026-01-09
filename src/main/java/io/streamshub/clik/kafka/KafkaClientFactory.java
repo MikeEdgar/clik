@@ -76,7 +76,7 @@ public class KafkaClientFactory {
 
         props.computeIfAbsent(
                 ProducerConfig.CLIENT_ID_CONFIG,
-                k -> "clik-producer-" + UUID.randomUUID().toString()
+                _ -> "clik-producer-" + UUID.randomUUID().toString()
         );
 
         return new KafkaProducer<>(props);
@@ -109,7 +109,7 @@ public class KafkaClientFactory {
 
         props.computeIfAbsent(
                 ConsumerConfig.CLIENT_ID_CONFIG,
-                k -> "clik-consumer-" + UUID.randomUUID().toString()
+                _ -> "clik-consumer-" + UUID.randomUUID().toString()
         );
 
         if (groupId != null) {

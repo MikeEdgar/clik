@@ -284,7 +284,7 @@ public class ProduceCommand implements Callable<Integer> {
                             components.valueBytes(),
                             mapHeaders(components.headers()));
 
-                    producer.send(rec, (metadata, exception) -> {
+                    producer.send(rec, (_, exception) -> {
                         if (exception == null) {
                             successCount.incrementAndGet();
                         } else {
@@ -316,7 +316,7 @@ public class ProduceCommand implements Callable<Integer> {
                         valueBytes,
                         recordHeaders);
 
-                producer.send(rec, (metadata, exception) -> {
+                producer.send(rec, (_, exception) -> {
                     if (exception == null) {
                         successCount.incrementAndGet();
                     } else {

@@ -78,7 +78,7 @@ public class GroupService {
                 .stream()
                 .map(f -> f.toCompletionStage().toCompletableFuture())
                 .toArray(CompletableFuture[]::new))
-            .handle((nothing, error) -> {
+            .handle((_, _) -> {
                 for (Map.Entry<String, KafkaFuture<ConsumerGroupDescription>> entry : descriptions.entrySet()) {
                     KafkaFuture<ConsumerGroupDescription> value = entry.getValue();
                     GroupInfo.Builder groupBuilder = groups.get(entry.getKey());
@@ -132,9 +132,9 @@ public class GroupService {
         for (MemberDescription member : desc.members()) {
             Map<String, List<Integer>> topicPartitions = new HashMap<>();
 
-            member.assignment().topicPartitions().forEach(tp -> {
-                topicPartitions.computeIfAbsent(tp.topic(), k -> new ArrayList<>()).add(tp.partition());
-            });
+            member.assignment().topicPartitions().forEach(tp ->
+                topicPartitions.computeIfAbsent(tp.topic(), _ -> new ArrayList<>()).add(tp.partition())
+            );
 
             List<GroupMemberInfo.PartitionAssignment> assignments = topicPartitions.entrySet().stream()
                     .map(e -> new GroupMemberInfo.PartitionAssignment(e.getKey(), e.getValue()))
@@ -214,7 +214,7 @@ public class GroupService {
             }
 
             return lagInfoList;
-        } catch (Exception e) {
+        } catch (Exception _) {
             // Return empty list if offsets cannot be retrieved
             return Collections.emptyList();
         }
