@@ -5,7 +5,7 @@
 
   <groupId>io.streamshub</groupId>
   <artifactId>clik</artifactId>
-  <version>0.1.3-SNAPSHOT</version>
+  <version>0.2.0</version>
 
   <properties>
     <compiler-plugin.version>3.14.1</compiler-plugin.version>
@@ -22,7 +22,7 @@
   <scm>
     <connection>scm:git:git://github.com/MikeEdgar/clik.git</connection>
     <developerConnection>scm:git:git@github.com:MikeEdgar/clik.git</developerConnection>
-    <tag>HEAD</tag>
+    <tag>v0.2.0</tag>
   </scm>
 
   <licenses>
