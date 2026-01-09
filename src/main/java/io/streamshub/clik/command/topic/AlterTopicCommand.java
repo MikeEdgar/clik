@@ -12,6 +12,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 
 import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.kafka.ConfigCandidates;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.TopicService;
 import io.streamshub.clik.kafka.model.TopicInfo;
@@ -31,13 +32,17 @@ public class AlterTopicCommand extends BaseCommand implements Callable<Integer> 
 
     @CommandLine.Option(
             names = {"-c", "--config"},
-            description = "Set configuration (key=value, repeatable)"
+            description = "Set configuration (key=value, repeatable)",
+            paramLabel = "config",
+            completionCandidates = ConfigCandidates.Topic.class
     )
     List<String> configs = new ArrayList<>();
 
     @CommandLine.Option(
             names = {"--delete-config"},
-            description = "Delete configuration (key, repeatable)"
+            description = "Delete configuration (key, repeatable)",
+            paramLabel = "delete-config",
+            completionCandidates = ConfigCandidates.Topic.class
     )
     List<String> deleteConfigs = new ArrayList<>();
 

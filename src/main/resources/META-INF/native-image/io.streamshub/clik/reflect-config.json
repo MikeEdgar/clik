@@ -1,0 +1,7 @@
+[
+  {
+    "name" : "org.apache.kafka.common.config.TopicConfig",
+    "allDeclaredFields" : true,
+    "allPublicFields" : true
+  }
+]

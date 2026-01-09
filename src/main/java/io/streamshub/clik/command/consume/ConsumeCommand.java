@@ -36,6 +36,7 @@ import com.github.freva.asciitable.ColumnData;
 import com.github.freva.asciitable.HorizontalAlign;
 
 import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.kafka.ConfigCandidates;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.KafkaRecord;
 import io.streamshub.clik.support.LifecycleHandler;
@@ -119,7 +120,9 @@ public class ConsumeCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"--property", "-P"},
-            description = "Consumer client properties to override those in the context (repeatable, format: key=value)"
+            description = "Consumer client properties to override those in the context (repeatable, format: key=value)",
+            paramLabel = "property",
+            completionCandidates = ConfigCandidates.Consumer.class
     )
     Map<String, String> properties = new HashMap<>();
 

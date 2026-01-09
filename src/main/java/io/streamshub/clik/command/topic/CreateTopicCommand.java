@@ -9,6 +9,7 @@ import jakarta.inject.Inject;
 import org.apache.kafka.clients.admin.Admin;
 
 import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.kafka.ConfigCandidates;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.TopicService;
 import picocli.CommandLine;
@@ -41,7 +42,9 @@ public class CreateTopicCommand extends BaseCommand implements Callable<Integer>
 
     @CommandLine.Option(
             names = {"--config", "-c"},
-            description = "Topic configuration (repeatable, format: key=value)"
+            description = "Topic configuration (repeatable, format: key=value)",
+            paramLabel = "config",
+            completionCandidates = ConfigCandidates.Topic.class
     )
     Map<String, String> configs = new HashMap<>();
 
