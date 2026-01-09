@@ -13,6 +13,7 @@ import io.streamshub.clik.config.ContextConfig;
 import io.streamshub.clik.config.ContextService;
 import io.streamshub.clik.config.ContextValidator;
 import io.streamshub.clik.config.ValidationResult;
+import io.streamshub.clik.kafka.ConfigCandidates;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -53,7 +54,9 @@ public class CreateContextCommand extends BaseCommand implements Callable<Intege
 
     @CommandLine.Option(
             names = {"--property", "-P"},
-            description = "Additional Kafka property (repeatable, format: key=value)"
+            description = "Additional Kafka property (repeatable, format: key=value)",
+            paramLabel = "property",
+            completionCandidates = ConfigCandidates.AnyClient.class
     )
     Map<String, String> properties = new HashMap<>();
 

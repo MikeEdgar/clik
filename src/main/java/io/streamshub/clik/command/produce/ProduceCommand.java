@@ -23,6 +23,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
 import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.kafka.ConfigCandidates;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.KafkaRecord;
 import io.streamshub.clik.support.Encoding;
@@ -91,7 +92,9 @@ public class ProduceCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"--property", "-P"},
-            description = "Producer client properties to override those in the context (repeatable, format: key=value)"
+            description = "Producer client properties to override those in the context (repeatable, format: key=value)",
+            paramLabel = "property",
+            completionCandidates = ConfigCandidates.Producer.class
     )
     Map<String, String> properties = new HashMap<>();
 
