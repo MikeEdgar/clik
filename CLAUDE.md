@@ -68,18 +68,19 @@ The codebase follows a standard Maven project layout:
   - `command/context/` - Context management commands
   - `command/topic/` - Topic management commands
   - `command/group/` - Consumer group management commands
+  - `command/cluster/` - Cluster management commands
   - `command/acl/` - ACL management commands
   - `command/produce/` - Message producer command
   - `command/consume/` - Message consumer command
   - `config/` - Configuration services (ContextService, ConfigurationLoader, ContextValidator)
-  - `kafka/` - Kafka services (KafkaClientFactory, TopicService, GroupService, AclService)
-  - `kafka/model/` - Data models (TopicInfo, GroupInfo, AclInfo, ConsumedMessage, etc.)
+  - `kafka/` - Kafka services (KafkaClientFactory, TopicService, GroupService, ClusterService, AclService)
+  - `kafka/model/` - Data models (TopicInfo, GroupInfo, ClusterInfo, AclInfo, ConsumedMessage, etc.)
   - `support/` - Utility classes (Encoding, FormatParser, format tokens, MessageComponents)
   - `version/` - Application version provider
 - `src/main/resources/` - Configuration files and resources
 - `src/test/java/` - Test code
 - `src/test/resources/` - Test fixtures and resources
-- `specs/` - Feature specifications (CONTEXT.md, TOPIC.md, GROUP.md, ACL.md, PRODUCE_CONSUME.md)
+- `specs/` - Feature specifications (CONTEXT.md, TOPIC.md, GROUP.md, CLUSTER.md, ACL.md, PRODUCE_CONSUME.md)
 
 ### Main Entry Point
 
@@ -168,6 +169,36 @@ Clik implements Kafka consumer group monitoring and management. See `specs/GROUP
 **Key Services:**
 - `GroupService` - Operations for listing, describing, deleting groups, offset management, and lag calculation
 - `GroupInfo` / `GroupMemberInfo` / `CoordinatorInfo` / `OffsetLagInfo` - Data models with @RegisterForReflection
+
+#### Cluster Management
+
+Clik implements Kafka cluster information and monitoring commands. See `specs/CLUSTER.md` for the full specification.
+
+**Implemented Commands:**
+- `clik cluster describe` - Display detailed cluster information including nodes and quorum metadata
+
+**Key Features:**
+- Comprehensive cluster information (cluster ID, controller, feature level)
+- Node details with host, port, and rack information
+- **Enhanced role detection for KRaft mode**:
+  - Basic roles: Broker, Controller, Broker+Controller
+  - Quorum roles: Voter, Observer, or none for broker-only nodes
+  - Leader annotation for current quorum leader
+- **Quorum metadata display** (KRaft only):
+  - Leader ID, controller epoch, high watermark
+  - Observer states with fetch timestamps
+- **Dual API call strategy**:
+  - Uses `describeCluster()` for basic cluster information
+  - Uses `describeMetadataQuorum()` for KRaft quorum details
+  - Uses `describeFeatures()` for Kafka version detection
+- Graceful fallback to basic cluster info in ZooKeeper mode
+- Multiple output formats (table, yaml, json)
+- Separate ROLE and QUORUM ROLE columns in table output for KRaft clusters
+- Integration with context management
+
+**Key Services:**
+- `ClusterService` - Operations for describing cluster with dual API call strategy
+- `ClusterInfo` / `NodeInfo` / `QuorumInfo` / `ObserverState` - Data models with @RegisterForReflection
 
 #### Producer and Consumer Commands
 
@@ -481,6 +512,28 @@ See `specs/GROUP.md` for detailed specification.
 - Group rebalancing controls
 - Consumer group export/import
 
+### Cluster Management (✅ COMPLETED)
+
+See `specs/CLUSTER.md` for detailed specification.
+
+**Phase 1: Core Cluster Operations (✅ COMPLETED)**
+- Cluster describe command implemented
+- Comprehensive cluster information display (cluster ID, controller, feature level)
+- Node details with role detection
+- KRaft quorum metadata support (voters, observers, leader)
+- Graceful ZooKeeper mode fallback
+- Multiple output formats (table, yaml, json)
+- Integration with context management
+- Comprehensive test coverage (7 integration tests in ClusterCommandTest, ClusterCommandIT)
+- Unit tests for services (6 tests in ClusterServiceTest)
+
+**Future Enhancements:**
+- Cluster health metrics and monitoring
+- Broker configuration management
+- Cluster topology visualization
+- Partition rebalancing controls
+- Cluster-wide performance metrics
+
 ### ACL Management (✅ COMPLETED)
 
 See `specs/ACL.md` for detailed specification.
@@ -611,16 +664,17 @@ See `specs/PRODUCE_CONSUME.md` for detailed specification.
 
 ### Overall Test Coverage
 
-**Total Tests: 317 passing (1 skipped)**
-- Unit tests: 121 tests (ContextService, ConfigurationLoader, ContextValidator, TopicService, GroupService, KafkaClientFactory, Encoding, FormatParser)
-  - 60 existing service tests
+**Total Tests: 389 passing (2 skipped)**
+- Unit tests: 127 tests (ContextService, ConfigurationLoader, ContextValidator, TopicService, GroupService, ClusterService, KafkaClientFactory, Encoding, FormatParser, OutputFormatter)
+  - 66 existing service tests
   - 26 Encoding tests
   - 35 FormatParser tests
-- Integration tests: 196 tests (29 ContextCommandTest + 27 TopicCommandTest + 28 GroupCommandTest + 31 AclCommandTest + 54 ProduceCommandTest + 14 ConsumeCommandTest + 13 ConsumeCommandIT + native IT variants)
+- Integration tests: 262 tests (29 ContextCommandTest + 27 TopicCommandTest + 28 GroupCommandTest + 7 ClusterCommandTest + 31 AclCommandTest + 54 ProduceCommandTest + 14 ConsumeCommandTest + native IT variants)
   - ContextCommandTest: 29 tests
   - TopicCommandTest: 27 tests
   - GroupCommandTest: 28 tests
-  - AclCommandTest: 31 tests
+  - ClusterCommandTest: 7 tests
+  - AclCommandTest: 31 tests (1 skipped)
   - ProduceCommandTest: 54 passing tests (1 skipped for stdin handling)
   - ConsumeCommandTest: 14 tests
 - All tests passing in both JVM and native modes
