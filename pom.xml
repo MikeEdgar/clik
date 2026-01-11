@@ -17,6 +17,7 @@
     <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
     <quarkus.platform.version>3.30.6</quarkus.platform.version>
     <surefire-plugin.version>3.5.4</surefire-plugin.version>
+    <kafka.version>4.1.1</kafka.version>
   </properties>
 
   <scm>
@@ -38,7 +39,12 @@
       <dependency>
         <groupId>org.apache.kafka</groupId>
         <artifactId>kafka-clients</artifactId>
-        <version>4.1.1</version>
+        <version>${kafka.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.kafka</groupId>
+        <artifactId>kafka-server-common</artifactId>
+        <version>${kafka.version}</version>
       </dependency>
       <dependency>
         <groupId>${quarkus.platform.group-id}</groupId>
@@ -58,6 +64,10 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-kafka-client</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka-server-common</artifactId>
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
