@@ -6,7 +6,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.function.Function;
 
 import jakarta.inject.Inject;
 
@@ -17,8 +16,6 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import com.github.freva.asciitable.AsciiTable;
-import com.github.freva.asciitable.Column;
-import com.github.freva.asciitable.ColumnData;
 import com.github.freva.asciitable.HorizontalAlign;
 
 import io.streamshub.clik.command.BaseCommand;
@@ -113,10 +110,6 @@ public class ListGroupsCommand extends BaseCommand implements Callable<Integer> 
         ));
 
         out().println(table);
-    }
-
-    private static <T> ColumnData<T> column(String name, HorizontalAlign dataAlign, Function<T, String> data) {
-        return new Column().header(name).headerAlign(HorizontalAlign.LEFT).dataAlign(dataAlign).with(data);
     }
 
     private void printNames(List<GroupInfo> groups) {

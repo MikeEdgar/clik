@@ -65,6 +65,20 @@ clik group alter my-group --by-duration PT-1H --yes
 clik group delete old-group --yes
 ```
 
+### 🖥️ [Cluster Management](specs/CLUSTER.md)
+View detailed cluster information including nodes, controllers, and KRaft quorum metadata. Supports both KRaft and ZooKeeper deployments.
+
+```bash
+# View cluster details with node roles
+clik cluster describe
+# Shows: Cluster ID, Feature Level, Controller ID, Nodes
+# Displays: Node roles (Broker, Controller, Broker+Controller)
+# Displays: Quorum roles (Voter, Observer) and leader
+
+# Export cluster topology as JSON
+clik cluster describe -o json
+```
+
 ### 🔒 [ACL Management](specs/ACL.md)
 Manage Kafka Access Control Lists (ACLs) to secure your cluster resources. Grant or deny access to topics, consumer groups, and cluster operations.
 
@@ -209,11 +223,20 @@ clik group alter slow-consumer-group --by-duration PT-1H --yes
 # Switch to production context
 clik context use production
 
+# Verify cluster topology
+clik cluster describe
+
 # Monitor new messages in real-time
 clik consume critical-events --follow --from-end
 
 # Check consumer group health
 clik group describe payment-processor
+```
+
+### Cluster Inspection
+```bash
+# View cluster information
+clik cluster describe
 ```
 
 ### Data Migration
@@ -243,6 +266,7 @@ Most commands support multiple output formats via the `-o, --output` flag:
 - [Context Management](specs/CONTEXT.md) - Managing cluster configurations
 - [Topic Management](specs/TOPIC.md) - CRUD operations for topics
 - [Consumer Group Management](specs/GROUP.md) - Monitoring and managing consumer groups
+- [Cluster Management](specs/CLUSTER.md) - Viewing cluster information and topology
 - [ACL Management](specs/ACL.md) - Managing Access Control Lists for security
 - [Message Production & Consumption](specs/PRODUCE_CONSUME.md) - Producing and consuming messages
 
