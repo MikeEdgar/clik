@@ -12,6 +12,10 @@ Clik provides an intuitive, kubectl-like experience for managing Kafka clusters.
 - Apache Kafka Clients
 - Picocli for command-line interface
 
+### Releases
+
+Download the latest release for your OS [here](https://github.com/MikeEdgar/clik/releases).
+
 ## Features
 
 ### 🔧 [Context Management](specs/CONTEXT.md)
@@ -141,11 +145,7 @@ clik consume my-topic --from-beginning -o "%k: %v"
 clik consume my-topic --from-beginning -o json > messages.json
 ```
 
-## Quick Start
-
-### Releases
-
-Download the latest release for your OS from the [here](https://github.com/MikeEdgar/clik/releases).
+## Build from Source
 
 ### Build and Run
 
