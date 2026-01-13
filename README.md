@@ -12,9 +12,36 @@ Clik provides an intuitive, kubectl-like experience for managing Kafka clusters.
 - Apache Kafka Clients
 - Picocli for command-line interface
 
+
+## Quick Start
+
 ### Releases
 
 Download the latest release for your OS [here](https://github.com/MikeEdgar/clik/releases).
+
+### Bash Completion
+
+Single-session
+
+```shell
+source <(clik generate-completion)
+```
+
+Persist in user preferences
+
+```shell
+clik generate-completion > ~/.local/share/bash-completion/clik
+```
+
+Persist globally
+
+```shell
+# Linux
+clik generate-completion > /etc/bash_completion.d/clik
+
+# MacOS
+clik generate-completion > /usr/local/etc/bash_completion.d/clik
+```
 
 ## Features
 
