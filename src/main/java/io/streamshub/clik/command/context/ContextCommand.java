@@ -11,7 +11,7 @@ import picocli.CommandLine;
                 UseContextCommand.class,
                 CurrentContextCommand.class,
                 DeleteContextCommand.class,
-                ShowContextCommand.class,
+                DescribeContextCommand.class,
                 RenameContextCommand.class,
                 CommandLine.HelpCommand.class
         }

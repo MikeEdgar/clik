@@ -21,10 +21,10 @@ import picocli.CommandLine;
 public class CurrentContextCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Option(
-            names = {"--show-config"},
+            names = {"--describe"},
             description = "Display full configuration of current context"
     )
-    boolean showConfig;
+    boolean describe;
 
     @Inject
     ContextService contextService;
@@ -50,7 +50,7 @@ public class CurrentContextCommand extends BaseCommand implements Callable<Integ
             return 1;
         }
 
-        if (showConfig) {
+        if (describe) {
             out().println("Current context: " + contextName);
             out().println();
             out().println("Configuration:");

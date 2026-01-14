@@ -66,7 +66,7 @@ class ContextCommandTest extends ClikMainTestBase {
     void testCreateContextWithProperties(LaunchResult result) {
         assertEquals(0, result.exitCode());
 
-        // Verify configuration by showing the context
+        // Verify configuration
         var context = contextService.loadContext("test-context");
         assertNotNull(context);
         assertEquals(Map.of(
@@ -247,7 +247,7 @@ class ContextCommandTest extends ClikMainTestBase {
         contextService.setCurrentContext("test-context");
 
         // Get current context with config
-        LaunchResult result = launcher.launch("context", "current", "--show-config");
+        LaunchResult result = launcher.launch("context", "current", "--describe");
 
         assertEquals(0, result.exitCode());
         String output = result.getOutput();
@@ -299,7 +299,7 @@ class ContextCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testShowContext() {
+    void testDescribeContext() {
         // Create context using the service
         contextService.createContext("test-context", ContextConfig.builder()
                 .addCommon("bootstrap.servers", "localhost:9092")
@@ -307,8 +307,8 @@ class ContextCommandTest extends ClikMainTestBase {
                 .addProducer("acks", "all")
                 .build(), false);
 
-        // Show the context
-        LaunchResult result = launcher.launch("context", "show", "test-context");
+        // Describe the context
+        LaunchResult result = launcher.launch("context", "describe", "test-context");
 
         assertEquals(0, result.exitCode());
         String output = result.getOutput();
@@ -319,22 +319,22 @@ class ContextCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    @Launch(value = {"context", "show", "nonexistent"}, exitCode = 1)
-    void testShowContextNotFound(LaunchResult result) {
+    @Launch(value = {"context", "describe", "nonexistent"}, exitCode = 1)
+    void testDescribeContextNotFound(LaunchResult result) {
         assertEquals(1, result.exitCode());
         assertTrue(result.getErrorOutput().contains("does not exist"));
     }
 
     @Test
-    void testShowContextPropertiesFormat() {
+    void testDescribeContextPropertiesFormat() {
         // Create context using the service
         contextService.createContext("test-context", ContextConfig.builder()
                 .addCommon("bootstrap.servers", "localhost:9092")
                 .addConsumer("group.id", "test-group")
                 .build(), false);
 
-        // Show context in properties format
-        LaunchResult result = launcher.launch("context", "show", "test-context", "-o", "properties");
+        // Describe context in properties format
+        LaunchResult result = launcher.launch("context", "describe", "test-context", "-o", "properties");
 
         assertEquals(0, result.exitCode());
         String output = result.getOutput();
@@ -343,14 +343,14 @@ class ContextCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testShowContextJsonFormat() {
+    void testDescribeContextJsonFormat() {
         // Create context using the service
         contextService.createContext("test-context", ContextConfig.builder()
                 .addCommon("bootstrap.servers", "localhost:9092")
                 .build(), false);
 
-        // Show context in JSON format
-        LaunchResult result = launcher.launch("context", "show", "test-context", "-o", "json");
+        // Describe context in JSON format
+        LaunchResult result = launcher.launch("context", "describe", "test-context", "-o", "json");
 
         assertEquals(0, result.exitCode());
         String output = result.getOutput();
