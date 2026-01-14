@@ -67,7 +67,7 @@ public abstract class ClikTestBase extends CommonTestBase {
     String kafkaBootstrapServers;
 
     @Override
-    protected String kafkaBootstrapServers() {
+    public String kafkaBootstrapServers() {
         return kafkaBootstrapServers;
     }
 }
