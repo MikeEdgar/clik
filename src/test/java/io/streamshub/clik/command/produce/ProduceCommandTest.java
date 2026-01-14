@@ -1276,8 +1276,7 @@ class ProduceCommandTest extends ClikMainTestBase {
      * Helper method to consume records from a topic
      */
     private List<ConsumerRecord<String, String>> consumeRecords(String topic, int count) {
-        Consumer<String, String> consumer = createConsumerGroup("test-consumer-" + System.currentTimeMillis(), topic).join();
-        consumer.seekToBeginning(consumer.assignment());
+        Consumer<String, String> consumer = createConsumer(topic);
 
         List<ConsumerRecord<String, String>> allRecords = new ArrayList<>();
         long startTime = System.currentTimeMillis();
