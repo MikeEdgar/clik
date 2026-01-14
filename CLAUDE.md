@@ -244,6 +244,7 @@ Clik implements message production and consumption commands for Kafka topics. Se
   - `--from-beginning` - Start from earliest offset
   - `--from-end` - Start from latest offset
   - `--from-offset <offset>` - Start from specific offset (requires `--partition`)
+  - `--from-datetime <datetime>` - Start from specific absolute datetime or duration relative to current time
 - Partition control:
   - All partitions (default)
   - Specific partition via `--partition <num>`
