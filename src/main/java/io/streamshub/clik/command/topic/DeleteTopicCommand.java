@@ -8,7 +8,7 @@ import jakarta.inject.Inject;
 
 import org.apache.kafka.clients.admin.Admin;
 
-import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.TopicService;
 import picocli.CommandLine;
@@ -17,7 +17,7 @@ import picocli.CommandLine;
         name = "delete",
         description = "Delete one or more topics"
 )
-public class DeleteTopicCommand extends BaseCommand implements Callable<Integer> {
+public class DeleteTopicCommand extends ContextualCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0..*",
@@ -57,7 +57,7 @@ public class DeleteTopicCommand extends BaseCommand implements Callable<Integer>
             }
         }
 
-        try (Admin admin = clientFactory.createAdminClient()) {
+        try (Admin admin = clientFactory.createAdminClient(contextName)) {
             topicService.deleteTopics(admin, names);
 
             if (names.size() == 1) {

@@ -32,7 +32,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import com.github.freva.asciitable.AsciiTable;
 import com.github.freva.asciitable.HorizontalAlign;
 
-import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.kafka.ConfigCandidates;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.KafkaRecord;
@@ -44,7 +44,7 @@ import picocli.CommandLine;
         name = "consume",
         description = "Consume messages from a Kafka topic"
 )
-public class ConsumeCommand extends BaseCommand implements Callable<Integer> {
+public class ConsumeCommand extends ContextualCommand implements Callable<Integer> {
 
     private static final String OUTPUT_TABLE = "table";
     private static final String OUTPUT_JSON = "json";
@@ -172,7 +172,7 @@ public class ConsumeCommand extends BaseCommand implements Callable<Integer> {
     }
 
     private int execute() {
-        try (Consumer<byte[], byte[]> consumer = clientFactory.createConsumer(properties, groupId)) {
+        try (Consumer<byte[], byte[]> consumer = clientFactory.createConsumer(contextName, properties, groupId)) {
             configureConsumer(consumer);
 
             if (follow) {
@@ -307,6 +307,11 @@ public class ConsumeCommand extends BaseCommand implements Callable<Integer> {
                 }
             }
 
+            if (fullyConsumed(consumer)) {
+                // Stop polling when we've read to the end of all assigned partitions.
+                return messages;
+            }
+
             if (!records.isEmpty()) {
                 // Reset timeout when we receive messages
                 startTime = System.currentTimeMillis();
@@ -314,6 +319,24 @@ public class ConsumeCommand extends BaseCommand implements Callable<Integer> {
         }
 
         return messages;
+    }
+
+    private boolean fullyConsumed(Consumer<?, ?> consumer) {
+        var assignment = consumer.assignment();
+
+        if (assignment.isEmpty()) {
+            // Consumer group that has not received the assignment yet.
+            return false;
+        }
+
+        var endOffsets = consumer.endOffsets(assignment);
+
+        return endOffsets.entrySet().stream().allMatch(e -> {
+            var endOffset = e.getValue();
+            var position = consumer.position(e.getKey());
+            // This should be correct for either consumer isolation level
+            return position >= endOffset;
+        });
     }
 
     private int consumeContinuously(Consumer<byte[], byte[]> consumer) {

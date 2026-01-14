@@ -11,7 +11,7 @@ import jakarta.inject.Inject;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.acl.AclBindingFilter;
 
-import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.command.acl.options.Operation;
 import io.streamshub.clik.command.acl.options.PatternType;
 import io.streamshub.clik.command.acl.options.Permission;
@@ -26,7 +26,7 @@ import picocli.CommandLine.Mixin;
         name = "delete",
         description = "Delete ACL bindings matching filter"
 )
-public class DeleteAclCommand extends BaseCommand implements Callable<Integer> {
+public class DeleteAclCommand extends ContextualCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"-y", "--yes"},
@@ -82,7 +82,7 @@ public class DeleteAclCommand extends BaseCommand implements Callable<Integer> {
             return 1;
         }
 
-        try (Admin admin = clientFactory.createAdminClient()) {
+        try (Admin admin = clientFactory.createAdminClient(contextName)) {
             var resourceSpec = Resource.fromOptions(resource);
 
             AclBindingFilter filter = aclService.buildAclBindingFilter(

@@ -17,7 +17,7 @@ import com.github.freva.asciitable.AsciiTable;
 import com.github.freva.asciitable.Column;
 import com.github.freva.asciitable.HorizontalAlign;
 
-import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.kafka.GroupService;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.GroupInfo;
@@ -29,7 +29,7 @@ import picocli.CommandLine;
         name = "describe",
         description = "Display detailed information about a consumer group"
 )
-public class DescribeGroupCommand extends BaseCommand implements Callable<Integer> {
+public class DescribeGroupCommand extends ContextualCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0",
@@ -52,7 +52,7 @@ public class DescribeGroupCommand extends BaseCommand implements Callable<Intege
 
     @Override
     public Integer call() {
-        try (Admin admin = clientFactory.createAdminClient()) {
+        try (Admin admin = clientFactory.createAdminClient(contextName)) {
             GroupInfo group = groupService.describeGroup(admin, groupId);
 
             if (group == null) {

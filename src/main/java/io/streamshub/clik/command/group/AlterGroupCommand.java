@@ -27,7 +27,7 @@ import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 
-import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.kafka.GroupService;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import picocli.CommandLine;
@@ -39,7 +39,7 @@ import picocli.CommandLine.Model.OptionSpec;
         name = "alter",
         description = "Alter consumer group offsets"
 )
-public class AlterGroupCommand extends BaseCommand implements Callable<Integer> {
+public class AlterGroupCommand extends ContextualCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0",
@@ -155,7 +155,7 @@ public class AlterGroupCommand extends BaseCommand implements Callable<Integer> 
             return 1;
         }
 
-        try (Admin admin = clientFactory.createAdminClient()) {
+        try (Admin admin = clientFactory.createAdminClient(contextName)) {
             return process(admin);
         } catch (IllegalStateException e) {
             err().println("Error: " + e.getMessage());
@@ -544,7 +544,7 @@ public class AlterGroupCommand extends BaseCommand implements Callable<Integer> 
             return timestamps;
         }
 
-        try (var consumer = clientFactory.createConsumer(Collections.emptyMap(), null)) {
+        try (var consumer = clientFactory.createConsumer(contextName, Collections.emptyMap(), null)) {
             Instant deadline = Instant.now().plusSeconds(10);
 
             while (!assignments.isEmpty() && Instant.now().isBefore(deadline)) {

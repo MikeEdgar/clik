@@ -8,7 +8,7 @@ import jakarta.inject.Inject;
 
 import org.apache.kafka.clients.admin.Admin;
 
-import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.kafka.ConfigCandidates;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.TopicService;
@@ -18,7 +18,7 @@ import picocli.CommandLine;
         name = "create",
         description = "Create a new Kafka topic"
 )
-public class CreateTopicCommand extends BaseCommand implements Callable<Integer> {
+public class CreateTopicCommand extends ContextualCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0",
@@ -56,7 +56,7 @@ public class CreateTopicCommand extends BaseCommand implements Callable<Integer>
 
     @Override
     public Integer call() {
-        try (Admin admin = clientFactory.createAdminClient()) {
+        try (Admin admin = clientFactory.createAdminClient(contextName)) {
             topicService.createTopic(admin, name, partitions, replicationFactor, configs);
             out().println("Topic \"" + name + "\" created.");
             return 0;

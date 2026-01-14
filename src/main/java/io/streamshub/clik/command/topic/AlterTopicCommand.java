@@ -11,7 +11,7 @@ import jakarta.inject.Inject;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 
-import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.kafka.ConfigCandidates;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.TopicService;
@@ -22,7 +22,7 @@ import picocli.CommandLine;
         name = "alter",
         description = "Alter topic configuration and partitions"
 )
-public class AlterTopicCommand extends BaseCommand implements Callable<Integer> {
+public class AlterTopicCommand extends ContextualCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0",
@@ -80,7 +80,7 @@ public class AlterTopicCommand extends BaseCommand implements Callable<Integer> 
         // Validate partition count if specified
         int currentPartitions = 0;
         if (partitions != null) {
-            try (Admin admin = clientFactory.createAdminClient()) {
+            try (Admin admin = clientFactory.createAdminClient(contextName)) {
                 TopicInfo topicInfo = topicService.describeTopic(admin, name);
                 currentPartitions = topicInfo.partitions();
 
@@ -104,7 +104,7 @@ public class AlterTopicCommand extends BaseCommand implements Callable<Integer> 
             }
         }
 
-        try (Admin admin = clientFactory.createAdminClient()) {
+        try (Admin admin = clientFactory.createAdminClient(contextName)) {
             boolean configsAltered = false;
             boolean partitionsAltered = false;
 

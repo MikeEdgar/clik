@@ -7,6 +7,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -38,6 +40,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
@@ -273,6 +276,32 @@ abstract class CommonTestBase {
         }
 
         return admin;
+    }
+
+    protected Consumer<String, String> createConsumer(String... topics) {
+        String clientId = "test-client-" + UUID.randomUUID().toString();
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, clientId);
+        props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "120000"); // 120 seconds
+
+        Consumer<String, String> consumer = new KafkaConsumer<>(props);
+        consumers.add(consumer);
+
+        var assignment = Arrays.stream(topics)
+            .map(consumer::partitionsFor)
+            .flatMap(Collection::stream)
+            .map(p -> new TopicPartition(p.topic(), p.partition()))
+            .collect(Collectors.toSet());
+
+        consumer.assign(assignment);
+        assignment.forEach(consumer::position);
+
+        return consumer;
     }
 
     protected CompletableFuture<Consumer<String, String>> createConsumerGroup(String groupId, String topic) {

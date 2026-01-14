@@ -260,8 +260,6 @@ class GroupCommandTest extends ClikMainTestBase {
         Consumer<String, String> consumer = createConsumerGroup("offset-test-group", "offset-test-topic")
                 .join();
 
-        // Poll and commit offsets
-        consumer.poll(Duration.ofSeconds(5));
         consumer.commitSync();
 
         LaunchResult result = launcher.launch("group", "describe", "offset-test-group");
@@ -344,7 +342,9 @@ class GroupCommandTest extends ClikMainTestBase {
 
         // Create consumer group and consume messages
         Consumer<String, String> consumer = createConsumerGroup("alter-earliest-group", "alter-earliest-topic").join();
-        consumer.poll(Duration.ofSeconds(5));
+        var assignment = consumer.assignment();
+        consumer.seekToEnd(assignment);
+        assignment.forEach(consumer::position);
         consumer.commitSync();
         close(consumer);
 
@@ -375,7 +375,9 @@ class GroupCommandTest extends ClikMainTestBase {
 
         // Create consumer group with offsets at 0
         Consumer<String, String> consumer = createConsumerGroup("alter-latest-group", "alter-latest-topic").join();
-        consumer.poll(Duration.ofMillis(100)); // Don't consume messages
+        var assignment = consumer.assignment();
+        consumer.seekToBeginning(assignment);
+        assignment.forEach(consumer::position);
         consumer.commitSync();
         close(consumer);
 
@@ -401,7 +403,6 @@ class GroupCommandTest extends ClikMainTestBase {
 
         // Create consumer group
         Consumer<String, String> consumer = createConsumerGroup("alter-offset-group", "alter-offset-topic").join();
-        consumer.poll(Duration.ofMillis(100));
         consumer.commitSync();
         close(consumer);
 
@@ -427,7 +428,6 @@ class GroupCommandTest extends ClikMainTestBase {
 
         // Create consumer group
         Consumer<String, String> consumer = createConsumerGroup("shift-group", "shift-topic").join();
-        consumer.poll(Duration.ofSeconds(2));
         consumer.commitSync();
         close(consumer);
 
@@ -562,7 +562,6 @@ class GroupCommandTest extends ClikMainTestBase {
 
         // Create consumer group
         Consumer<String, String> consumer = createConsumerGroup("delete-offset-group", "delete-offset-topic").join();
-        consumer.poll(Duration.ofSeconds(2));
         consumer.commitSync();
         close(consumer);
 

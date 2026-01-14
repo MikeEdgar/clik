@@ -18,7 +18,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import com.github.freva.asciitable.AsciiTable;
 import com.github.freva.asciitable.HorizontalAlign;
 
-import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.kafka.GroupService;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.GroupInfo;
@@ -28,7 +28,7 @@ import picocli.CommandLine;
         name = "list",
         description = "List all Kafka consumer groups"
 )
-public class ListGroupsCommand extends BaseCommand implements Callable<Integer> {
+public class ListGroupsCommand extends ContextualCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"-o", "--output"},
@@ -51,7 +51,7 @@ public class ListGroupsCommand extends BaseCommand implements Callable<Integer> 
 
     @Override
     public Integer call() {
-        try (Admin admin = clientFactory.createAdminClient()) {
+        try (Admin admin = clientFactory.createAdminClient(contextName)) {
             Collection<GroupInfo> groups = groupService.listGroups(admin, typeFilter);
 
             if (groups.isEmpty()) {

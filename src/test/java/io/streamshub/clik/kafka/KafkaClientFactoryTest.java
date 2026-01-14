@@ -1,6 +1,7 @@
 package io.streamshub.clik.kafka;
 
 import java.util.List;
+import java.util.Optional;
 
 import jakarta.inject.Inject;
 
@@ -59,7 +60,7 @@ class KafkaClientFactoryTest extends ClikTestBase {
     void testCreateAdminClientFromCurrentContext() {
         contextService.setCurrentContext("test-context");
 
-        Admin admin = clientFactory.createAdminClient();
+        Admin admin = clientFactory.createAdminClient(Optional.empty());
         assertNotNull(admin);
         admin.close();
     }
@@ -68,7 +69,7 @@ class KafkaClientFactoryTest extends ClikTestBase {
     void testCreateAdminClientNoCurrentContext() {
         // Don't set current context
         IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
-                clientFactory.createAdminClient());
+                clientFactory.createAdminClient(Optional.empty()));
 
         assertTrue(exception.getMessage().contains("No current context set"));
     }

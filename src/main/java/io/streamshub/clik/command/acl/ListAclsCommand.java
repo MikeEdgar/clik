@@ -15,7 +15,7 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import com.github.freva.asciitable.AsciiTable;
 import com.github.freva.asciitable.HorizontalAlign;
 
-import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.command.acl.options.Operation;
 import io.streamshub.clik.command.acl.options.PatternType;
 import io.streamshub.clik.command.acl.options.Permission;
@@ -30,7 +30,7 @@ import picocli.CommandLine.Mixin;
         name = "list",
         description = "List ACL bindings with optional filtering"
 )
-public class ListAclsCommand extends BaseCommand implements Callable<Integer> {
+public class ListAclsCommand extends ContextualCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"-o", "--output"},
@@ -71,7 +71,7 @@ public class ListAclsCommand extends BaseCommand implements Callable<Integer> {
 
     @Override
     public Integer call() {
-        try (Admin admin = clientFactory.createAdminClient()) {
+        try (Admin admin = clientFactory.createAdminClient(contextName)) {
             var resourceSpec = Resource.fromOptions(resource);
 
             AclBindingFilter filter = aclService.buildAclBindingFilter(
