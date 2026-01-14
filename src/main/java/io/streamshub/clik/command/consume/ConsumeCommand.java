@@ -1,6 +1,5 @@
 package io.streamshub.clik.command.consume;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -29,8 +28,6 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
-import com.github.freva.asciitable.AsciiTable;
-import com.github.freva.asciitable.HorizontalAlign;
 
 import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.kafka.ConfigCandidates;
@@ -174,18 +171,7 @@ public class ConsumeCommand extends ContextualCommand implements Callable<Intege
     private int execute() {
         try (Consumer<byte[], byte[]> consumer = clientFactory.createConsumer(contextName, properties, groupId)) {
             configureConsumer(consumer);
-
-            if (follow) {
-                return consumeContinuously(consumer);
-            } else {
-                List<KafkaRecord> messages = consumeOnce(consumer);
-                if (messages.isEmpty()) {
-                    err().println("No messages consumed");
-                } else {
-                    printMessages(messages);
-                }
-                return 0;
-            }
+            return consume(consumer);
         } catch (IllegalStateException e) {
             err().println("Error: " + e.getMessage());
             return 1;
@@ -292,24 +278,55 @@ public class ConsumeCommand extends ContextualCommand implements Callable<Intege
         });
     }
 
-    private List<KafkaRecord> consumeOnce(Consumer<byte[], byte[]> consumer) {
-        List<KafkaRecord> messages = new ArrayList<>();
+    private int consume(Consumer<byte[], byte[]> consumer) {
+        long count = 0;
+
+        ObjectMapper mapper = null;
+        OutputFormatter formatter = null;
+
+        // Check if we're using a format string and parse it once for efficiency
+        switch (outputFormat.toLowerCase()) {
+            case OUTPUT_TABLE:
+                break;
+            case OUTPUT_JSON:
+                mapper = jsonMapper();
+                break;
+            case OUTPUT_YAML:
+                mapper = yamlMapper();
+                break;
+            default:
+                formatter = OutputFormatter.withFormat(outputFormat);
+                break;
+        }
+
         long startTime = System.currentTimeMillis();
 
-        while (System.currentTimeMillis() - startTime < timeout) {
+        while (lifecycle.isRunning() && continueConsuming(consumer, startTime, count)) {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
 
             for (ConsumerRecord<byte[], byte[]> rec : records) {
-                messages.add(KafkaRecord.from(rec));
+                count++;
+                KafkaRecord msg = KafkaRecord.from(rec);
 
-                if (maxMessages != null && messages.size() >= maxMessages) {
-                    return messages;
+                switch (outputFormat.toLowerCase()) {
+                    case OUTPUT_TABLE:
+                        printTableRow(msg, count);
+                        break;
+                    case OUTPUT_JSON:
+                        printStructuredMessage(mapper, msg);
+                        break;
+                    case OUTPUT_YAML:
+                        printStructuredMessage(mapper, msg);
+                        break;
+                    default:
+                        // Format string mode - use pre-parsed formatter
+                        out().println(formatter.format(msg));
+                        break;
                 }
-            }
 
-            if (fullyConsumed(consumer)) {
-                // Stop polling when we've read to the end of all assigned partitions.
-                return messages;
+                if (maxMessagesConsumed(count)) {
+                    break;
+                }
             }
 
             if (!records.isEmpty()) {
@@ -318,7 +335,29 @@ public class ConsumeCommand extends ContextualCommand implements Callable<Intege
             }
         }
 
-        return messages;
+        if (count > 0) {
+            err().println("\n" + count + " messages consumed");
+        } else {
+            err().println("No messages consumed");
+        }
+
+        return 0;
+    }
+
+    private boolean continueConsuming(Consumer<byte[], byte[]> consumer, long startTime, long consumedCount) {
+        if (maxMessagesConsumed(consumedCount)) {
+            return false;
+        }
+
+        if (follow) {
+            return true;
+        } else {
+            return (System.currentTimeMillis() - startTime < timeout) && !fullyConsumed(consumer);
+        }
+    }
+
+    private boolean maxMessagesConsumed(long consumedCount) {
+        return maxMessages != null && consumedCount >= maxMessages;
     }
 
     private boolean fullyConsumed(Consumer<?, ?> consumer) {
@@ -339,75 +378,11 @@ public class ConsumeCommand extends ContextualCommand implements Callable<Intege
         });
     }
 
-    private int consumeContinuously(Consumer<byte[], byte[]> consumer) {
-        int count = 0;
-
-        // Check if we're using a format string and parse it once for efficiency
-        boolean isPredefinedFormat = Stream.of(OUTPUT_TABLE, OUTPUT_JSON, OUTPUT_YAML)
-                .anyMatch(outputFormat::equalsIgnoreCase);
-
-        OutputFormatter formatter = !isPredefinedFormat ? OutputFormatter.withFormat(outputFormat) : null;
-
-        while (lifecycle.isRunning() && (maxMessages == null || count < maxMessages)) {
-            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
-
-            for (ConsumerRecord<byte[], byte[]> rec : records) {
-                KafkaRecord msg = KafkaRecord.from(rec);
-
-                if (outputFormat.equalsIgnoreCase(OUTPUT_TABLE)) {
-                    printTableRow(msg);
-                } else if (formatter != null) {
-                    // Format string mode - use pre-parsed formatter
-                    out().println(formatter.format(msg));
-                } else {
-                    // Predefined format (json, yaml, value)
-                    printMessages(List.of(msg));
-                }
-
-                count++;
-            }
+    private void printTableRow(KafkaRecord msg, long count) {
+        if (count == 1) {
+            out().println("PARTITION\tOFFSET\tKEY\tVALUE");
         }
 
-        err().println("\n" + count + " messages consumed");
-        return 0;
-    }
-
-    private void printMessages(List<KafkaRecord> messages) {
-        switch (outputFormat.toLowerCase()) {
-            case OUTPUT_TABLE:
-                printTable(messages);
-                break;
-            case OUTPUT_JSON:
-                printJson(messages);
-                break;
-            case OUTPUT_YAML:
-                printYaml(messages);
-                break;
-            default:
-                printFormatString(messages);
-                break;
-        }
-    }
-
-    private void printFormatString(List<KafkaRecord> messages) {
-        OutputFormatter formatter = OutputFormatter.withFormat(outputFormat);
-        for (KafkaRecord msg : messages) {
-            out().println(formatter.format(msg));
-        }
-    }
-
-    private void printTable(List<KafkaRecord> messages) {
-        String table = AsciiTable.getTable(AsciiTable.NO_BORDERS, messages, List.of(
-                column("PARTITION", HorizontalAlign.RIGHT, msg -> String.valueOf(msg.partition())),
-                column("OFFSET", HorizontalAlign.RIGHT, msg -> String.valueOf(msg.offset())),
-                column("KEY", HorizontalAlign.LEFT, msg -> msg.keyString("")),
-                column("VALUE", HorizontalAlign.LEFT, msg -> msg.valueString(""))
-        ));
-
-        out().println(table);
-    }
-
-    private void printTableRow(KafkaRecord msg) {
         out().printf("%d\t%d\t%s\t%s%n",
                 msg.partition(),
                 msg.offset(),
@@ -415,41 +390,20 @@ public class ConsumeCommand extends ContextualCommand implements Callable<Intege
                 msg.valueString(""));
     }
 
-    private void printJson(List<KafkaRecord> messages) {
-        ObjectMapper jsonMapper = new ObjectMapper()
+    private ObjectMapper jsonMapper() {
+        return new ObjectMapper()
                 .disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
-
-        try {
-            for (KafkaRecord msg : messages) {
-                printStructuredMessage(jsonMapper, msg);
-                out().println();
-            }
-        } catch (Exception e) {
-            err().println("Error: Failed to generate JSON output: " + e.getMessage());
-        }
     }
 
-    private void printYaml(List<KafkaRecord> messages) {
+    private ObjectMapper yamlMapper() {
         YAMLFactory yamlFactory = YAMLFactory.builder()
                 .enable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
                 .build();
-        ObjectMapper yamlMapper = new ObjectMapper(yamlFactory)
+        return new ObjectMapper(yamlFactory)
                 .disable(JsonGenerator.Feature.AUTO_CLOSE_TARGET);
-
-        try {
-            for (KafkaRecord msg : messages) {
-                printStructuredMessage(yamlMapper, msg);
-                if (follow) {
-                    // Write the document end marker when streaming
-                    out().println("...");
-                }
-            }
-        } catch (Exception e) {
-            err().println("Error: Failed to generate YAML output: " + e.getMessage());
-        }
     }
 
-    private void printStructuredMessage(ObjectMapper mapper, KafkaRecord msg) throws IOException {
+    private void printStructuredMessage(ObjectMapper mapper, KafkaRecord msg) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("partition", msg.partition());
         data.put("offset", msg.offset());
@@ -457,7 +411,12 @@ public class ConsumeCommand extends ContextualCommand implements Callable<Intege
         data.put("value", msg.valueString(null));
         data.put("timestamp", msg.timestamp());
         data.put("headers", convertHeadersToMapList(msg.headers()));
-        mapper.writeValue(out(), data);
+
+        try {
+            mapper.writeValue(out(), data);
+        } catch (Exception e) {
+            err().println("Error: Failed to generate output: " + e.getMessage());
+        }
     }
 
     /**
