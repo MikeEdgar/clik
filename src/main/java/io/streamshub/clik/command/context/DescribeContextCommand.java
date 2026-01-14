@@ -4,6 +4,9 @@ import java.util.concurrent.Callable;
 
 import jakarta.inject.Inject;
 
+import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.DumperOptions.ScalarStyle;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
@@ -16,10 +19,10 @@ import io.streamshub.clik.config.ContextService;
 import picocli.CommandLine;
 
 @CommandLine.Command(
-        name = "show",
+        name = "describe",
         description = "Display detailed configuration for a specific context"
 )
-public class ShowContextCommand extends BaseCommand implements Callable<Integer> {
+public class DescribeContextCommand extends BaseCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0",
@@ -77,8 +80,13 @@ public class ShowContextCommand extends BaseCommand implements Callable<Integer>
 
     private void printYaml(ContextConfig config) {
         try {
+            DumperOptions options = new DumperOptions();
+            options.setDefaultScalarStyle(ScalarStyle.LITERAL); // '|'
+
             YAMLFactory yamlFactory = YAMLFactory.builder()
+                    .dumperOptions(options)
                     .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER)
+                    .enable(YAMLGenerator.Feature.MINIMIZE_QUOTES)
                     .build();
             ObjectMapper yamlMapper = new ObjectMapper(yamlFactory);
             out().print(yamlMapper.writeValueAsString(config));
