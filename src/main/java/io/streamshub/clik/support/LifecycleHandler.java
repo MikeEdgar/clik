@@ -14,6 +14,7 @@ import jakarta.enterprise.event.Shutdown;
 import jakarta.enterprise.event.Startup;
 import jakarta.inject.Inject;
 
+import org.eclipse.microprofile.context.ManagedExecutor;
 import org.jboss.logging.Logger;
 
 /**
@@ -26,6 +27,9 @@ public class LifecycleHandler {
 
     @Inject
     Logger logger;
+
+    @Inject
+    ManagedExecutor executor;
 
     List<CompletableFuture<?>> promises = new ArrayList<>();
 
@@ -53,7 +57,7 @@ public class LifecycleHandler {
     }
 
     public <T> CompletableFuture<T> supply(Supplier<T> task) {
-        CompletableFuture<T> promise = CompletableFuture.supplyAsync(task);
+        CompletableFuture<T> promise = CompletableFuture.supplyAsync(task, executor);
         promises.add(promise);
         return promise;
     }
