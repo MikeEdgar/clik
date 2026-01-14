@@ -4,16 +4,11 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
-import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
 
 import jakarta.inject.Inject;
 
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -24,6 +19,7 @@ import io.quarkus.test.junit.TestProfile;
 import io.streamshub.clik.kafka.model.GroupInfo;
 import io.streamshub.clik.kafka.model.OffsetLagInfo;
 import io.streamshub.clik.test.ClikTestBase;
+import io.streamshub.clik.test.TestRecordProducer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -33,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
 @TestProfile(ClikTestBase.Profile.class)
-class GroupServiceTest extends ClikTestBase {
+class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
 
     @Inject
     Logger logger;
@@ -223,22 +219,6 @@ class GroupServiceTest extends ClikTestBase {
         if (offsets != null) {
             // If offsets are present, they should be empty or have null current offsets
             assertTrue(offsets.isEmpty() || offsets.get(0).currentOffset() == null);
-        }
-    }
-
-    /**
-     * Helper method to produce test messages
-     */
-    private void produceMessages(String topic, int count) throws Exception {
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
-            for (int i = 0; i < count; i++) {
-                producer.send(new ProducerRecord<>(topic, "key-" + i, "value-" + i)).get();
-            }
         }
     }
 }

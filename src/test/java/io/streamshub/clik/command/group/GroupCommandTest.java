@@ -5,19 +5,13 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.StringSerializer;
-import org.jboss.logging.Logger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -32,6 +26,7 @@ import io.streamshub.clik.config.ContextService;
 import io.streamshub.clik.kafka.GroupService;
 import io.streamshub.clik.kafka.TopicService;
 import io.streamshub.clik.test.ClikMainTestBase;
+import io.streamshub.clik.test.TestRecordProducer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -40,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusMainTest
 @TestProfile(ClikMainTestBase.Profile.class)
-class GroupCommandTest extends ClikMainTestBase {
+class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
 
     private AtomicBoolean initialized = new AtomicBoolean(false);
 
@@ -686,46 +681,5 @@ class GroupCommandTest extends ClikMainTestBase {
 
         assertEquals(1, result.exitCode());
         assertTrue(result.getErrorOutput().contains("No current context set"));
-    }
-
-    /**
-     * Helper method to produce test messages
-     */
-    private void produceMessages(String topic, int count) throws Exception {
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
-            for (int i = 0; i < count; i++) {
-                producer.send(new ProducerRecord<>(topic, "key-" + i, "value-" + i)).get();
-            }
-        }
-    }
-
-    private void produceMessagesWithTimestamps(String topic, int count, long baseTimestamp, long incrementMs) throws Exception {
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
-            for (int i = 0; i < count; i++) {
-                long timestamp = baseTimestamp + (i * incrementMs);
-                ProducerRecord<String, String> rec = new ProducerRecord<>(
-                    topic,
-                    null, // partition
-                    timestamp,
-                    "key-" + i,
-                    "value-" + i
-                );
-                var recMeta = producer.send(rec).get();
-                Logger.getLogger(getClass()).debugf("partition:%d offset:%d ts:%s",
-                        recMeta.partition(),
-                        recMeta.offset(),
-                        Instant.ofEpochMilli(recMeta.timestamp()));
-            }
-        }
     }
 }

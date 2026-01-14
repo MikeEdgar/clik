@@ -1,5 +1,12 @@
 package io.streamshub.clik.command.consume;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import io.quarkus.test.junit.TestProfile;
 import io.quarkus.test.junit.main.LaunchResult;
 import io.quarkus.test.junit.main.QuarkusMainLauncher;
@@ -8,24 +15,15 @@ import io.streamshub.clik.config.ContextConfig;
 import io.streamshub.clik.config.ContextService;
 import io.streamshub.clik.kafka.TopicService;
 import io.streamshub.clik.test.ClikMainTestBase;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.serialization.StringSerializer;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import io.streamshub.clik.test.TestRecordProducer;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Collections;
-import java.util.Properties;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusMainTest
 @TestProfile(ClikMainTestBase.Profile.class)
-class ConsumeCommandTest extends ClikMainTestBase {
+class ConsumeCommandTest extends ClikMainTestBase implements TestRecordProducer {
 
     private AtomicBoolean initialized = new AtomicBoolean(false);
 
@@ -351,9 +349,10 @@ class ConsumeCommandTest extends ClikMainTestBase {
         // Create topic and produce messages with headers
         topicService.createTopic(admin(), "headers-json-topic", 1, 1, Collections.emptyMap());
 
-        RecordHeaders headers = new RecordHeaders();
-        headers.add("content-type", "application/json".getBytes(StandardCharsets.UTF_8));
-        headers.add("version", "1.0".getBytes(StandardCharsets.UTF_8));
+        var headers = List.of(
+                TestHeader.of("content-type", "application/json"),
+                TestHeader.of("version", "1.0")
+        );
 
         produceMessagesWithHeaders("headers-json-topic", headers, "test message");
 
@@ -377,9 +376,10 @@ class ConsumeCommandTest extends ClikMainTestBase {
         // Create topic and produce messages with headers
         topicService.createTopic(admin(), "headers-yaml-topic", 1, 1, Collections.emptyMap());
 
-        RecordHeaders headers = new RecordHeaders();
-        headers.add("source", "cli".getBytes(StandardCharsets.UTF_8));
-        headers.add("environment", "test".getBytes(StandardCharsets.UTF_8));
+        var headers = List.of(
+                TestHeader.of("source", "cli"),
+                TestHeader.of("environment", "test")
+        );
 
         produceMessagesWithHeaders("headers-yaml-topic", headers, "yaml test message");
 
@@ -403,10 +403,11 @@ class ConsumeCommandTest extends ClikMainTestBase {
         // Create topic and produce messages with duplicate header keys
         topicService.createTopic(admin(), "dup-headers-json-topic", 1, 1, Collections.emptyMap());
 
-        RecordHeaders headers = new RecordHeaders();
-        headers.add("tag", "v1".getBytes(StandardCharsets.UTF_8));
-        headers.add("tag", "v2".getBytes(StandardCharsets.UTF_8));
-        headers.add("tag", "v3".getBytes(StandardCharsets.UTF_8));
+        var headers = List.of(
+                TestHeader.of("tag", "v1"),
+                TestHeader.of("tag", "v2"),
+                TestHeader.of("tag", "v3")
+        );
 
         produceMessagesWithHeaders("dup-headers-json-topic", headers, "duplicate header test");
 
@@ -432,9 +433,10 @@ class ConsumeCommandTest extends ClikMainTestBase {
         // Create topic and produce messages with duplicate header keys
         topicService.createTopic(admin(), "dup-headers-yaml-topic", 1, 1, Collections.emptyMap());
 
-        RecordHeaders headers = new RecordHeaders();
-        headers.add("label", "alpha".getBytes(StandardCharsets.UTF_8));
-        headers.add("label", "beta".getBytes(StandardCharsets.UTF_8));
+        var headers = List.of(
+                TestHeader.of("label", "alpha"),
+                TestHeader.of("label", "beta")
+        );
 
         produceMessagesWithHeaders("dup-headers-yaml-topic", headers, "yaml duplicate test");
 
@@ -490,55 +492,6 @@ class ConsumeCommandTest extends ClikMainTestBase {
     }
 
     /**
-     * Helper method to produce test messages
-     */
-    private void produceMessages(String topic, String... messages) throws Exception {
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
-            for (String message : messages) {
-                producer.send(new ProducerRecord<>(topic, message)).get();
-            }
-        }
-    }
-
-    /**
-     * Helper method to produce messages to a specific partition
-     */
-    private void produceMessagesToPartition(String topic, int partition, String... messages) throws Exception {
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
-            for (String message : messages) {
-                producer.send(new ProducerRecord<>(topic, partition, null, message)).get();
-            }
-        }
-    }
-
-    /**
-     * Helper method to produce messages with headers
-     */
-    private void produceMessagesWithHeaders(String topic, RecordHeaders headers, String... messages) throws Exception {
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
-            for (String message : messages) {
-                ProducerRecord<String, String> record = new ProducerRecord<>(topic, null, null, null, message, headers);
-                producer.send(record).get();
-            }
-        }
-    }
-
-    /**
      * Helper method to count occurrences of a substring
      */
     private int countOccurrences(String text, String substring) {
@@ -576,15 +529,10 @@ class ConsumeCommandTest extends ClikMainTestBase {
         // Create topic and produce messages with keys
         topicService.createTopic(admin(), "format-kv-topic", 1, 1, Collections.emptyMap());
 
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
-            producer.send(new ProducerRecord<>("format-kv-topic", "key1", "value1")).get();
-            producer.send(new ProducerRecord<>("format-kv-topic", "key2", "value2")).get();
-        }
+        produceRecords(
+                TestRecord.of("format-kv-topic", "key1", "value1"),
+                TestRecord.of("format-kv-topic", "key2", "value2")
+        );
 
         // Consume with key=value format
         LaunchResult result = launcher.launch("consume", "format-kv-topic",
@@ -621,9 +569,10 @@ class ConsumeCommandTest extends ClikMainTestBase {
         // Create topic and produce messages with headers
         topicService.createTopic(admin(), "format-headers-topic", 1, 1, Collections.emptyMap());
 
-        RecordHeaders headers = new RecordHeaders();
-        headers.add("type", "test".getBytes(StandardCharsets.UTF_8));
-        headers.add("version", "1.0".getBytes(StandardCharsets.UTF_8));
+        var headers = List.of(
+                TestHeader.of("type", "test"),
+                TestHeader.of("version", "1.0")
+        );
 
         produceMessagesWithHeaders("format-headers-topic", headers, "message1");
 
@@ -643,9 +592,7 @@ class ConsumeCommandTest extends ClikMainTestBase {
         // Create topic and produce messages with headers
         topicService.createTopic(admin(), "format-named-header-topic", 1, 1, Collections.emptyMap());
 
-        RecordHeaders headers = new RecordHeaders();
-        headers.add("content-type", "application/json".getBytes(StandardCharsets.UTF_8));
-
+        var headers = List.of(TestHeader.of("content-type", "application/json"));
         produceMessagesWithHeaders("format-named-header-topic", headers, "json-data");
 
         // Consume with named header in format
@@ -681,14 +628,7 @@ class ConsumeCommandTest extends ClikMainTestBase {
         // Create topic and produce messages
         topicService.createTopic(admin(), "format-csv-topic", 1, 1, Collections.emptyMap());
 
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(props)) {
-            producer.send(new ProducerRecord<>("format-csv-topic", "key1", "value1")).get();
-        }
+        produceRecords(TestRecord.of("format-csv-topic", "key1", "value1"));
 
         // Consume with CSV format
         LaunchResult result = launcher.launch("consume", "format-csv-topic",

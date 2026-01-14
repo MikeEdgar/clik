@@ -59,7 +59,7 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @TestInstance(Lifecycle.PER_CLASS)
-abstract class CommonTestBase {
+public abstract class CommonTestBase {
 
     private static final Logger LOGGER = Logger.getLogger(CommonTestBase.class);
     static AtomicBoolean initialized = new AtomicBoolean(false);
@@ -253,7 +253,7 @@ abstract class CommonTestBase {
         delete(configDir());
     }
 
-    protected String kafkaBootstrapServers() {
+    public String kafkaBootstrapServers() {
         return kafkaBootstrapServers;
     }
 
