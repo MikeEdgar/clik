@@ -287,7 +287,7 @@ clik context current [OPTIONS]
 
 | Flag | Description |
 |------|-------------|
-| `--show-config` | Display full configuration of current context |
+| `--describe` | Display full configuration of current context |
 
 **Examples:**
 
@@ -296,7 +296,7 @@ clik context current [OPTIONS]
 clik context current
 
 # Show current context with full configuration
-clik context current --show-config
+clik context current --describe
 ```
 
 **Output (name only):**
@@ -304,7 +304,7 @@ clik context current --show-config
 dev
 ```
 
-**Output (with --show-config):**
+**Output (with --describe):**
 ```
 Current context: dev
 
@@ -323,7 +323,7 @@ Configuration:
 **Behavior:**
 
 1. Read `current-context` from root `config.yaml`
-2. If `--show-config`, load and display context configuration
+2. If `--describe`, load and display context configuration
 3. Print context name and optionally configuration
 
 **Error Conditions:**
@@ -370,13 +370,13 @@ clik context delete old-cluster --yes
 - Context does not exist
 - User declines confirmation prompt
 
-### Command: `clik context show`
+### Command: `clik context describe`
 
 Display detailed configuration for a specific context.
 
 **Syntax:**
 ```bash
-clik context show <name> [OPTIONS]
+clik context describe <name> [OPTIONS]
 ```
 
 **Options:**
@@ -389,13 +389,13 @@ clik context show <name> [OPTIONS]
 
 ```bash
 # Show context configuration (YAML)
-clik context show prod
+clik context describe prod
 
 # Show as Java properties format
-clik context show prod -o properties
+clik context describe prod -o properties
 
 # Show as JSON
-clik context show prod -o json
+clik context describe prod -o json
 ```
 
 **Output (YAML):**
@@ -1016,7 +1016,7 @@ consumer:
 - [x] `clik context use` command
 - [x] `clik context current` command
 - [x] `clik context delete` command
-- [x] `clik context show` command
+- [x] `clik context describe` command
 - [x] Unit tests for all services
 - [x] `--from-file` support for multiple formats (properties, YAML)
 - [x] `--verify` connection testing

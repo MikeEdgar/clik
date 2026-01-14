@@ -102,7 +102,7 @@ Clik implements a kubectl-like context management system for Kafka clusters. See
 - `clik context use <name>` - Switch to a different context
 - `clik context current` - Display the current active context
 - `clik context delete <name>` - Delete a context
-- `clik context show <name>` - Display detailed configuration for a context
+- `clik context describe <name>` - Display detailed configuration for a context
 - `clik context rename <old-name> <new-name>` - Rename a context
 
 **Configuration Storage:**
