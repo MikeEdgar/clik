@@ -16,7 +16,7 @@ import com.github.freva.asciitable.AsciiTable;
 import com.github.freva.asciitable.ColumnData;
 import com.github.freva.asciitable.HorizontalAlign;
 
-import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.kafka.ClusterService;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.ClusterInfo;
@@ -27,7 +27,7 @@ import picocli.CommandLine;
         name = "describe",
         description = "Display detailed information about the Kafka cluster"
 )
-public class DescribeClusterCommand extends BaseCommand implements Callable<Integer> {
+public class DescribeClusterCommand extends ContextualCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"-o", "--output"},
@@ -44,7 +44,7 @@ public class DescribeClusterCommand extends BaseCommand implements Callable<Inte
 
     @Override
     public Integer call() {
-        try (Admin admin = clientFactory.createAdminClient()) {
+        try (Admin admin = clientFactory.createAdminClient(contextName)) {
             ClusterInfo cluster = clusterService.describeCluster(admin);
 
             switch (outputFormat.toLowerCase()) {

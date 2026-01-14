@@ -10,7 +10,7 @@ import com.github.freva.asciitable.HorizontalAlign;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.CommandSpec;
 
-public class BaseCommand {
+public abstract class BaseCommand {
 
     @CommandLine.Spec
     CommandSpec commandSpec;

@@ -8,7 +8,7 @@ import jakarta.inject.Inject;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.acl.AclBinding;
 
-import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.command.acl.options.Operation;
 import io.streamshub.clik.command.acl.options.PatternType;
 import io.streamshub.clik.command.acl.options.Permission;
@@ -22,7 +22,7 @@ import picocli.CommandLine.Mixin;
         name = "create",
         description = "Create new ACL bindings"
 )
-public class CreateAclCommand extends BaseCommand implements Callable<Integer> {
+public class CreateAclCommand extends ContextualCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"--principal", "-p"},
@@ -71,7 +71,7 @@ public class CreateAclCommand extends BaseCommand implements Callable<Integer> {
             return 1;
         }
 
-        try (Admin admin = clientFactory.createAdminClient()) {
+        try (Admin admin = clientFactory.createAdminClient(contextName)) {
             AclBinding binding = aclService.buildAclBinding(
                     resourceSpec.type(),
                     resourceSpec.name(),

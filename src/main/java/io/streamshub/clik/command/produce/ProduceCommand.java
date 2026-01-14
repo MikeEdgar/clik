@@ -22,7 +22,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
-import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.kafka.ConfigCandidates;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.KafkaRecord;
@@ -34,7 +34,7 @@ import picocli.CommandLine;
         name = "produce",
         description = "Produce messages to a Kafka topic"
 )
-public class ProduceCommand extends BaseCommand implements Callable<Integer> {
+public class ProduceCommand extends ContextualCommand implements Callable<Integer> {
 
     @CommandLine.Parameters(
             index = "0",
@@ -160,7 +160,7 @@ public class ProduceCommand extends BaseCommand implements Callable<Integer> {
             }
         }
 
-        try (Producer<byte[], byte[]> producer = clientFactory.createProducer(properties);
+        try (Producer<byte[], byte[]> producer = clientFactory.createProducer(contextName, properties);
             Stream<String> messages = readMessages()) {
             return sendMessages(producer, messages);
         } catch (IllegalStateException e) {

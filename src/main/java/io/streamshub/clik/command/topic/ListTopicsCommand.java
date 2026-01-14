@@ -19,7 +19,7 @@ import com.github.freva.asciitable.AsciiTable;
 import com.github.freva.asciitable.Column;
 import com.github.freva.asciitable.HorizontalAlign;
 
-import io.streamshub.clik.command.BaseCommand;
+import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.TopicService;
 import io.streamshub.clik.kafka.model.TopicInfo;
@@ -29,7 +29,7 @@ import picocli.CommandLine;
         name = "list",
         description = "List all Kafka topics"
 )
-public class ListTopicsCommand extends BaseCommand implements Callable<Integer> {
+public class ListTopicsCommand extends ContextualCommand implements Callable<Integer> {
 
     @CommandLine.Option(
             names = {"-o", "--output"},
@@ -53,7 +53,7 @@ public class ListTopicsCommand extends BaseCommand implements Callable<Integer> 
 
     @Override
     public Integer call() {
-        try (Admin admin = clientFactory.createAdminClient()) {
+        try (Admin admin = clientFactory.createAdminClient(contextName)) {
             Set<String> topicNames = topicService.listTopics(admin, includeInternal);
 
             if (topicNames.isEmpty()) {
