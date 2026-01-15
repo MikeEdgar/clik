@@ -47,138 +47,74 @@ clik completion generate > /usr/local/etc/bash_completion.d/clik
 
 ## Features
 
-### 🔧 [Context Management](specs/CONTEXT.md)
+### 🔧 Context Management
 Save and switch between multiple Kafka cluster configurations with kubectl-like context commands.
 
 ```bash
-# Create a context for your local cluster
 clik context create local --bootstrap-servers localhost:9092
-
-# Switch to production
-clik context use production
-
-# View current context
-clik context current
+clik context use local
 ```
 
-### 📊 [Topic Management](specs/TOPIC.md)
-Create, list, describe, alter, and delete Kafka topics with rich output formatting.
+See [specs/CONTEXT.md](specs/CONTEXT.md) for complete documentation.
+
+### 📊 Topic Management
+Create, list, describe, alter, and delete Kafka topics.
 
 ```bash
-# Create a topic with 3 partitions
-clik topic create my-topic --partitions 3 --replication-factor 1
-
-# List all topics
+clik topic create my-topic --partitions 3
 clik topic list
-
-# Describe a topic with partition details
-clik topic describe my-topic
-
-# View as JSON for automation
-clik topic list -o json
 ```
 
-### 👥 [Consumer Group Management](specs/GROUP.md)
-Monitor consumer lag, manage offsets, and control consumer group lifecycle. Supports all Kafka 4.1+ group types (consumer, classic, share, streams).
+See [specs/TOPIC.md](specs/TOPIC.md) for complete documentation.
+
+### 👥 Consumer Group Management
+Monitor consumer lag, manage offsets, and control consumer group lifecycle.
 
 ```bash
-# List all consumer groups
 clik group list
-
-# Describe a group with lag information
 clik group describe my-consumer-group
-
-# Reset offsets to earliest
-clik group alter my-group --to-earliest --yes
-
-# Shift back 1 hour to reprocess messages
-clik group alter my-group --by-duration PT-1H --yes
-
-# Delete an inactive group
-clik group delete old-group --yes
 ```
 
-### 🖥️ [Cluster Management](specs/CLUSTER.md)
-View detailed cluster information including nodes, controllers, and KRaft quorum metadata. Supports both KRaft and ZooKeeper deployments.
+See [specs/GROUP.md](specs/GROUP.md) for complete documentation.
+
+### 🖥️ Cluster Management
+View detailed cluster information including nodes, controllers, and KRaft quorum metadata.
 
 ```bash
-# View cluster details with node roles
 clik cluster describe
-# Shows: Cluster ID, Feature Level, Controller ID, Nodes
-# Displays: Node roles (Broker, Controller, Broker+Controller)
-# Displays: Quorum roles (Voter, Observer) and leader
-
-# Export cluster topology as JSON
-clik cluster describe -o json
 ```
 
-### 🔒 [ACL Management](specs/ACL.md)
-Manage Kafka Access Control Lists (ACLs) to secure your cluster resources. Grant or deny access to topics, consumer groups, and cluster operations.
+See [specs/CLUSTER.md](specs/CLUSTER.md) for complete documentation.
+
+### 🔒 ACL Management
+Manage Kafka Access Control Lists (ACLs) to secure your cluster resources.
 
 ```bash
-# Grant read access to a user on a topic
 clik acl create --topic my-topic --operation READ --principal User:alice
-
-# Grant write access with a prefixed pattern
-clik acl create --topic orders --pattern-type PREFIXED --operation WRITE --principal User:producer
-
-# List all ACLs
 clik acl list
-
-# List ACLs for a specific resource
-clik acl list --topic my-topic
-
-# Delete ACL with confirmation
-clik acl delete --topic my-topic --principal User:alice --operation READ
-
-# Delete all ACLs for a principal
-clik acl delete --principal User:olduser --yes
 ```
 
-### 📨 [Message Production](specs/PRODUCE_CONSUME.md)
+See [specs/ACL.md](specs/ACL.md) for complete documentation.
+
+### 📨 Message Production
 Produce messages from files, stdin, or interactively with support for keys, headers, and timestamps.
 
 ```bash
-# Produce from a file
-clik produce my-topic --file messages.txt
-
-# Pipe data to a topic
 echo "Hello Kafka" | clik produce my-topic
-
-# Produce with a key and header
-clik produce my-topic --value "important data" \
-  --key user123 \
-  --header "content-type=application/json"
-
-# Structured input with format strings
-cat data.csv | clik produce my-topic --input "%k,%v"
+clik produce my-topic --file messages.txt
 ```
 
-### 📥 [Message Consumption](specs/PRODUCE_CONSUME.md)
+See [specs/PRODUCE_CONSUME.md](specs/PRODUCE_CONSUME.md) for complete documentation.
+
+### 📥 Message Consumption
 Consume messages with flexible offset control, output formatting, and continuous monitoring.
 
 ```bash
-# Consume from beginning
 clik consume my-topic --from-beginning
-
-# Continuous consumption (like tail -f)
 clik consume my-topic --follow
-
-# Consume specific partition from offset
-clik consume my-topic --partition 2 --from-offset 1000
-
-# Consume specific partition from the last hour
-clik consume my-topic --partition 2 --from-datetime PT1H
-
-# Consume specific partition from a datetime onward
-clik consume my-topic --partition 2 --from-datetime 2026-01-01T00:00:00Z
-
-# Custom output format
-clik consume my-topic --from-beginning -o "%k: %v"
-
-# Export to JSON for processing
-clik consume my-topic --from-beginning -o json > messages.json
 ```
+
+See [specs/PRODUCE_CONSUME.md](specs/PRODUCE_CONSUME.md) for complete documentation.
 
 ## Build from Source
 
@@ -222,68 +158,6 @@ java -jar target/quarkus-app/quarkus-run.jar --help
    ```bash
    clik consume test-topic --from-beginning
    ```
-
-## Example Workflows
-
-### Development Testing
-```bash
-# Set up dev environment
-clik context create dev --bootstrap-servers dev-kafka:9092
-clik context use dev
-
-# Create topic for testing
-clik topic create user-events --partitions 3 --replication-factor 1
-
-# Produce test data
-clik produce user-events --file test-data.json
-
-# Verify messages
-clik consume user-events --from-beginning --max-messages 10
-```
-
-### Debugging Consumer Lag
-```bash
-# Check which groups are behind
-clik group list
-
-# See detailed lag information
-clik group describe slow-consumer-group
-
-# Reset to reprocess last hour of data
-clik group alter slow-consumer-group --by-duration PT-1H --yes
-```
-
-### Monitoring Production
-```bash
-# Switch to production context
-clik context use production
-
-# Verify cluster topology
-clik cluster describe
-
-# Monitor new messages in real-time
-clik consume critical-events --follow --from-end
-
-# Check consumer group health
-clik group describe payment-processor
-```
-
-### Cluster Inspection
-```bash
-# View cluster information
-clik cluster describe
-```
-
-### Data Migration
-```bash
-# Export messages from source
-clik context use source-cluster
-clik consume legacy-topic --from-beginning -o "%v" > data.txt
-
-# Import to destination
-clik context use dest-cluster
-clik produce new-topic --file data.txt
-```
 
 ## Output Formats
 
