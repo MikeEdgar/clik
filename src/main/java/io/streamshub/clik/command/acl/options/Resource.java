@@ -1,5 +1,6 @@
 package io.streamshub.clik.command.acl.options;
 
+import io.streamshub.clik.support.NameCandidate;
 import picocli.CommandLine;
 
 public record Resource(String type, String name) {
@@ -16,13 +17,15 @@ public record Resource(String type, String name) {
     public static class Options {
         @CommandLine.Option(
                 names = {"--topic"},
-                description = "Topic name (supports literal or prefix with --prefix)"
+                description = "Topic name (supports literal or prefix with --prefix)",
+                completionCandidates = NameCandidate.Topic.class
         )
         String topic;
 
         @CommandLine.Option(
                 names = {"--group"},
-                description = "Consumer group name (supports literal or prefix with --prefix)"
+                description = "Consumer group name (supports literal or prefix with --prefix)",
+                completionCandidates = NameCandidate.Group.class
         )
         String group;
 

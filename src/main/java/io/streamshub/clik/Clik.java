@@ -2,6 +2,7 @@ package io.streamshub.clik;
 
 import io.streamshub.clik.command.acl.AclCommand;
 import io.streamshub.clik.command.cluster.ClusterCommand;
+import io.streamshub.clik.command.completion.CompletionCommand;
 import io.streamshub.clik.command.consume.ConsumeCommand;
 import io.streamshub.clik.command.context.ContextCommand;
 import io.streamshub.clik.command.group.GroupCommand;
@@ -29,7 +30,7 @@ import picocli.CommandLine.IVersionProvider;
                 ProduceCommand.class,
                 ConsumeCommand.class,
                 CommandLine.HelpCommand.class,
-                picocli.AutoComplete.GenerateCompletion.class
+                CompletionCommand.class,
         }
 )
 public class Clik {

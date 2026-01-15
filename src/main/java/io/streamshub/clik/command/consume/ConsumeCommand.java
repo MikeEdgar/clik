@@ -40,6 +40,7 @@ import io.streamshub.clik.kafka.ConfigCandidates;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.KafkaRecord;
 import io.streamshub.clik.support.LifecycleHandler;
+import io.streamshub.clik.support.NameCandidate;
 import io.streamshub.clik.support.OutputFormatter;
 import picocli.CommandLine;
 import picocli.CommandLine.ITypeConverter;
@@ -59,7 +60,8 @@ public class ConsumeCommand extends ContextualCommand implements Callable<Intege
 
     @CommandLine.Parameters(
             index = "0",
-            description = "Topic name"
+            description = "Topic name",
+            completionCandidates = NameCandidate.Topic.class
     )
     String topic;
 

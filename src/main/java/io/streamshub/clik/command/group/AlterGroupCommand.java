@@ -30,6 +30,7 @@ import org.apache.kafka.common.TopicPartition;
 import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.kafka.GroupService;
 import io.streamshub.clik.kafka.KafkaClientFactory;
+import io.streamshub.clik.support.NameCandidate;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.ArgSpec;
 import picocli.CommandLine.Model.CommandSpec;
@@ -43,7 +44,8 @@ public class AlterGroupCommand extends ContextualCommand implements Callable<Int
 
     @CommandLine.Parameters(
             index = "0",
-            description = "Group ID"
+            description = "Group ID",
+            completionCandidates = NameCandidate.Group.class
     )
     String groupId;
 

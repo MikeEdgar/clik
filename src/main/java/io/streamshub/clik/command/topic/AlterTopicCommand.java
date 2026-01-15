@@ -16,6 +16,7 @@ import io.streamshub.clik.kafka.ConfigCandidates;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.TopicService;
 import io.streamshub.clik.kafka.model.TopicInfo;
+import io.streamshub.clik.support.NameCandidate;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -26,7 +27,8 @@ public class AlterTopicCommand extends ContextualCommand implements Callable<Int
 
     @CommandLine.Parameters(
             index = "0",
-            description = "Topic name"
+            description = "Topic name",
+            completionCandidates = NameCandidate.Topic.class
     )
     String name;
 
