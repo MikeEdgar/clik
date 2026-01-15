@@ -28,6 +28,7 @@ import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.KafkaRecord;
 import io.streamshub.clik.support.Encoding;
 import io.streamshub.clik.support.InputParser;
+import io.streamshub.clik.support.NameCandidate;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -38,7 +39,8 @@ public class ProduceCommand extends ContextualCommand implements Callable<Intege
 
     @CommandLine.Parameters(
             index = "0",
-            description = "Topic name"
+            description = "Topic name",
+            completionCandidates = NameCandidate.Topic.class
     )
     String topic;
 

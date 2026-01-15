@@ -7,6 +7,7 @@ import jakarta.inject.Inject;
 import io.streamshub.clik.command.BaseCommand;
 import io.streamshub.clik.config.ContextService;
 import io.streamshub.clik.config.ContextValidator;
+import io.streamshub.clik.support.NameCandidate;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -17,7 +18,8 @@ public class RenameContextCommand extends BaseCommand implements Callable<Intege
 
     @CommandLine.Parameters(
             index = "0",
-            description = "Current context name"
+            description = "Current context name",
+            completionCandidates = NameCandidate.Context.class
     )
     String oldName;
 

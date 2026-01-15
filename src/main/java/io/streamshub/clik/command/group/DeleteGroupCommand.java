@@ -11,6 +11,7 @@ import org.apache.kafka.clients.admin.Admin;
 import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.kafka.GroupService;
 import io.streamshub.clik.kafka.KafkaClientFactory;
+import io.streamshub.clik.support.NameCandidate;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -22,7 +23,8 @@ public class DeleteGroupCommand extends ContextualCommand implements Callable<In
     @CommandLine.Parameters(
             index = "0..*",
             arity = "1..*",
-            description = "Group ID(s)"
+            description = "Group ID(s)",
+            completionCandidates = NameCandidate.Group.class
     )
     List<String> groupIds;
 

@@ -39,6 +39,17 @@ public class GroupService {
     Logger logger;
 
     /**
+     * List all group IDs
+     */
+    public Collection<String> listGroupIds(Admin admin)
+            throws ExecutionException, InterruptedException {
+        return admin.listGroups().all().get()
+                .stream()
+                .map(GroupListing::groupId)
+                .toList();
+    }
+
+    /**
      * List all groups, optionally filtered by type
      */
     public Collection<GroupInfo> listGroups(Admin admin, String typeFilter)

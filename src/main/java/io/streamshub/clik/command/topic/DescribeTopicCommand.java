@@ -22,6 +22,7 @@ import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.TopicService;
 import io.streamshub.clik.kafka.model.PartitionInfo;
 import io.streamshub.clik.kafka.model.TopicInfo;
+import io.streamshub.clik.support.NameCandidate;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -32,7 +33,8 @@ public class DescribeTopicCommand extends ContextualCommand implements Callable<
 
     @CommandLine.Parameters(
             index = "0",
-            description = "Topic name"
+            description = "Topic name",
+            completionCandidates = NameCandidate.Topic.class
     )
     String name;
 

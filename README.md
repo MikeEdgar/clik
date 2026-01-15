@@ -21,26 +21,28 @@ Download the latest release for your OS [here](https://github.com/MikeEdgar/clik
 
 ### Bash Completion
 
+After renaming the downloaded release executable to `clik` and placing it in a directory on your `PATH`, use one of the following to setup Bash completion.
+
 Single-session
 
 ```shell
-source <(clik generate-completion)
+source <(clik completion generate)
 ```
 
 Persist in user preferences
 
 ```shell
-clik generate-completion > ~/.local/share/bash-completion/clik
+clik completion generate > ~/.local/share/bash-completion/clik
 ```
 
 Persist globally
 
 ```shell
 # Linux
-clik generate-completion > /etc/bash_completion.d/clik
+clik completion generate > /etc/bash_completion.d/clik
 
 # MacOS
-clik generate-completion > /usr/local/etc/bash_completion.d/clik
+clik completion generate > /usr/local/etc/bash_completion.d/clik
 ```
 
 ## Features

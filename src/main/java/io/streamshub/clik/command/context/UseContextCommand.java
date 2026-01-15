@@ -6,6 +6,7 @@ import jakarta.inject.Inject;
 
 import io.streamshub.clik.command.BaseCommand;
 import io.streamshub.clik.config.ContextService;
+import io.streamshub.clik.support.NameCandidate;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -16,7 +17,8 @@ public class UseContextCommand extends BaseCommand implements Callable<Integer> 
 
     @CommandLine.Parameters(
             index = "0",
-            description = "Context name"
+            description = "Context name",
+            completionCandidates = NameCandidate.Context.class
     )
     String name;
 

@@ -23,6 +23,7 @@ import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.model.GroupInfo;
 import io.streamshub.clik.kafka.model.GroupMemberInfo;
 import io.streamshub.clik.kafka.model.OffsetLagInfo;
+import io.streamshub.clik.support.NameCandidate;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -33,7 +34,8 @@ public class DescribeGroupCommand extends ContextualCommand implements Callable<
 
     @CommandLine.Parameters(
             index = "0",
-            description = "Group ID"
+            description = "Group ID",
+            completionCandidates = NameCandidate.Group.class
     )
     String groupId;
 

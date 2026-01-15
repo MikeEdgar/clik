@@ -16,6 +16,7 @@ import io.streamshub.clik.command.BaseCommand;
 import io.streamshub.clik.config.ConfigurationLoader;
 import io.streamshub.clik.config.ContextConfig;
 import io.streamshub.clik.config.ContextService;
+import io.streamshub.clik.support.NameCandidate;
 import picocli.CommandLine;
 
 @CommandLine.Command(
@@ -26,7 +27,8 @@ public class DescribeContextCommand extends BaseCommand implements Callable<Inte
 
     @CommandLine.Parameters(
             index = "0",
-            description = "Context name"
+            description = "Context name",
+            completionCandidates = NameCandidate.Context.class
     )
     String name;
 
