@@ -165,6 +165,12 @@ clik consume my-topic --follow
 # Consume specific partition from offset
 clik consume my-topic --partition 2 --from-offset 1000
 
+# Consume specific partition from the last hour
+clik consume my-topic --partition 2 --from-datetime PT1H
+
+# Consume specific partition from a datetime onward
+clik consume my-topic --partition 2 --from-datetime 2026-01-01T00:00:00Z
+
 # Custom output format
 clik consume my-topic --from-beginning -o "%k: %v"
 

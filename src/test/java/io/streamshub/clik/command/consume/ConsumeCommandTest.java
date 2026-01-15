@@ -1,11 +1,15 @@
 package io.streamshub.clik.command.consume;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import io.quarkus.test.junit.TestProfile;
 import io.quarkus.test.junit.main.LaunchResult;
@@ -144,6 +148,70 @@ class ConsumeCommandTest extends ClikMainTestBase implements TestRecordProducer 
         assertFalse(output.contains("p0-msg1"));
         assertTrue(output.contains("p0-msg2"));
         assertTrue(output.contains("p0-msg3"));
+    }
+
+    @Test
+    void testConsumeSpecificDatetime() throws Exception {
+        // Create topic with multiple partitions
+        topicService.createTopic(admin(), "datetime-absolute-topic", 1, 1, Collections.emptyMap());
+
+        // Produce messages with timestamps spread over 2 hours
+        var startTime = Instant.now();
+        var baseTimestamp = startTime.minus(Duration.ofHours(2)); // 2 hours ago
+        produceMessagesWithTimestamps("datetime-absolute-topic", 120, baseTimestamp.toEpochMilli(), 60000); // 1 message per minute
+
+        LaunchResult result = launcher.launch("consume", "datetime-absolute-topic",
+                "--from-datetime", startTime.minus(Duration.ofMinutes(60)).toString(),
+                "--output", "%o", // output only the offset
+                "--timeout", "3000");
+        assertEquals(0, result.exitCode());
+
+        List<String> outputLines = result.getOutputStream();
+        assertTrue(outputLines.size() > 1);
+        assertEquals("60", outputLines.get(0));
+        assertEquals("119", outputLines.get(outputLines.size() - 1));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "PT90M, 30",
+        "PT1H, 60",
+        "PT30M, 90"
+    })
+    void testConsumeRelativeDatetime(String duration, int lowerBound) throws Exception {
+        // Create topic with multiple partitions
+        topicService.createTopic(admin(), "datetime-relative-topic", 1, 1, Collections.emptyMap());
+
+        // Produce messages with timestamps spread over 2 hours
+        var startTime = Instant.now();
+        var baseTimestamp = startTime.minus(Duration.ofHours(2)); // 2 hours ago
+        produceMessagesWithTimestamps("datetime-relative-topic", 120, baseTimestamp.toEpochMilli(), 60000); // 1 message per minute
+
+        LaunchResult result = launcher.launch("consume", "datetime-relative-topic",
+                "--from-datetime", duration,
+                "--output", "%o", // output only the offset
+                "--timeout", "3000");
+        assertEquals(0, result.exitCode());
+
+        List<String> outputLines = result.getOutputStream();
+        assertTrue(outputLines.size() > 1);
+        int firstOffset = Integer.parseInt(outputLines.get(0));
+        assertTrue(firstOffset >= lowerBound); // should not be earlier
+        int lastOffset = Integer.parseInt(outputLines.get(outputLines.size() - 1));
+        assertTrue(lastOffset > firstOffset && lastOffset < 120);
+    }
+
+    @Test
+    void testConsumeInvalidDatetime() throws Exception {
+        // Create topic with multiple partitions
+        topicService.createTopic(admin(), "datetime-absolute-topic", 1, 1, Collections.emptyMap());
+
+        LaunchResult result = launcher.launch("consume", "datetime-absolute-topic",
+                "--from-datetime", "not-a-datetime-or-duration",
+                "--output", "%o", // output only the offset
+                "--timeout", "3000");
+        assertEquals(2, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("not a valid datetime or duration"));
     }
 
     @Test

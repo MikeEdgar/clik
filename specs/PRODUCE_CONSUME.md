@@ -203,6 +203,7 @@ clik consume <topic> [OPTIONS]
 | `--from-beginning` | Start from earliest offset | - |
 | `--from-end` | Start from latest offset | - |
 | `--from-offset <offset>` | Start from specific offset (requires --partition) | - |
+| `--from-datetime <datetime>` | Start from specific absolute datetime or duration relative to current time | - |
 | `-p, --partition <num>` | Consume from specific partition only | all partitions |
 | `-o, --output <format>` | Output format: table, json, yaml, or custom format string | table |
 | `--max-messages <num>` | Maximum messages to consume | unlimited |
@@ -421,7 +422,7 @@ clik consume my-topic --from-beginning -o "%k = %{hex:v}"
 - Respects `--max-messages` limit if specified
 
 **Important Notes:**
-- Only one offset option can be specified (--from-beginning, --from-end, --from-offset)
+- Only one offset option can be specified (--from-beginning, --from-end, --from-datetime, --from-offset)
 - `--from-offset` requires `--partition` to be specified
 - In continuous mode, timeout is ignored
 - Standalone consumers (no group ID) don't commit offsets

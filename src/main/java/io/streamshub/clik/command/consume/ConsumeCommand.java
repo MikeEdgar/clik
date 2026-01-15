@@ -1,6 +1,9 @@
 package io.streamshub.clik.command.consume;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -8,9 +11,12 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -36,6 +42,7 @@ import io.streamshub.clik.kafka.model.KafkaRecord;
 import io.streamshub.clik.support.LifecycleHandler;
 import io.streamshub.clik.support.OutputFormatter;
 import picocli.CommandLine;
+import picocli.CommandLine.ITypeConverter;
 
 @CommandLine.Command(
         name = "consume",
@@ -87,6 +94,16 @@ public class ConsumeCommand extends ContextualCommand implements Callable<Intege
     Long offset;
 
     @CommandLine.Option(
+            names = {"--from-datetime"},
+            description = """
+                    Start from a specific date/time or relative duration from the current time \
+                    in ISO-8601 format. For example, an absolute datetime '2026-01-01T00:00:00Z' \
+                    or 'PT24H' for messages produced in the last 24 hours.""",
+            converter = DateTimeConverter.class
+    )
+    Instant fromDatetime;
+
+    @CommandLine.Option(
             names = {"-p", "--partition"},
             description = "Consume from specific partition only"
     )
@@ -126,6 +143,23 @@ public class ConsumeCommand extends ContextualCommand implements Callable<Intege
     @Inject
     LifecycleHandler lifecycle;
 
+    private static final class DateTimeConverter implements ITypeConverter<Instant> {
+        @Override
+        public Instant convert(String value) throws Exception {
+            return parseFromDatetime(() -> OffsetDateTime.parse(value).toInstant())
+                    .or(() -> parseFromDatetime(() -> Instant.now().minus(Duration.parse(value))))
+                    .orElseThrow(() -> new IllegalArgumentException("--from-datetime is not a valid datetime or duration: " + value));
+        }
+
+        private static Optional<Instant> parseFromDatetime(Supplier<Instant> source) {
+            try {
+                return Optional.of(source.get());
+            } catch (DateTimeParseException _) {
+                return Optional.empty();
+            }
+        }
+    }
+
     @Override
     public Integer call() {
         // Validate offset control options
@@ -140,9 +174,12 @@ public class ConsumeCommand extends ContextualCommand implements Callable<Intege
         if (offset != null) {
             offsetOptions++;
         }
+        if (fromDatetime != null) {
+            offsetOptions++;
+        }
 
         if (offsetOptions > 1) {
-            err().println("Error: Only one of --from-beginning, --from-end, or --from-offset can be specified");
+            err().println("Error: Only one of --from-beginning, --from-end, --from-offset, or --from-datetime can be specified");
             return 1;
         }
 
@@ -222,10 +259,8 @@ public class ConsumeCommand extends ContextualCommand implements Callable<Intege
 
         if (offset != null) {
             consumer.seek(topicPartition, offset);
-        } else if (fromBeginning) {
-            consumer.seekToBeginning(assignment);
-        } else if (fromEnd) {
-            consumer.seekToEnd(assignment);
+        } else {
+            seek(consumer, assignment);
         }
     }
 
@@ -241,14 +276,7 @@ public class ConsumeCommand extends ContextualCommand implements Callable<Intege
             .collect(Collectors.toSet());
 
         consumer.assign(assignment);
-
-        if (fromBeginning) {
-            consumer.seekToBeginning(consumer.assignment());
-        } else if (fromEnd) {
-            // Default for standalone (no group): from end
-            // Default for named group: let Kafka manage offsets
-            consumer.seekToEnd(consumer.assignment());
-        }
+        seek(consumer, assignment);
     }
 
     private void subscribeAllPartitions(Consumer<byte[], byte[]> consumer) {
@@ -266,16 +294,33 @@ public class ConsumeCommand extends ContextualCommand implements Callable<Intege
                     logger.infof("Member %s in group %s received assignment: %s",
                             consumer.groupMetadata().memberId(),
                             consumer.groupMetadata().groupId(),
-                            consumer.assignment());
+                            partitions);
 
-                    if (fromBeginning) {
-                        consumer.seekToBeginning(partitions);
-                    } else if (fromEnd) {
-                        consumer.seekToEnd(partitions);
-                    }
+                    seek(consumer, partitions);
                 }
             }
         });
+    }
+
+    private void seek(Consumer<?, ?> consumer, Collection<TopicPartition> assignment) {
+        if (fromBeginning) {
+            consumer.seekToBeginning(assignment);
+        } else if (fromEnd) {
+            consumer.seekToEnd(assignment);
+        } else if (fromDatetime != null) {
+            long epochMs = fromDatetime.toEpochMilli();
+            var times = assignment.stream().collect(Collectors.toMap(Function.identity(), _ -> epochMs));
+            var endOffsets = consumer.endOffsets(assignment);
+
+            consumer.offsetsForTimes(times)
+                    .forEach((p, result) -> {
+                        if (result != null) {
+                            consumer.seek(p, result.offset());
+                        } else {
+                            consumer.seek(p, endOffsets.get(p));
+                        }
+                    });
+        }
     }
 
     private int consume(Consumer<byte[], byte[]> consumer) {
