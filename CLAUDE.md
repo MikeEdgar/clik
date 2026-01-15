@@ -92,216 +92,51 @@ The codebase follows a standard Maven project layout:
 
 ### Implemented Features
 
-#### Context Management
+#### Context Management (✅ COMPLETED)
+See `specs/CONTEXT.md` for complete specification.
+- Commands: create, list, use, current, delete, describe, rename
+- Key services: ContextService, ConfigurationLoader, ContextValidator
+- Tests: 29 passing (integration)
 
-Clik implements a kubectl-like context management system for Kafka clusters. See `specs/CONTEXT.md` for the full specification.
+#### Topic Management (✅ COMPLETED)
+See `specs/TOPIC.md` for complete specification.
+- Commands: create, list, describe, alter, delete
+- Key services: TopicService, KafkaClientFactory
+- Data models: TopicInfo, PartitionInfo
+- Tests: 27 passing (integration) + 13 passing (service)
 
-**Implemented Commands:**
-- `clik context create <name>` - Create a new context with Kafka configuration
-- `clik context list` - List all available contexts (supports table, yaml, json, name formats)
-- `clik context use <name>` - Switch to a different context
-- `clik context current` - Display the current active context
-- `clik context delete <name>` - Delete a context
-- `clik context describe <name>` - Display detailed configuration for a context
-- `clik context rename <old-name> <new-name>` - Rename a context
+#### Group Management (✅ COMPLETED)
+See `specs/GROUP.md` for complete specification.
+- Commands: list, describe, delete, alter (with offset management strategies)
+- Key services: GroupService
+- Data models: GroupInfo, GroupMemberInfo, CoordinatorInfo, OffsetLagInfo
+- Tests: 28 passing (integration) + 9 passing (service)
 
-**Configuration Storage:**
-- Contexts are stored in `$XDG_CONFIG_HOME/clik/contexts/<name>/config.yaml` (defaults to `~/.config/clik`)
-- Follows XDG Base Directory Specification
-- Configuration is organized by client type: common, admin, consumer, producer
-- Current context is tracked in `$XDG_CONFIG_HOME/clik/config.yaml`
+#### Cluster Management (✅ COMPLETED)
+See `specs/CLUSTER.md` for complete specification.
+- Commands: describe
+- Key services: ClusterService (dual API call: describeCluster + describeMetadataQuorum)
+- Data models: ClusterInfo, NodeInfo, QuorumInfo, ObserverState
+- KRaft support: Role detection, quorum metadata, graceful ZooKeeper fallback
+- Tests: 7 passing (integration) + 6 passing (service)
 
-**Key Services:**
-- `ContextService` - CRUD operations for contexts, manages context directories and files
-- `ConfigurationLoader` - Loads and merges configurations, supports YAML and properties formats
-- `ContextValidator` - Validates context names and configurations
+#### ACL Management (✅ COMPLETED)
+See `specs/ACL.md` for complete specification.
+- Commands: create, list, delete
+- Key services: AclService
+- Data models: AclInfo
+- Resource-specific shortcuts (--topic, --group, --cluster, --transactional-id, --delegation-token, --user-resource)
+- Option mixins: Resource.Options, Operation, Permission, PatternType
+- Tests: 31 passing (integration)
 
-#### Topic Management
-
-Clik implements comprehensive Kafka topic management operations. See `specs/TOPIC.md` for the full specification.
-
-**Implemented Commands:**
-- `clik topic create <name>` - Create a new topic with custom partitions, replication, and configuration
-- `clik topic list` - List all topics (supports table, yaml, json, name formats)
-- `clik topic describe <name>` - Display detailed topic information including partition details
-- `clik topic alter <name>` - Alter topic configuration and partition count
-- `clik topic delete <name>` - Delete one or more topics (with confirmation prompt)
-
-**Key Features:**
-- Multiple output formats (table, yaml, json, name)
-- Partition and replication factor configuration
-- Topic-level configuration management (set/delete configs)
-- Partition count increases (cannot decrease - Kafka limitation)
-- Internal topic filtering
-- Integration with context management
-
-**Key Services:**
-- `KafkaClientFactory` - Creates Kafka AdminClient from context configuration
-- `TopicService` - CRUD operations for topics, configuration management, partition operations
-- `TopicInfo` / `PartitionInfo` - Data models with @RegisterForReflection for native builds
-
-#### Group Management
-
-Clik implements Kafka consumer group monitoring and management. See `specs/GROUP.md` for the full specification.
-
-**Implemented Commands:**
-- `clik group list` - List all consumer groups with state and member count
-- `clik group describe <groupId>` - Display detailed group information including member assignments and lag
-- `clik group delete <groupId>` - Delete one or more consumer groups
-- `clik group alter <groupId>` - Alter consumer group offsets or delete offsets from the group
-
-**Key Features:**
-- Support for all Kafka 4.1 group types: consumer, classic, share, streams
-- Consumer lag monitoring and calculation
-- Partition assignment visualization
-- Multiple output formats (table, yaml, json, name)
-- Group type filtering
-- Member and coordinator information
-- **Offset management** with multiple strategies:
-  - Reset to earliest/latest
-  - Set to specific offset
-  - Shift by relative amount
-  - Reset to timestamp or duration
-  - Delete offsets from group
-- Flexible topic:partition syntax for offset targeting
-- Integration with context management
-
-**Key Services:**
-- `GroupService` - Operations for listing, describing, deleting groups, offset management, and lag calculation
-- `GroupInfo` / `GroupMemberInfo` / `CoordinatorInfo` / `OffsetLagInfo` - Data models with @RegisterForReflection
-
-#### Cluster Management
-
-Clik implements Kafka cluster information and monitoring commands. See `specs/CLUSTER.md` for the full specification.
-
-**Implemented Commands:**
-- `clik cluster describe` - Display detailed cluster information including nodes and quorum metadata
-
-**Key Features:**
-- Comprehensive cluster information (cluster ID, controller, feature level)
-- Node details with host, port, and rack information
-- **Enhanced role detection for KRaft mode**:
-  - Basic roles: Broker, Controller, Broker+Controller
-  - Quorum roles: Voter, Observer, or none for broker-only nodes
-  - Leader annotation for current quorum leader
-- **Quorum metadata display** (KRaft only):
-  - Leader ID, controller epoch, high watermark
-  - Observer states with fetch timestamps
-- **Dual API call strategy**:
-  - Uses `describeCluster()` for basic cluster information
-  - Uses `describeMetadataQuorum()` for KRaft quorum details
-  - Uses `describeFeatures()` for Kafka version detection
-- Graceful fallback to basic cluster info in ZooKeeper mode
-- Multiple output formats (table, yaml, json)
-- Separate ROLE and QUORUM ROLE columns in table output for KRaft clusters
-- Integration with context management
-
-**Key Services:**
-- `ClusterService` - Operations for describing cluster with dual API call strategy
-- `ClusterInfo` / `NodeInfo` / `QuorumInfo` / `ObserverState` - Data models with @RegisterForReflection
-
-#### Producer and Consumer Commands
-
-Clik implements message production and consumption commands for Kafka topics. See `specs/PRODUCE_CONSUME.md` for the full specification.
-
-**Implemented Commands:**
-- `clik produce <topic>` - Produce messages to a Kafka topic from various input sources
-- `clik consume <topic>` - Consume messages from a Kafka topic with flexible options
-
-**Producer Features:**
-- Multiple input sources:
-  - Single message via `--value <value>`
-  - File input via `--file <path>` (one message per line)
-  - Standard input (piped input)
-  - Interactive mode via `--interactive` (prompt for messages)
-- Message metadata support (applied globally to all messages):
-  - Message key via `--key <key>`
-  - Partition targeting via `--partition <num>`
-  - Headers via `--header <key=value>` (repeatable, supports duplicates)
-  - Timestamp via `--timestamp <ts>` (epoch milliseconds or ISO-8601)
-- Binary encoding support:
-  - `base64:` prefix for base64-encoded data
-  - `hex:` prefix for hex-encoded data
-  - Applies to keys, values, and header values
-- Format string support for structured input parsing:
-  - `--input <format>` parses each line according to format string
-  - Simple placeholders: `%k` (key), `%v` (value), `%h` (header), `%T` (timestamp), `%p` (partition), `%%` (literal %)
-  - Parameterized placeholders: `%{base64:k}`, `%{hex:v}`, `%{h[name]}`
-  - Unicode escapes: `\uXXXX` for special delimiters
-  - Format strings cannot be used with global metadata options
-- String serialization for simplicity (MVP scope)
-- Synchronous sending with flush for reliability
-- Success/failure counting and reporting
-
-**Consumer Features:**
-- Consumer modes:
-  - Standalone mode (default, auto-generated group ID)
-  - Consumer group mode via `--group <id>` (offset tracking)
-- Consumption modes:
-  - One-time read (default, with `--timeout` control)
-  - Continuous mode via `--follow` (consume until interrupted)
-- Offset control:
-  - `--from-beginning` - Start from earliest offset
-  - `--from-end` - Start from latest offset
-  - `--from-offset <offset>` - Start from specific offset (requires `--partition`)
-  - `--from-datetime <datetime>` - Start from specific absolute datetime or duration relative to current time
-- Partition control:
-  - All partitions (default)
-  - Specific partition via `--partition <num>`
-- Output formats:
-  - `table` - ASCII table with partition, offset, key, value (default)
-  - `json` - JSON array with full message metadata
-  - `yaml` - YAML format with full message metadata
-  - `value` - Value-only output (no metadata)
-- Message limits:
-  - `--max-messages <num>` - Limit number of messages to consume
-  - `--timeout <ms>` - Timeout for one-time consumption (default: 5000)
-- String deserialization (MVP scope)
-- Clean shutdown handling for continuous mode
-
-**Key Features:**
-- Integration with context management (uses current context for configuration)
-- Multiple output formats for consumption
-- Flexible offset control for debugging and monitoring
-- Consumer group support for production use cases
-- Message metadata preservation (partition, offset, timestamp, key)
-
-**Key Services:**
-- `KafkaClientFactory` - Extended with `createProducer()` and `createConsumer()` methods
-- `ConsumedMessage` - Data model for consumed messages with @RegisterForReflection
-
-**Common Use Cases:**
-```bash
-# Produce messages from a file
-clik produce my-topic --file messages.txt
-
-# Produce a single message with headers and timestamp
-clik produce my-topic --value "test" --header "type=json" --timestamp "2026-01-04T12:00:00Z"
-
-# Produce with binary encoding
-echo "base64:SGVsbG8gV29ybGQ=" | clik produce my-topic --key "hex:6b6579"
-
-# Produce with format string (key-value pairs)
-echo -e "key1 value1\nkey2 value2" | clik produce my-topic --input "%k %v"
-
-# Produce with format string (tab-delimited with headers)
-cat data.tsv | clik produce my-topic --input "%k\u0009%v\u0009%{h[type]}"
-
-# Produce with format string (all fields)
-cat data.txt | clik produce my-topic --input "%{hex:k} %{base64:v} %{h[sig]} %T %p"
-
-# Consume from beginning (one-time read)
-clik consume my-topic --from-beginning
-
-# Consume latest messages continuously
-clik consume my-topic --from-end --follow
-
-# Consume from specific offset and partition
-clik consume my-topic --partition 0 --from-offset 1000
-
-# Consume and output as JSON
-clik consume my-topic --from-beginning -o json
-```
+#### Producer and Consumer (✅ COMPLETED)
+See `specs/PRODUCE_CONSUME.md` for complete specification.
+- Commands: produce, consume
+- Key services: KafkaClientFactory (createProducer/createConsumer methods)
+- Data models: ConsumedMessage
+- Producer: Multiple input sources, format string support, binary encoding (base64/hex), headers, timestamps
+- Consumer: Offset control, continuous mode, multiple output formats, partition filtering
+- Tests: 54 passing (produce) + 14 passing (consume) + 61 passing (support)
 
 ### Configuration
 
@@ -442,240 +277,29 @@ Co-authored-by: Claude Sonnet 4.5 <noreply@anthropic.com>
 
 ## Roadmap
 
-Current implementation status across all feature areas:
+Implementation status:
 
 ### Context Management (✅ COMPLETED)
-
-See `specs/CONTEXT.md` for detailed specification.
-
-**Phase 1: Core Context Management (✅ COMPLETED)**
-- All basic context commands implemented and tested
-- XDG Base Directory specification compliance
-- Multiple output formats (table, yaml, json, name, properties)
-- Comprehensive test coverage (29 integration tests in ContextCommandTest, ContextCommandIT)
-
-**Phase 2: Enhanced Context Features (✅ COMPLETED)**
-- Integration tests completed
-- Context rename command completed
-
-**Future Enhancements:**
-- Shell completion for context names
-- Context update command
-- Credential helpers/plugins
-- Environment variable substitution
-- Context templates and namespaces
+Specification: `specs/CONTEXT.md`
 
 ### Topic Management (✅ COMPLETED)
-
-See `specs/TOPIC.md` for detailed specification.
-
-**Phase 1: Core Topic Operations (✅ COMPLETED)**
-- All CRUD operations implemented: create, list, describe, alter, delete
-- Configuration management (set/delete topic configs)
-- Partition count increases
-- Multiple output formats (table, yaml, json, name)
-- Integration with context management
-- Comprehensive test coverage (27 integration tests in TopicCommandTest, TopicCommandIT)
-- Unit tests for services (13 tests in TopicServiceTest, 4 tests in KafkaClientFactoryTest)
-
-**Future Enhancements:**
-- Topic templates/presets
-- Bulk operations from file
-- Topic cloning/copying
-- Topic metrics/statistics
+Specification: `specs/TOPIC.md`
 
 ### Group Management (✅ COMPLETED)
-
-See `specs/GROUP.md` for detailed specification.
-
-**Phase 1: Core Group Operations (✅ COMPLETED)**
-- List and describe operations implemented
-- Support for all Kafka 4.1 group types (consumer, classic, share, streams)
-- Consumer lag monitoring and calculation
-- Multiple output formats (table, yaml, json, name)
-- Integration with context management
-- Comprehensive test coverage (27 integration tests in GroupCommandTest, GroupCommandIT)
-- Unit tests for services (9 tests in GroupServiceTest)
-
-**Phase 2: Advanced Group Management (✅ COMPLETED)**
-- ✅ Consumer group deletion (delete command)
-- ✅ Offset management (alter command with multiple strategies)
-  - Reset to earliest/latest offsets
-  - Set specific offsets
-  - Shift offsets by relative amount
-  - Reset to timestamp or duration
-  - Delete offsets from group
-  - Topic:partition targeting syntax
-
-**Future Enhancements:**
-- Consumer group quota management
-- Real-time lag monitoring
-- Group rebalancing controls
-- Consumer group export/import
+Specification: `specs/GROUP.md`
 
 ### Cluster Management (✅ COMPLETED)
-
-See `specs/CLUSTER.md` for detailed specification.
-
-**Phase 1: Core Cluster Operations (✅ COMPLETED)**
-- Cluster describe command implemented
-- Comprehensive cluster information display (cluster ID, controller, feature level)
-- Node details with role detection
-- KRaft quorum metadata support (voters, observers, leader)
-- Graceful ZooKeeper mode fallback
-- Multiple output formats (table, yaml, json)
-- Integration with context management
-- Comprehensive test coverage (7 integration tests in ClusterCommandTest, ClusterCommandIT)
-- Unit tests for services (6 tests in ClusterServiceTest)
-
-**Future Enhancements:**
-- Cluster health metrics and monitoring
-- Broker configuration management
-- Cluster topology visualization
-- Partition rebalancing controls
-- Cluster-wide performance metrics
+Specification: `specs/CLUSTER.md`
 
 ### ACL Management (✅ COMPLETED)
-
-See `specs/ACL.md` for detailed specification.
-
-**Implemented Commands:**
-- `clik acl create` - Create ACL bindings with resource-specific shortcuts
-- `clik acl list` - List ACLs with flexible filtering and multiple output formats
-- `clik acl delete` - Delete ACLs with confirmation prompts
-
-**Key Features:**
-- Resource-specific shortcuts (--topic, --group, --cluster, --transactional-id, --delegation-token, --user-resource)
-- All pattern types supported (LITERAL, PREFIXED, MATCH, ANY)
-- Permission types (ALLOW, DENY)
-- All ACL operations (READ, WRITE, CREATE, DELETE, ALTER, DESCRIBE, etc.)
-- Multiple output formats (table, yaml, json)
-- Flexible filtering for list and delete operations
-- Safety confirmation prompts with preview for delete operations
-- Host-based access control
-- Integration with context management
-
-**Key Services:**
-- `AclService` - CRUD operations for ACLs using Kafka Admin API
-- `AclInfo` - Data model with @RegisterForReflection for native builds
-
-**Option Mixins:**
-- `Resource.Options` - Mutually exclusive resource type selection (--topic, --group, etc.)
-- `Operation.ValueOption` / `FilterOption` - ACL operation options for create vs list/delete
-- `Permission.ValueOption` / `FilterOption` - Permission type options
-- `PatternType.ValueOption` / `FilterOption` - Pattern type options
-
-**Common Use Cases:**
-```bash
-# Grant read access to a user on a topic
-clik acl create --topic my-topic --operation READ --principal User:alice
-
-# Grant write access with prefixed pattern
-clik acl create --topic orders --pattern-type PREFIXED --operation WRITE --principal User:producer
-
-# Deny write access to all users
-clik acl create --topic sensitive --operation WRITE --principal User:* --permission DENY
-
-# List all ACLs
-clik acl list
-
-# List ACLs for a specific resource
-clik acl list --topic my-topic
-
-# List ACLs for a principal
-clik acl list --principal User:alice
-
-# Delete ACL with confirmation
-clik acl delete --topic my-topic --principal User:alice --operation READ
-
-# Delete all ACLs for a principal (auto-confirm)
-clik acl delete --principal User:olduser --yes
-```
-
-**Phase 1: Core ACL Operations (✅ COMPLETED)**
-- All three commands implemented: create, list, delete
-- Support for all Kafka resource types
-- Support for all pattern types and operations
-- Flexible filtering for list and delete
-- Multiple output formats (table, yaml, json)
-- Confirmation prompts with preview for delete
-- Integration with context management
-- Comprehensive test coverage (31 integration tests in AclCommandTest, AclCommandIT)
-- Option mixins for code reusability
-
-**Future Enhancements:**
-- ACL templates or presets for common scenarios
-- Bulk ACL operations from YAML/JSON file
-- ACL migration between clusters
-- ACL diff/compare between environments
+Specification: `specs/ACL.md`
 
 ### Producer and Consumer (✅ COMPLETED)
-
-See `specs/PRODUCE_CONSUME.md` for detailed specification.
-
-**Phase 1: Foundation (✅ COMPLETED)**
-- Extended KafkaClientFactory with createProducer() and createConsumer() methods
-- Created ConsumedMessage model with builder pattern
-- String serializer/deserializer for MVP scope
-
-**Phase 2: Produce Command (✅ COMPLETED)**
-- Implemented ProduceCommand with file/stdin/interactive support
-- Message key and partition targeting options
-- Comprehensive test coverage (8 integration tests in ProduceCommandTest, ProduceCommandIT)
-
-**Phase 3: Consume Command (✅ COMPLETED)**
-- Implemented ConsumeCommand with standalone and consumer group modes
-- Offset control options (--from-beginning, --from-end, --from-offset)
-- Multiple output formats (table, JSON, YAML, value)
-- Continuous mode support (--follow)
-- Partition filtering and message limits
-- Comprehensive test coverage (14 integration tests in ConsumeCommandTest, ConsumeCommandIT)
-
-**Phase 4: Testing & Documentation (✅ COMPLETED)**
-- All 22 tests passing (8 produce + 14 consume)
-- Native image reflection configuration verified
-- Specification document (PRODUCE_CONSUME.md)
-- CLAUDE.md updates completed
-
-**Phase 5: Binary Encoding & Headers (✅ COMPLETED)**
-- Added base64 and hex encoding support for keys, values, and headers
-- Added `--header` option for message headers
-- Added `--timestamp` option for message timestamps
-- Added `--value` option for single message production
-- Added comprehensive encoding tests (26 EncodingTest unit tests + 10 integration tests)
-- Added header and timestamp tests (11 integration tests)
-
-**Phase 6: Format String Support (✅ COMPLETED)**
-- Designed and implemented format string parser
-- Added `--input` option for structured input parsing
-- Support for simple placeholders (`%k`, `%v`, `%h`, `%T`, `%p`, `%%`)
-- Support for parameterized placeholders (`%{base64:k}`, `%{hex:v}`, `%{h[name]}`)
-- Support for unicode escapes (`\uXXXX`)
-- Added format string validation and error handling
-- Added FormatParser unit tests (35 tests)
-- Added format string integration tests (20 tests)
-- Total producer test count: 54 passing tests (1 skipped)
-
-**Future Enhancements:**
-- Custom serializers/deserializers (Avro, Protobuf, JSON Schema)
-- Advanced filtering and transformation
-- Transactional producer support
-- Consumer offset commit control
-- Consumer format string support for output formatting
+Specification: `specs/PRODUCE_CONSUME.md`
 
 ### Overall Test Coverage
 
 **Total Tests: 389 passing (2 skipped)**
-- Unit tests: 127 tests (ContextService, ConfigurationLoader, ContextValidator, TopicService, GroupService, ClusterService, KafkaClientFactory, Encoding, FormatParser, OutputFormatter)
-  - 66 existing service tests
-  - 26 Encoding tests
-  - 35 FormatParser tests
-- Integration tests: 262 tests (29 ContextCommandTest + 27 TopicCommandTest + 28 GroupCommandTest + 7 ClusterCommandTest + 31 AclCommandTest + 54 ProduceCommandTest + 14 ConsumeCommandTest + native IT variants)
-  - ContextCommandTest: 29 tests
-  - TopicCommandTest: 27 tests
-  - GroupCommandTest: 28 tests
-  - ClusterCommandTest: 7 tests
-  - AclCommandTest: 31 tests (1 skipped)
-  - ProduceCommandTest: 54 passing tests (1 skipped for stdin handling)
-  - ConsumeCommandTest: 14 tests
+- Unit tests: 127 (ContextService, ConfigurationLoader, ContextValidator, TopicService, GroupService, ClusterService, KafkaClientFactory, Encoding, FormatParser, OutputFormatter)
+- Integration tests: 262 (ContextCommandTest: 29, TopicCommandTest: 27, GroupCommandTest: 28, ClusterCommandTest: 7, AclCommandTest: 31, ProduceCommandTest: 54, ConsumeCommandTest: 14 + native IT variants)
 - All tests passing in both JVM and native modes
