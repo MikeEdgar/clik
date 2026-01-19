@@ -283,8 +283,11 @@ public class ConsumeCommand extends ContextualCommand implements Callable<Intege
 
     private void subscribeAllPartitions(Consumer<byte[], byte[]> consumer) {
         AtomicBoolean initial = new AtomicBoolean(true);
+        var subscription = Collections.singleton(topic);
 
-        consumer.subscribe(Collections.singleton(topic), new ConsumerRebalanceListener() {
+        logger.debugf("Subscribing to topics %s in group %s", subscription, groupId);
+
+        consumer.subscribe(subscription, new ConsumerRebalanceListener() {
             @Override
             public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
                 // Not interested
@@ -293,7 +296,7 @@ public class ConsumeCommand extends ContextualCommand implements Callable<Intege
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
                 if (initial.compareAndSet(true, false)) {
-                    logger.infof("Member %s in group %s received assignment: %s",
+                    logger.debugf("Member %s in group %s received assignment: %s",
                             consumer.groupMetadata().memberId(),
                             consumer.groupMetadata().groupId(),
                             partitions);

@@ -7,9 +7,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +30,7 @@ import io.streamshub.clik.kafka.TopicService;
 import io.streamshub.clik.test.ClikMainTestBase;
 import io.streamshub.clik.test.TestRecordProducer;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -78,8 +81,8 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         topicService.createTopic(admin(), "group-test-topic", 3, 1, Collections.emptyMap());
 
         CompletableFuture.allOf(
-                createConsumerGroup("test-group-1", "group-test-topic"),
-                createConsumerGroup("test-group-2", "group-test-topic")
+                createClassicConsumer("test-group-1", "group-test-topic"),
+                createClassicConsumer("test-group-2", "group-test-topic")
         ).join();
 
         LaunchResult result = launcher.launch("group", "list");
@@ -99,9 +102,9 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         topicService.createTopic(admin(), "name-test-topic", 2, 1, Collections.emptyMap());
 
         CompletableFuture.allOf(
-                createConsumerGroup("alpha-group", "name-test-topic"),
-                createConsumerGroup("beta-group", "name-test-topic"),
-                createConsumerGroup("gamma-group", "name-test-topic")
+                createClassicConsumer("alpha-group", "name-test-topic"),
+                createClassicConsumer("beta-group", "name-test-topic"),
+                createClassicConsumer("gamma-group", "name-test-topic")
         ).join();
 
         LaunchResult result = launcher.launch("group", "list", "-o", "name");
@@ -116,7 +119,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     void testListGroupsJsonFormat() throws Exception {
         // Create test topic and consumer group
         topicService.createTopic(admin(), "json-group-topic", 2, 1, Collections.emptyMap());
-        createConsumerGroup("json-group", "json-group-topic").join();
+        createClassicConsumer("json-group", "json-group-topic").join();
 
         LaunchResult result = launcher.launch("group", "list", "-o", "json");
         assertEquals(0, result.exitCode());
@@ -132,7 +135,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     void testListGroupsYamlFormat() throws Exception {
         // Create test topic and consumer group
         topicService.createTopic(admin(), "yaml-group-topic", 2, 1, Collections.emptyMap());
-        createConsumerGroup("yaml-group", "yaml-group-topic").join();
+        createClassicConsumer("yaml-group", "yaml-group-topic").join();
 
         LaunchResult result = launcher.launch("group", "list", "-o", "yaml");
         assertEquals(0, result.exitCode());
@@ -148,7 +151,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     void testListGroupsFilterByType() throws Exception {
         // Create test topic and consumer group
         topicService.createTopic(admin(), "filter-topic", 2, 1, Collections.emptyMap());
-        createConsumerGroup("consumer-group-1", "filter-topic", "classic").join();
+        createConsumer("consumer-group-1", GroupProtocol.CLASSIC, "filter-topic").join();
 
         // Filter by consumer type
         LaunchResult consumerResult = launcher.launch("group", "list", "--type", "classic");
@@ -165,7 +168,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     void testDescribeGroup() throws Exception {
         // Create test topic and consumer group
         topicService.createTopic(admin(), "describe-topic", 3, 1, Collections.emptyMap());
-        createConsumerGroup("describe-group", "describe-topic").join();
+        createClassicConsumer("describe-group", "describe-topic").join();
 
         LaunchResult result = launcher.launch("group", "describe", "describe-group");
         assertEquals(0, result.exitCode());
@@ -181,9 +184,9 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         topicService.createTopic(admin(), "members-topic", 6, 1, Collections.emptyMap());
 
         CompletableFuture.allOf(
-                createConsumerGroup("multi-member-group", "members-topic"),
-                createConsumerGroup("multi-member-group", "members-topic"),
-                createConsumerGroup("multi-member-group", "members-topic")
+                createClassicConsumer("multi-member-group", "members-topic"),
+                createClassicConsumer("multi-member-group", "members-topic"),
+                createClassicConsumer("multi-member-group", "members-topic")
         ).join();
 
         LaunchResult result = launcher.launch("group", "describe", "multi-member-group");
@@ -207,7 +210,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     void testDescribeGroupJsonFormat() throws Exception {
         // Create test topic and consumer group
         topicService.createTopic(admin(), "json-describe-topic", 2, 1, Collections.emptyMap());
-        createConsumerGroup("json-describe-group", "json-describe-topic").join();
+        createClassicConsumer("json-describe-group", "json-describe-topic").join();
 
         LaunchResult result = launcher.launch("group", "describe", "json-describe-group", "-o", "json");
         assertEquals(0, result.exitCode());
@@ -222,7 +225,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     void testDescribeGroupYamlFormat() throws Exception {
         // Create test topic and consumer group
         topicService.createTopic(admin(), "yaml-describe-topic", 2, 1, Collections.emptyMap());
-        createConsumerGroup("yaml-describe-group", "yaml-describe-topic").join();
+        createClassicConsumer("yaml-describe-group", "yaml-describe-topic").join();
 
         LaunchResult result = launcher.launch("group", "describe", "yaml-describe-group", "-o", "yaml");
         assertEquals(0, result.exitCode());
@@ -252,7 +255,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         produceMessages("offset-test-topic", 50);
 
         // Create consumer and consume messages
-        Consumer<String, String> consumer = createConsumerGroup("offset-test-group", "offset-test-topic")
+        Consumer<String, String> consumer = createClassicConsumer("offset-test-group", "offset-test-topic")
                 .join();
 
         consumer.commitSync();
@@ -273,7 +276,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     void testDeleteGroup() throws Exception {
         // Create test topic and consumer group
         topicService.createTopic(admin(), "delete-test-topic", 2, 1, Collections.emptyMap());
-        Consumer<String, String> consumer = createConsumerGroup("delete-test-group", "delete-test-topic").join();
+        Consumer<String, String> consumer = createClassicConsumer("delete-test-group", "delete-test-topic").join();
 
         // Close the consumer so the group becomes empty/eligible for deletion
         close(consumer);
@@ -282,18 +285,20 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Group \"delete-test-group\" deleted"));
 
-        // Verify group was deleted
-        var groups = groupService.listGroups(admin(), null);
-        assertFalse(groups.stream().anyMatch(g -> g.groupId().equals("delete-test-group")));
+        // Verify group was deleted - there may be a small delay, hence await
+        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+            var groups = groupService.listGroups(admin(), null);
+            assertEquals(0, groups.size());
+        });
     }
 
     @Test
     void testDeleteMultipleGroups() throws Exception {
         // Create test topic and consumer groups
         topicService.createTopic(admin(), "multi-delete-topic", 2, 1, Collections.emptyMap());
-        var consumer1 = createConsumerGroup("delete1", "multi-delete-topic");
-        var consumer2 = createConsumerGroup("delete2", "multi-delete-topic");
-        var consumer3 = createConsumerGroup("delete3", "multi-delete-topic");
+        var consumer1 = createConsumer("delete1", GroupProtocol.CLASSIC, "multi-delete-topic");
+        var consumer2 = createConsumer("delete2", GroupProtocol.CONSUMER, "multi-delete-topic");
+        var consumer3 = createShareConsumer("delete3", "multi-delete-topic");
         CompletableFuture.allOf(consumer1, consumer2, consumer3).join();
 
         // Close all consumers so the groups become empty/eligible for deletion
@@ -305,18 +310,18 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("3 groups deleted"));
 
-        // Verify groups were deleted
-        var groups = groupService.listGroups(admin(), null);
-        assertFalse(groups.stream().anyMatch(g -> g.groupId().equals("delete1")));
-        assertFalse(groups.stream().anyMatch(g -> g.groupId().equals("delete2")));
-        assertFalse(groups.stream().anyMatch(g -> g.groupId().equals("delete3")));
+        // Verify groups were deleted - there may be a small delay, hence await
+        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+            var groups = groupService.listGroups(admin(), null);
+            assertEquals(0, groups.size());
+        });
     }
 
     @Test
     void testDeleteGroupNotFound() {
         LaunchResult result = launcher.launch("group", "delete", "nonexistent-group", "--yes");
         assertEquals(1, result.exitCode());
-        assertTrue(result.getErrorOutput().contains("Failed to delete group(s)"));
+        assertTrue(result.getErrorOutput().contains("Error deleting group"));
     }
 
     @Test
@@ -336,7 +341,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         produceMessages("alter-earliest-topic", 100);
 
         // Create consumer group and consume messages
-        Consumer<String, String> consumer = createConsumerGroup("alter-earliest-group", "alter-earliest-topic").join();
+        Consumer<String, String> consumer = createClassicConsumer("alter-earliest-group", "alter-earliest-topic").join();
         var assignment = consumer.assignment();
         consumer.seekToEnd(assignment);
         assignment.forEach(consumer::position);
@@ -369,7 +374,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         produceMessages("alter-latest-topic", 50);
 
         // Create consumer group with offsets at 0
-        Consumer<String, String> consumer = createConsumerGroup("alter-latest-group", "alter-latest-topic").join();
+        Consumer<String, String> consumer = createClassicConsumer("alter-latest-group", "alter-latest-topic").join();
         var assignment = consumer.assignment();
         consumer.seekToBeginning(assignment);
         assignment.forEach(consumer::position);
@@ -397,7 +402,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         produceMessages("alter-offset-topic", 100);
 
         // Create consumer group
-        Consumer<String, String> consumer = createConsumerGroup("alter-offset-group", "alter-offset-topic").join();
+        Consumer<String, String> consumer = createClassicConsumer("alter-offset-group", "alter-offset-topic").join();
         consumer.commitSync();
         close(consumer);
 
@@ -422,7 +427,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         produceMessages("shift-topic", 100);
 
         // Create consumer group
-        Consumer<String, String> consumer = createConsumerGroup("shift-group", "shift-topic").join();
+        Consumer<String, String> consumer = createClassicConsumer("shift-group", "shift-topic").join();
         consumer.commitSync();
         close(consumer);
 
@@ -466,7 +471,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         produceMessagesWithTimestamps("datetime-topic", 50, baseTimestamp.toEpochMilli(), 60000); // 1 message per minute
 
         // Create consumer group
-        var consumer = createConsumerGroup("datetime-group", "datetime-topic").join();
+        var consumer = createClassicConsumer("datetime-group", "datetime-topic").join();
         consumer.commitSync();
         // Close so that the group may be altered
         close(consumer);
@@ -502,7 +507,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         var baseTimestamp = Instant.now().minus(Duration.ofHours(2)); // 2 hours ago
         produceMessagesWithTimestamps("duration-topic", 120, baseTimestamp.toEpochMilli(), 60000); // 1 message per minute
 
-        var consumer = createConsumerGroup("duration-group", "duration-topic").join();
+        var consumer = createClassicConsumer("duration-group", "duration-topic").join();
         for (var partition : consumer.assignment()) {
             consumer.seek(partition, startOffset);
         }
@@ -530,7 +535,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         var baseTimestamp = Instant.now().minus(Duration.ofHours(2)); // 2 hours ago
         produceMessagesWithTimestamps("duration-topic", 120, baseTimestamp.toEpochMilli(), 60000); // 1 message per minute
 
-        var consumer = createConsumerGroup("duration-group", "duration-topic").join();
+        var consumer = createClassicConsumer("duration-group", "duration-topic").join();
         for (var partition : consumer.assignment()) {
             consumer.seek(partition, 120);
         }
@@ -556,7 +561,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         produceMessages("delete-offset-topic", 50);
 
         // Create consumer group
-        Consumer<String, String> consumer = createConsumerGroup("delete-offset-group", "delete-offset-topic").join();
+        Consumer<String, String> consumer = createClassicConsumer("delete-offset-group", "delete-offset-topic").join();
         consumer.commitSync();
         close(consumer);
 
@@ -587,7 +592,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         produceMessages("topic-b", 50);
 
         // Create consumer group consuming from both topics
-        Consumer<String, String> consumer = createConsumerGroup("multi-topic-group", "topic-a").join();
+        Consumer<String, String> consumer = createClassicConsumer("multi-topic-group", "topic-a").join();
         consumer.subscribe(List.of("topic-a", "topic-b"));
         consumer.poll(Duration.ofSeconds(3));
         consumer.commitSync();
@@ -616,7 +621,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         topicService.createTopic(admin(), "active-topic", 2, 1, Collections.emptyMap());
 
         // Create consumer group with active consumer (don't close it)
-        Consumer<String, String> consumer = createConsumerGroup("active-group", "active-topic").join();
+        Consumer<String, String> consumer = createClassicConsumer("active-group", "active-topic").join();
 
         // Try to alter offsets - should fail
         LaunchResult result = launcher.launch("group", "alter", "active-group",
@@ -643,7 +648,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     void testAlterGroupNoOffsets() throws Exception {
         // Create topic and group
         topicService.createTopic(admin(), "no-offsets-topic", 1, 1, Collections.emptyMap());
-        Consumer<String, String> consumer = createConsumerGroup("no-offsets-group", "no-offsets-topic").join();
+        Consumer<String, String> consumer = createClassicConsumer("no-offsets-group", "no-offsets-topic").join();
         close(consumer);
         groupService.deleteGroupOffsets(admin(), "no-offsets-group", Set.of(new TopicPartition("no-offsets-topic", 0)));
 
@@ -659,7 +664,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     void testAlterGroupNoOptions() throws Exception {
         // Create topic and group
         topicService.createTopic(admin(), "no-opts-topic", 1, 1, Collections.emptyMap());
-        Consumer<String, String> consumer = createConsumerGroup("no-opts-group", "no-opts-topic").join();
+        Consumer<String, String> consumer = createClassicConsumer("no-opts-group", "no-opts-topic").join();
         consumer.poll(Duration.ofMillis(100));
         consumer.commitSync();
         close(consumer);

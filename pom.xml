@@ -43,6 +43,11 @@
       </dependency>
       <dependency>
         <groupId>org.apache.kafka</groupId>
+        <artifactId>kafka-streams</artifactId>
+        <version>${kafka.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.kafka</groupId>
         <artifactId>kafka-server-common</artifactId>
         <version>${kafka.version}</version>
       </dependency>
@@ -102,6 +107,11 @@
     <dependency>
       <groupId>org.awaitility</groupId>
       <artifactId>awaitility</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka-streams</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>
