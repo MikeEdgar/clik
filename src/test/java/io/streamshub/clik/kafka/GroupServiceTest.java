@@ -8,10 +8,8 @@ import java.util.concurrent.CompletableFuture;
 
 import jakarta.inject.Inject;
 
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
-import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.common.GroupType;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.Test;
@@ -59,12 +57,12 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
 
         // Create consumer groups
         CompletableFuture.allOf(
-                createConsumer("test-group-1", GroupProtocol.CLASSIC, "test-topic"),
-                createConsumer("test-group-2", GroupProtocol.CONSUMER, "test-topic"),
-                createShareConsumer("test-group-3", "test-topic"),
-                createShareConsumer("test-group-4", "test-topic"),
-                createStreamsConsumer("test-group-5", "test-topic"),
-                createStreamsConsumer("test-group-6", "test-topic")
+                createConsumer(GroupType.CONSUMER, GroupProtocol.CLASSIC, "test-group-1", "test-topic"),
+                createConsumer(GroupType.CONSUMER, GroupProtocol.CONSUMER, "test-group-2", "test-topic"),
+                createConsumer(GroupType.SHARE, null, "test-group-3", "test-topic"),
+                createConsumer(GroupType.SHARE, null, "test-group-4", "test-topic"),
+                createConsumer(GroupType.STREAMS, null, "test-group-5", "test-topic"),
+                createConsumer(GroupType.STREAMS, null, "test-group-6", "test-topic")
         ).join();
 
         Collection<GroupInfo> groups = groupService.listGroups(admin(), null);
@@ -100,7 +98,8 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
         topicService.createTopic(admin(), "test-topic", 3, 1, null);
 
         // Create consumer group
-        createConsumer("consumer-group", GroupProtocol.CONSUMER, "test-topic").join();
+        createConsumer(GroupType.CONSUMER, GroupProtocol.CONSUMER, "consumer-group", "test-topic")
+                .join();
 
         // Filter by consumer type
         Collection<GroupInfo> consumerGroups = groupService.listGroups(admin(), "consumer");
@@ -218,32 +217,21 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
         // Produce some messages
         produceMessages("offset-topic", 100);
 
-        switch (consumer) {
-            case Consumer<?, ?> c -> {
-                // Poll and commit offsets
-                c.poll(Duration.ofSeconds(2));
-                c.commitSync();
+        ConsumerRecords<?, ?> records;
+
+        do {
+            records = consumer.poll(Duration.ofSeconds(2));
+
+            if (records.isEmpty()) {
+                logger.debugf("No records received for share consumer");
+                // Produce some messages
+                produceMessages("offset-topic", 100);
+            } else {
+                logger.debugf("Received %d records for share consumer", records.count());
             }
-            case ShareConsumer<?, ?> s -> {
-                // Poll and commit offsets
-                ConsumerRecords<?, ?> records;
+        } while (records.isEmpty());
 
-                do {
-                    records = s.poll(Duration.ofSeconds(2));
-
-                    if (records.isEmpty()) {
-                        logger.debugf("No records received for share consumer");
-                        // Produce some messages
-                        produceMessages("offset-topic", 100);
-                    } else {
-                        logger.debugf("Received %d records for share consumer", records.count());
-                    }
-                } while (records.isEmpty());
-
-                s.commitSync();
-            }
-            default -> throw new IllegalArgumentException("Unsupported group type: " + type);
-        }
+        consumer.commit();
 
         GroupInfo group = groupService.describeGroup(admin(), "offset-group");
         assertNotNull(group);
