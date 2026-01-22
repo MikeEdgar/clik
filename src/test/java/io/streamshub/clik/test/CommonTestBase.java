@@ -4,21 +4,13 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Properties;
-import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
@@ -30,34 +22,14 @@ import java.util.stream.Collectors;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.clients.admin.GroupListing;
-import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.MemberToRemove;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
-import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
-import org.apache.kafka.clients.consumer.CloseOptions;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.consumer.KafkaShareConsumer;
-import org.apache.kafka.clients.consumer.ShareConsumer;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.KStream;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -68,7 +40,6 @@ import org.junit.jupiter.api.TestInstance.Lifecycle;
 import io.streamshub.clik.config.ContextService;
 import io.streamshub.clik.kafka.GroupService;
 
-import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.fail;
 
 @TestInstance(Lifecycle.PER_CLASS)
@@ -81,7 +52,7 @@ public abstract class CommonTestBase {
     static String kafkaBootstrapServers;
 
     Admin admin;
-    List<AutoCloseable> consumers = new ArrayList<>();
+    List<TestConsumerFacade> consumers = new ArrayList<>();
 
     protected static void delete(Path root) {
         if (root != null && Files.exists(root)) {
@@ -216,42 +187,6 @@ public abstract class CommonTestBase {
         }
     }
 
-    protected <K, V> void close(Consumer<K, V> consumer) {
-        try {
-            String groupId = consumer.groupMetadata().groupId();
-            var removal = new MemberToRemove(consumer.groupMetadata().groupInstanceId().orElseThrow());
-            consumer.close(CloseOptions.timeout(Duration.ofSeconds(5)));
-            admin.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions(List.of(removal)));
-        } catch (Exception e) {
-            LOGGER.debugf("Error closing consumer: %s", e.toString());
-        }
-    }
-
-    protected <K, V> void close(ShareConsumer<K, V> consumer) {
-        try {
-            consumer.close(Duration.ofSeconds(5));
-        } catch (Exception e) {
-            LOGGER.debugf("Error closing share consumer: %s", e.toString());
-        }
-    }
-
-    protected <K, V> void close(KafkaStreams streams) {
-        try {
-            streams.close(Duration.ofSeconds(5));
-        } catch (Exception e) {
-            LOGGER.debugf("Error closing streams consumer: %s", e.toString());
-        }
-    }
-
-    protected void close(AutoCloseable consumer) {
-        switch (consumer) {
-            case Consumer<?, ?> c -> close(c);
-            case ShareConsumer<?, ?> c -> close(c);
-            case KafkaStreams s -> close(s);
-            default -> throw new IllegalArgumentException("Unexpected value: " + consumer);
-        }
-    }
-
     @BeforeAll
     void initialize() {
         LOGGER.infof("***** Before tests in %s", getClass().getName());
@@ -266,7 +201,7 @@ public abstract class CommonTestBase {
     @AfterEach
     protected void tearDown() {
         // Close all consumers
-        consumers.forEach(this::close);
+        consumers.forEach(TestConsumerFacade::close);
         consumers.clear();
 
         try (var _ = admin()) {
@@ -306,214 +241,15 @@ public abstract class CommonTestBase {
         return admin;
     }
 
-    private Properties initialProperties() {
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        return props;
-    }
-
-    protected CompletableFuture<ShareConsumer<String, String>> createShareConsumer(String groupId, String... topics) {
-        // Enable share groups feature - see KAFKA-16894
-        admin().updateFeatures(Map.of(
-                    "share.version",
-                    new FeatureUpdate((short) 1, FeatureUpdate.UpgradeType.UPGRADE)),
-                new UpdateFeaturesOptions());
-
-        Objects.requireNonNull(groupId, "groupId required");
-        String clientId = "test-share-consumer-" + UUID.randomUUID().toString();
-        Properties props = initialProperties();
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
-
-        ShareConsumer<String, String> consumer = new KafkaShareConsumer<>(props);
-        consumers.add(consumer);
-        Instant beginTime = Instant.now();
-
-        return CompletableFuture.supplyAsync(() -> {
-            consumer.subscribe(List.of(topics));
-
-            await().atMost(10, TimeUnit.SECONDS).until(() -> {
-                consumer.poll(Duration.ofMillis(200));
-
-                var group = admin.listGroups()
-                        .all()
-                        .get()
-                        .stream()
-                        .filter(listing -> listing.groupId().equals(groupId))
-                        .findFirst()
-                        .orElse(null);
-
-                return group != null && group.groupState().orElse(GroupState.UNKNOWN) == GroupState.STABLE;
-            });
-
-            LOGGER.infof("Client instance %s took %s to become a member of group %s",
-                    clientId,
-                    Duration.between(beginTime, Instant.now()),
-                    groupId);
-            return consumer;
-        });
-    }
-
-    public static class StringSerde implements Serde<String> {
-        @Override
-        public Deserializer<String> deserializer() {
-            return new StringDeserializer();
-        }
-        @Override
-        public Serializer<String> serializer() {
-            return new StringSerializer();
-        }
-    }
-
-    protected CompletableFuture<KafkaStreams> createStreamsConsumer(String groupId, String... topics) {
-        // Enable share groups feature - see KAFKA-16894
-        admin().updateFeatures(Map.of(
-                    "streams.group",
-                    new FeatureUpdate((short) 1, FeatureUpdate.UpgradeType.UPGRADE)),
-                new UpdateFeaturesOptions());
-
-        Objects.requireNonNull(groupId, "groupId required");
-        Properties props = initialProperties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, groupId);
-        props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupType.STREAMS.name().toLowerCase(Locale.ROOT));
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, StringSerde.class);
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, StringSerde.class);
-
-        String outTopicName = topics[0] + "-out-" + UUID.randomUUID().toString();
-        admin().createTopics(List.of(new NewTopic(outTopicName, 2, (short) 1)))
-            .all()
-            .toCompletionStage()
-            .toCompletableFuture()
-            .join();
-
-        StreamsBuilder builder = new StreamsBuilder();
-        KStream<String, String> input = builder.stream(topics[0]);
-
-        input.filter((_, value) -> value != null)
-            .mapValues(v -> v.toUpperCase(Locale.ROOT))
-            .to(outTopicName);
-
-        KafkaStreams streams = new KafkaStreams(builder.build(), props);
-        consumers.add(streams);
-        streams.start();
-
-        await().atMost(10, TimeUnit.SECONDS).until(() -> {
-            var listings = admin().listGroups().all().toCompletionStage().toCompletableFuture().join();
-            return listings.stream().anyMatch(l -> l.groupId().equals(groupId));
-        });
-
-        return CompletableFuture.completedFuture(streams);
-    }
-
-    protected CompletableFuture<Consumer<String, String>> createConsumer(String groupId, GroupProtocol protocol, String... topics) {
-        String clientId = "test-consumer-" + UUID.randomUUID().toString();
-        Properties props = initialProperties();
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, clientId);
-
-        if (groupId != null) {
-            props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-            props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT));
-
-            if (GroupProtocol.CLASSIC == protocol) {
-                // Set very long session timeout to keep group alive during tests
-                props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "60000"); // 60 seconds
-                props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "20000"); // 20 seconds
-            }
-        }
-
-        Consumer<String, String> consumer = new KafkaConsumer<>(props);
-        consumers.add(consumer);
-
-        if (groupId != null) {
-            Instant beginTime = Instant.now();
-
-            return CompletableFuture.supplyAsync(() -> {
-                consumer.subscribe(List.of(topics));
-
-                await().atMost(10, TimeUnit.SECONDS).until(() -> {
-                    consumer.poll(Duration.ofMillis(200));
-                    return isMember(groupId, clientId, beginTime);
+    protected CompletableFuture<? extends TestConsumerFacade> createConsumer(GroupType type, GroupProtocol protocol, String groupId, String... topics) {
+        return TestConsumerFacade.create(admin(), kafkaBootstrapServers(), type, protocol, groupId, topics)
+                .thenApply(consumer -> {
+                    consumers.add(consumer);
+                    return consumer;
                 });
-
-                LOGGER.infof("Client instance %s took %s to become a member of group %s",
-                        clientId,
-                        Duration.between(beginTime, Instant.now()),
-                        groupId);
-                return consumer;
-            });
-        } else {
-            var assignment = Arrays.stream(topics)
-                    .map(consumer::partitionsFor)
-                    .flatMap(Collection::stream)
-                    .map(p -> new TopicPartition(p.topic(), p.partition()))
-                    .collect(Collectors.toSet());
-
-            consumer.assign(assignment);
-            assignment.forEach(consumer::position);
-
-            return CompletableFuture.completedFuture(consumer);
-        }
     }
 
-    @SuppressWarnings("unchecked")
-    protected <C extends AutoCloseable> CompletableFuture<C> createConsumer(GroupType type, GroupProtocol protocol, String groupId, String... topics) {
-        return switch (type) {
-            case CLASSIC, CONSUMER -> (CompletableFuture<C>) createConsumer(groupId, protocol, topics);
-            case SHARE -> (CompletableFuture<C>) createShareConsumer(groupId, topics);
-            case STREAMS -> (CompletableFuture<C>) createStreamsConsumer(groupId, topics);
-            default -> throw new IllegalArgumentException("Unsupported group type: " + type);
-        };
-    }
-
-    protected Consumer<String, String> createConsumer(String... topics) {
-        return createConsumer(null, null, topics).join();
-    }
-
-    protected CompletableFuture<Consumer<String, String>> createClassicConsumer(String groupId, String... topics) {
-        return createConsumer(groupId, GroupProtocol.CLASSIC, topics);
-    }
-
-    private boolean isMember(String groupId, String clientId, Instant beginTime) {
-        try {
-            var group = admin().describeConsumerGroups(Set.of(groupId))
-                    .all()
-                    .toCompletionStage()
-                    .toCompletableFuture()
-                    .join()
-                    .get(groupId);
-            var allMembers = group.members().stream()
-                    .map(MemberDescription::groupInstanceId)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
-                    .toList();
-
-            return switch(group.groupState()) {
-                case UNKNOWN, DEAD, EMPTY -> {
-                    if (Duration.between(beginTime, Instant.now()).compareTo(Duration.ofSeconds(3)) > 0) {
-                        LOGGER.debugf("State of group %s invalid: %s. Members: %s",
-                                groupId, group.groupState(), allMembers);
-                    }
-                    yield false;
-                }
-                default -> {
-                    if (allMembers.stream().anyMatch(memberId -> memberId.contains(clientId))) {
-                        yield true;
-                    }
-
-                    if (Duration.between(beginTime, Instant.now()).compareTo(Duration.ofSeconds(3)) > 0) {
-                        LOGGER.debugf("Group %s (state: %s) does not include clientId '%s'. Known members: %s",
-                                groupId, group.groupState(), clientId, allMembers);
-                    }
-
-                    yield false;
-                }
-            };
-        } catch (CompletionException _) {
-            return false;
-        }
+    protected CompletableFuture<? extends TestConsumerFacade> createClassicConsumer(String groupId, String... topics) {
+        return createConsumer(GroupType.CONSUMER, GroupProtocol.CLASSIC, groupId, topics);
     }
 }

@@ -1,21 +1,5 @@
 package io.streamshub.clik.command.produce;
 
-import io.quarkus.test.junit.TestProfile;
-import io.quarkus.test.junit.main.LaunchResult;
-import io.quarkus.test.junit.main.QuarkusMainLauncher;
-import io.quarkus.test.junit.main.QuarkusMainTest;
-import io.streamshub.clik.config.ContextConfig;
-import io.streamshub.clik.config.ContextService;
-import io.streamshub.clik.kafka.TopicService;
-import io.streamshub.clik.test.ClikMainTestBase;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.common.header.Header;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.Test;
-
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,7 +10,29 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.jupiter.api.Assertions.*;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.GroupType;
+import org.apache.kafka.common.header.Header;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+
+import io.quarkus.test.junit.TestProfile;
+import io.quarkus.test.junit.main.LaunchResult;
+import io.quarkus.test.junit.main.QuarkusMainLauncher;
+import io.quarkus.test.junit.main.QuarkusMainTest;
+import io.streamshub.clik.config.ContextConfig;
+import io.streamshub.clik.config.ContextService;
+import io.streamshub.clik.kafka.TopicService;
+import io.streamshub.clik.test.ClikMainTestBase;
+import io.streamshub.clik.test.TestConsumerFacade;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusMainTest
 @TestProfile(ClikMainTestBase.Profile.class)
@@ -1276,7 +1282,8 @@ class ProduceCommandTest extends ClikMainTestBase {
      * Helper method to consume records from a topic
      */
     private List<ConsumerRecord<String, String>> consumeRecords(String topic, int count) {
-        Consumer<String, String> consumer = createConsumer(topic);
+        TestConsumerFacade consumer = createConsumer(GroupType.CONSUMER, GroupProtocol.CONSUMER, null, topic)
+                .join();
 
         List<ConsumerRecord<String, String>> allRecords = new ArrayList<>();
         long startTime = System.currentTimeMillis();
@@ -1288,7 +1295,8 @@ class ProduceCommandTest extends ClikMainTestBase {
             }
         }
 
-        close(consumer);
+        consumer.close();
+
         return allRecords;
     }
 }
