@@ -83,6 +83,7 @@
       <version>1.9.0</version>
     </dependency>
     <dependency>
+      <!-- Artifact name changes in 3.31+ -->
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-junit5</artifactId>
       <scope>test</scope>
@@ -90,6 +91,12 @@
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-jacoco</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- Artifact name changes in 3.31+ -->
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-junit5-mockito</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
