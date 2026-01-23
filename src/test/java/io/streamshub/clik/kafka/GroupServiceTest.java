@@ -8,7 +8,6 @@ import java.util.concurrent.CompletableFuture;
 
 import jakarta.inject.Inject;
 
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.common.GroupType;
 import org.jboss.logging.Logger;
@@ -125,7 +124,7 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
         "CLASSIC , CONSUMER,",
         "CONSUMER, CONSUMER,",
         "SHARE   ,         ,",
-        //"STREAMS ,         ,", streams groups cannot be successfully described in Kafka 4.1
+        "STREAMS ,         ,",
     })
     void testDescribeConsumerGroup(GroupType type, GroupProtocol protocol) throws Exception {
         // Create test topic
@@ -160,7 +159,7 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
         "CLASSIC , CONSUMER,",
         "CONSUMER, CONSUMER,",
         "SHARE   ,         ,",
-        //"STREAMS ,         ,", streams groups cannot be successfully described in Kafka 4.1
+        "STREAMS ,         ,",
     })
     void testDescribeGroupWithMembers(GroupType type, GroupProtocol protocol) throws Exception {
         // Create test topic
@@ -200,11 +199,11 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
 
     @ParameterizedTest
     @CsvSource({
-        "CLASSIC , CONSUMER,",
-        "CLASSIC , CLASSIC ,",
-        "CONSUMER, CONSUMER,",
-        "SHARE   ,         ,",
-        //"STREAMS ,         ,", streams groups cannot be successfully described in Kafka 4.1
+        "CLASSIC , CONSUMER",
+        "CLASSIC , CLASSIC ",
+        "CONSUMER, CONSUMER",
+        "SHARE   ,         ",
+        "STREAMS ,         ",
     })
     void testDescribeGroupOffsets(GroupType type, GroupProtocol protocol) throws Exception {
         // Create test topic
@@ -216,22 +215,9 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
 
         // Produce some messages
         produceMessages("offset-topic", 100);
-
-        ConsumerRecords<?, ?> records;
-
-        do {
-            records = consumer.poll(Duration.ofSeconds(2));
-
-            if (records.isEmpty()) {
-                logger.debugf("No records received for share consumer");
-                // Produce some messages
-                produceMessages("offset-topic", 100);
-            } else {
-                logger.debugf("Received %d records for share consumer", records.count());
-            }
-        } while (records.isEmpty());
-
+        consumer.poll(Duration.ofMillis(200));
         consumer.commit();
+        consumer.close();
 
         GroupInfo group = groupService.describeGroup(admin(), "offset-group");
         assertNotNull(group);
@@ -259,7 +245,7 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
         "CLASSIC , CONSUMER,",
         "CONSUMER, CONSUMER,",
         "SHARE   ,         ,",
-        //"STREAMS ,         ,", streams groups cannot be successfully described in Kafka 4.1
+        "STREAMS ,         ,",
     })
     void testDescribeGroupNoOffsets(GroupType type, GroupProtocol protocol) throws Exception {
         // Create test topic
