@@ -139,7 +139,7 @@ public sealed interface TestConsumerFacade {
 
         public static CompletableFuture<TestConsumer> create(Admin admin, String bootstrapServers, GroupProtocol protocol, String groupId, String... topics) {
             String clientId = "test-consumer-" + UUID.randomUUID().toString();
-            Properties props = initialProperties(bootstrapServers);
+            Properties props = TestConsumerFacade.initialProperties(bootstrapServers);
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
             props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
             props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, clientId);
@@ -333,7 +333,7 @@ public sealed interface TestConsumerFacade {
         public static CompletableFuture<TestShareConsumer> create(Admin admin, String bootstrapServers, String groupId, String... topics) {
             Objects.requireNonNull(groupId, "groupId required");
             String clientId = "test-share-consumer-" + UUID.randomUUID().toString();
-            Properties props = initialProperties(bootstrapServers);
+            Properties props = TestConsumerFacade.initialProperties(bootstrapServers);
             props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
             props.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
             props.put("share.acknowledgement.mode", "implicit");
@@ -342,7 +342,7 @@ public sealed interface TestConsumerFacade {
             Instant beginTime = Instant.now();
 
             return CompletableFuture.supplyAsync(() -> {
-                await().atMost(100, TimeUnit.SECONDS).until(() -> {
+                await().atMost(10, TimeUnit.SECONDS).ignoreExceptions().until(() -> {
                     // Set share.auto.offset.reset=earliest for the group
                     admin.incrementalAlterConfigs(Map.of(
                             new ConfigResource(ConfigResource.Type.GROUP, groupId),
@@ -356,23 +356,26 @@ public sealed interface TestConsumerFacade {
                     return true;
                 });
 
-                await().atMost(100, TimeUnit.SECONDS).until(() -> {
-                    var recs = consumer.poll(Duration.ofMillis(200));
+                await().atMost(10, TimeUnit.SECONDS).ignoreExceptions().until(() -> {
+                    consumer.poll(Duration.ofMillis(200));
 
                     var group = admin.describeShareGroups(List.of(groupId))
-                        .all()
-                        .toCompletionStage()
-                        .toCompletableFuture()
-                        .join()
-                        .get(groupId);
+                            .all()
+                            .toCompletionStage()
+                            .toCompletableFuture()
+                            .join()
+                            .get(groupId);
 
-                    var hasAssignment = group.members().stream()
-                        .filter(m -> m.clientId().equals(clientId))
-                        .findFirst()
-                        .map(member -> !member.assignment().topicPartitions().isEmpty())
-                        .orElse(false);
+                    if (group.groupState() != GroupState.STABLE) {
+                        return false;
+                    }
 
-                    return group != null && group.groupState() == GroupState.STABLE && hasAssignment && !recs.isEmpty();
+                    return group.members()
+                            .stream()
+                            .filter(m -> m.clientId().equals(clientId))
+                            .findFirst()
+                            .map(member -> !member.assignment().topicPartitions().isEmpty())
+                            .orElse(false);
                 });
 
                 var commitResult = consumer.commitSync();
@@ -402,7 +405,7 @@ public sealed interface TestConsumerFacade {
             var subscription = consumer.get().subscription();
             consumer.get().close();
 
-            var offsets = listTopicOffsets(admin, subscription, spec);
+            var offsets = TestConsumerFacade.listTopicOffsets(admin, subscription, spec);
 
             admin.alterShareGroupOffsets(groupId(), offsets)
                     .all()
@@ -473,12 +476,20 @@ public sealed interface TestConsumerFacade {
 
         public static CompletableFuture<TestStreamsConsumer> create(Admin admin, String bootstrapServers, String groupId, String... topics) {
             Objects.requireNonNull(groupId, "groupId required");
-            Properties props = initialProperties(bootstrapServers);
+            Properties props = TestConsumerFacade.initialProperties(bootstrapServers);
             props.put(StreamsConfig.APPLICATION_ID_CONFIG, groupId);
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupType.STREAMS.name().toLowerCase(Locale.ROOT));
             props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, StringSerde.class);
             props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, StringSerde.class);
-            return CompletableFuture.completedFuture(new TestStreamsConsumer(admin, props, new AtomicReference<>(create(admin, props, topics))));
+            KafkaStreams streams = create(admin, props, topics);
+
+            return CompletableFuture.supplyAsync(() -> {
+                await().atMost(10, TimeUnit.SECONDS).until(() -> {
+                    return streams.state() == KafkaStreams.State.RUNNING;
+                });
+
+                return new TestStreamsConsumer(admin, props, new AtomicReference<>(streams));
+            });
         }
 
         private static KafkaStreams create(Admin admin, Properties props, String... topics) {
@@ -512,7 +523,7 @@ public sealed interface TestConsumerFacade {
                     .toList();
             streams.get().close();
 
-            var offsets = listPartitionOffsets(admin, subscription, spec)
+            var offsets = TestConsumerFacade.listPartitionOffsets(admin, subscription, spec)
                     .entrySet()
                     .stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> new OffsetAndMetadata(e.getValue())));

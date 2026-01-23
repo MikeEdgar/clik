@@ -4,13 +4,13 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.kafka.clients.consumer.GroupProtocol;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +26,7 @@ import io.streamshub.clik.config.ContextConfig;
 import io.streamshub.clik.config.ContextService;
 import io.streamshub.clik.kafka.GroupService;
 import io.streamshub.clik.kafka.TopicService;
+import io.streamshub.clik.kafka.model.GroupOffsetInfo;
 import io.streamshub.clik.test.ClikMainTestBase;
 import io.streamshub.clik.test.TestRecordProducer;
 
@@ -388,7 +389,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         // Verify group was deleted - there may be a small delay, hence await
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
             var groups = groupService.listGroups(admin(), null);
-            assertEquals(0, groups.size());
+            assertEquals(0, groups.size(), () -> "Groups still exist: " + groups);
         });
     }
 
@@ -413,7 +414,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         // Verify groups were deleted - there may be a small delay, hence await
         await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
             var groups = groupService.listGroups(admin(), null);
-            assertEquals(0, groups.size());
+            assertEquals(0, groups.size(), () -> "Groups still exist: " + groups);
         });
     }
 
@@ -470,7 +471,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
 
         // Verify offsets were reset to 0
         var offsetsAfter = groupService.getGroupOffsetMap(admin(), groupId);
-        for (OffsetAndMetadata offset : offsetsAfter.values()) {
+        for (GroupOffsetInfo offset : offsetsAfter.values()) {
             assertEquals(0, offset.offset());
         }
     }
@@ -505,7 +506,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
 
         // Verify offsets are at end (50 messages / 2 partitions = ~25 per partition)
         var offsetsAfter = groupService.getGroupOffsetMap(admin(), groupId);
-        for (OffsetAndMetadata offset : offsetsAfter.values()) {
+        for (GroupOffsetInfo offset : offsetsAfter.values()) {
             assertTrue(offset.offset() >= 20, () -> "Offset was " + offset.offset());  // Should be around 25
         }
     }
@@ -541,7 +542,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
 
         // Verify only partition 0 was changed to offset 10
         var offsets = groupService.getGroupOffsetMap(admin(), groupId);
-        OffsetAndMetadata partition0 = offsets.get(new TopicPartition(topicName, 0));
+        GroupOffsetInfo partition0 = offsets.get(new TopicPartition(topicName, 0));
         assertNotNull(partition0);
         assertEquals(10, partition0.offset());
     }
@@ -560,10 +561,16 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
 
         // Create topic with 3 partitions
         topicService.createTopic(admin(), topicName, 3, 1, Collections.emptyMap());
-        produceMessages(topicName, 100);
+        produceMessages(topicName, 99);
 
         // Create consumer group
         var consumer = createConsumer(groupType, groupProtocol, groupId, topicName).join();
+        // Seek to the middle of each partition to give buffer for the shift-by operation
+        consumer.seek(Map.of(
+                new TopicPartition(topicName, 0), 16L,
+                new TopicPartition(topicName, 1), 16L,
+                new TopicPartition(topicName, 2), 16L
+        ));
         consumer.commit();
         consumer.close();
 
@@ -706,34 +713,48 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         // "STREAMS ,         ,", // Kafka 4.1 limitation - alter not supported for STREAMS groups
     })
     void testAlterGroupDeleteOffsets(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
-        String topicName = "delete-offset-topic-" + groupType.name().toLowerCase();
+        String topicName1 = "delete-offset-topic1-" + groupType.name().toLowerCase();
+        String topicName2 = "delete-offset-topic2-" + groupType.name().toLowerCase();
         String groupId = "delete-offset-group-" + groupType.name().toLowerCase();
 
         // Create topic
-        topicService.createTopic(admin(), topicName, 2, 1, Collections.emptyMap());
-        produceMessages(topicName, 50);
+        topicService.createTopic(admin(), topicName1, 1, 1, Collections.emptyMap());
+        topicService.createTopic(admin(), topicName2, 1, 1, Collections.emptyMap());
+        produceMessages(topicName1, 50);
+        produceMessages(topicName2, 50);
 
         // Create consumer group
-        var consumer = createConsumer(groupType, groupProtocol, groupId, topicName).join();
+        var consumer = createConsumer(groupType, groupProtocol, groupId, topicName1, topicName2).join();
         consumer.commit();
-        consumer.close();
 
         // Verify offsets exist
-        var offsetsBefore = groupService.getGroupOffsetMap(admin(), groupId);
-        assertEquals(2, offsetsBefore.size());
+        await().atMost(5, TimeUnit.SECONDS).until(() -> {
+            var offsetsBefore = groupService.getGroupOffsetMap(admin(), groupId);
+            assertEquals(2, offsetsBefore.size());
+
+            if (offsetsBefore.values().stream().anyMatch(Objects::isNull)) {
+                // Keep polling until offsets are present for both topics
+                consumer.poll(Duration.ofMillis(200));
+                return false;
+            }
+
+            return true;
+        });
+
+        consumer.close();
 
         // Delete offsets for partition 0
         LaunchResult result = launcher.launch("group", "alter", groupId,
-                "--delete", topicName + ":0", "--yes");
+                "--delete", topicName1, "--yes");
 
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Deleted offsets"));
 
-        // Verify partition 0 offset was deleted
+        // Verify topic1 was deleted
         var offsetsAfter = groupService.getGroupOffsetMap(admin(), groupId);
         assertEquals(1, offsetsAfter.size());
-        assertFalse(offsetsAfter.containsKey(new TopicPartition(topicName, 0)));
-        assertTrue(offsetsAfter.containsKey(new TopicPartition(topicName, 1)));
+        assertFalse(offsetsAfter.containsKey(new TopicPartition(topicName1, 0)), () -> "offsetsAfter: " + offsetsAfter);
+        assertTrue(offsetsAfter.containsKey(new TopicPartition(topicName2, 0)), () -> "offsetsAfter: " + offsetsAfter);
     }
 
     @Test
@@ -758,7 +779,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
 
         // Verify only topic-a partitions were reset
         var offsets = groupService.getGroupOffsetMap(admin(), "multi-topic-group");
-        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+        for (Map.Entry<TopicPartition, GroupOffsetInfo> entry : offsets.entrySet()) {
             if (entry.getKey().topic().equals("topic-a")) {
                 assertEquals(0, entry.getValue().offset());
             } else if (entry.getKey().topic().equals("topic-b")) {
