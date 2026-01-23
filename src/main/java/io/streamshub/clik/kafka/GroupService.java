@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -11,6 +12,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -32,6 +34,7 @@ import org.jboss.logging.Logger;
 import io.streamshub.clik.kafka.model.CoordinatorInfo;
 import io.streamshub.clik.kafka.model.GroupInfo;
 import io.streamshub.clik.kafka.model.GroupMemberInfo;
+import io.streamshub.clik.kafka.model.GroupOffsetInfo;
 import io.streamshub.clik.kafka.model.OffsetLagInfo;
 import io.streamshub.clik.support.RootCause;
 
@@ -314,7 +317,7 @@ public class GroupService {
 
         try {
             // Get current consumer group offsets
-            Map<TopicPartition, OffsetAndMetadata> offsets = getGroupOffsetMap(admin, groupId);
+            Map<TopicPartition, GroupOffsetInfo> offsets = getGroupOffsetMap(admin, groupId);
 
             if (offsets.isEmpty()) {
                 return Collections.emptyList();
@@ -331,11 +334,11 @@ public class GroupService {
 
             // Calculate lag
             List<OffsetLagInfo> lagInfoList = new ArrayList<>();
-            for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+            for (Map.Entry<TopicPartition, GroupOffsetInfo> entry : offsets.entrySet()) {
                 TopicPartition tp = entry.getKey();
                 long currentOffset = entry.getValue().offset();
                 long logEndOffset = endOffsets.get(tp).offset();
-                long lag = logEndOffset - currentOffset;
+                long lag = entry.getValue().lag().orElseGet(() -> logEndOffset - currentOffset);
 
                 OffsetLagInfo lagInfo = new OffsetLagInfo(
                         tp.topic(),
@@ -465,16 +468,46 @@ public class GroupService {
      * @throws ExecutionException if the operation fails
      * @throws InterruptedException if the operation is interrupted
      */
-    public Map<TopicPartition, OffsetAndMetadata> getGroupOffsetMap(Admin admin, String groupId)
+    public Map<TopicPartition, GroupOffsetInfo> getGroupOffsetMap(Admin admin, String groupId)
             throws ExecutionException, InterruptedException {
 
-        KafkaFuture<Map<TopicPartition, OffsetAndMetadata>> promise = switch (groupType(admin, groupId)) {
+        KafkaFuture<Map<TopicPartition, GroupOffsetInfo>> promise = switch (groupType(admin, groupId)) {
             case CLASSIC, CONSUMER -> admin.listConsumerGroupOffsets(groupId)
-                    .partitionsToOffsetAndMetadata();
+                    .partitionsToOffsetAndMetadata()
+                    .thenApply(offsets -> offsets
+                            .entrySet()
+                            .stream()
+                            .collect(Collectors.toMap(
+                                    Map.Entry::getKey,
+                                    e -> GroupOffsetInfo.fromOffsetAndMetadata(e.getValue())
+                            )));
             case SHARE -> admin.listShareGroupOffsets(Map.of(groupId, new ListShareGroupOffsetsSpec().topicPartitions(null)))
-                    .partitionsToOffsetAndMetadata(groupId);
+                    .partitionsToOffsetInfo(groupId)
+                    .thenApply(offsets -> offsets
+                            .entrySet()
+                            .stream()
+                            .collect(
+                                    LinkedHashMap::new,
+                                    (map, entry) -> {
+                                        var offsetInfo = entry.getValue();
+
+                                        if (offsetInfo != null) {
+                                            map.put(entry.getKey(), GroupOffsetInfo.fromSharePartitionOffset(offsetInfo));
+                                        } else {
+                                            map.put(entry.getKey(), null);
+                                        }
+                                    },
+                                    Map::putAll
+                            ));
             case STREAMS -> admin.listStreamsGroupOffsets(Map.of(groupId, new ListStreamsGroupOffsetsSpec()))
-                    .partitionsToOffsetAndMetadata(groupId);
+                    .partitionsToOffsetAndMetadata(groupId)
+                    .thenApply(offsets -> offsets
+                            .entrySet()
+                            .stream()
+                            .collect(Collectors.toMap(
+                                    Map.Entry::getKey,
+                                    e -> GroupOffsetInfo.fromOffsetAndMetadata(e.getValue())
+                            )));
             default -> KafkaFuture.completedFuture(null);
         };
 

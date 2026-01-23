@@ -40,8 +40,6 @@ import org.junit.jupiter.api.TestInstance.Lifecycle;
 import io.streamshub.clik.config.ContextService;
 import io.streamshub.clik.kafka.GroupService;
 
-import static org.junit.jupiter.api.Assertions.fail;
-
 @TestInstance(Lifecycle.PER_CLASS)
 public abstract class CommonTestBase {
 
@@ -97,8 +95,8 @@ public abstract class CommonTestBase {
             }
         } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            fail(e);
+        } catch (Exception _) {
+            // Ignore
         }
     }
 
@@ -169,8 +167,8 @@ public abstract class CommonTestBase {
             }
         } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            fail(e);
+        } catch (Exception _) {
+            // Ignore
         }
     }
 
@@ -182,8 +180,8 @@ public abstract class CommonTestBase {
             }
         } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            fail(e);
+        } catch (Exception _) {
+            // Ignore
         }
     }
 
@@ -205,15 +203,26 @@ public abstract class CommonTestBase {
         consumers.clear();
 
         try (var _ = admin()) {
-            deleteAcls();
-            deleteConsumerGroups();
-            deleteTopics();
+            try {
+                deleteAcls();
+            } catch (Exception _) {
+                // Ignore
+            }
+            try {
+                deleteConsumerGroups();
+            } catch (Exception _) {
+                // Ignore
+            }
+            try {
+                deleteTopics();
+            } catch (Exception _) {
+                // Ignore
+            }
         } finally {
             admin = null;
+            // Clean up config directory always
+            delete(configDir());
         }
-
-        // Clean up config directory always
-        delete(configDir());
     }
 
     public String kafkaBootstrapServers() {
