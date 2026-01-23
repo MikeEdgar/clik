@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -14,11 +15,14 @@ import jakarta.inject.Inject;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeClusterResult;
+import org.apache.kafka.clients.admin.DescribeFeaturesResult;
 import org.apache.kafka.clients.admin.DescribeMetadataQuorumResult;
+import org.apache.kafka.clients.admin.FinalizedVersionRange;
 import org.apache.kafka.clients.admin.QuorumInfo;
 import org.apache.kafka.clients.admin.QuorumInfo.ReplicaState;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.jboss.logging.Logger;
 
 import io.streamshub.clik.config.ConfigurationLoader;
 import io.streamshub.clik.config.ContextService;
@@ -31,11 +35,13 @@ import io.streamshub.clik.kafka.model.NodeInfo.QuorumRole;
 public class ClusterService {
 
     @Inject
+    Logger logger;
+
+    @Inject
     ContextService contextService;
 
     @Inject
     ConfigurationLoader configurationLoader;
-
 
     /**
      * Describe the Kafka cluster including nodes and optional quorum information.
@@ -65,17 +71,9 @@ public class ClusterService {
         Set<Integer> observerIds = new HashSet<>();
         int quorumLeaderId = -1;
 
-        String featureLevel = MetadataVersion
-                .fromFeatureLevel(admin.describeFeatures()
-                        .featureMetadata()
-                        .get()
-                        .finalizedFeatures()
-                        .get(MetadataVersion.FEATURE_NAME)
-                        .maxVersionLevel()).shortVersion();
-
         try {
             DescribeMetadataQuorumResult quorumResult = admin.describeMetadataQuorum();
-            QuorumInfo kafkaQuorumInfo = quorumResult.quorumInfo().get();
+            QuorumInfo kafkaQuorumInfo = quorumResult.quorumInfo().toCompletionStage().toCompletableFuture().join();
 
             // Extract voter and observer IDs
             for (ReplicaState voter : kafkaQuorumInfo.voters()) {
@@ -115,12 +113,10 @@ public class ClusterService {
                     kafkaQuorumInfo.highWatermark(),
                     observerStates
             );
-        } catch (UnsupportedOperationException _) {
-            // ZooKeeper mode - quorum information not available
-            // quorumInfo remains null
         } catch (Exception e) {
-            // Other errors (e.g., authorization) - log and continue without quorum info
-            // quorumInfo remains null
+            // ZooKeeper mode (quorum information not available or other errors (e.g., authorization).
+            // Log and continue without quorum info
+            logger.infof("Exception retrieving Metadata Quorum: %s", e.toString());
         }
 
         // Step 3: Convert nodes to NodeInfo with role detection
@@ -146,11 +142,36 @@ public class ClusterService {
 
         return ClusterInfo.builder()
                 .clusterId(clusterId)
-                .featureLevel(featureLevel)
+                .featureLevel(determineFeatureLevel(admin.describeFeatures()))
                 .controllerId(controllerId)
                 .nodes(nodeInfos)
                 .quorumInfo(quorumInfo)
                 .build();
+    }
+
+    /* testing */ String determineFeatureLevel(DescribeFeaturesResult features) {
+        var metadataVersionMax = Optional.ofNullable(features
+                .featureMetadata()
+                .toCompletionStage()
+                .toCompletableFuture()
+                .join()
+                .finalizedFeatures()
+                .get(MetadataVersion.FEATURE_NAME))
+                .map(FinalizedVersionRange::maxVersionLevel);
+
+        return metadataVersionMax
+                .map(level -> {
+                    try {
+                        return MetadataVersion.fromFeatureLevel(level).shortVersion();
+                    } catch (IllegalArgumentException _) {
+                        if (level < MetadataVersion.MINIMUM_VERSION.featureLevel()) {
+                            return "Unknown (<%s)".formatted(MetadataVersion.MINIMUM_VERSION.shortVersion());
+                        }
+
+                        return "Unknown (>%s)".formatted(MetadataVersion.latestTesting().shortVersion());
+                    }
+                })
+                .orElse("Unknown");
     }
 
     /**

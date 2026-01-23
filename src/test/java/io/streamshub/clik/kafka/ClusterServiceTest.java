@@ -1,8 +1,18 @@
 package io.streamshub.clik.kafka;
 
+import java.util.Collections;
+import java.util.Map;
+
 import jakarta.inject.Inject;
 
+import org.apache.kafka.clients.admin.DescribeFeaturesResult;
+import org.apache.kafka.clients.admin.FeatureMetadata;
+import org.apache.kafka.clients.admin.FinalizedVersionRange;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
@@ -14,6 +24,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @QuarkusTest
 @TestProfile(ClikTestBase.Profile.class)
@@ -114,5 +126,38 @@ class ClusterServiceTest extends ClikTestBase {
             assertTrue(cluster.nodes().stream().allMatch(node -> node.quorumRole() == null),
                     "All nodes should have null quorum role in ZooKeeper mode");
         }
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "   ,    , 'Unknown'",        // Not available
+        "  1,   1, 'Unknown (<%s)'", // Below range, metadata.version 1 - 6 are not in enum as of Kafka 4.2
+        "999, 999, 'Unknown (>%s)'", // Above range, metadata.version 29 is the highest as of Kafka 4.2
+        " 28,  29, '4.2'"             // Within range, 28/29 indicate Kafka 4.2
+    })
+    void testDetermineFeatureLevel(Short min, Short max, String expectedLevel) {
+        var result = mock(DescribeFeaturesResult.class);
+        Map<String, FinalizedVersionRange> range;
+
+        if (min != null) {
+            range = Map.of(MetadataVersion.FEATURE_NAME, new FinalizedVersionRange(min, max));
+        } else {
+            range = Collections.emptyMap();
+        }
+
+        if (expectedLevel.contains("<%s")) {
+            expectedLevel = expectedLevel.formatted(MetadataVersion.MINIMUM_VERSION.shortVersion());
+        } else if (expectedLevel.contains(">%s")) {
+            expectedLevel = expectedLevel.formatted(MetadataVersion.latestTesting().shortVersion());
+        }
+
+        when(result.featureMetadata()).thenAnswer(_ -> {
+            var metadata = mock(FeatureMetadata.class);
+            when(metadata.finalizedFeatures()).thenReturn(range);
+            return KafkaFuture.completedFuture(metadata);
+        });
+
+        String actualLevel = clusterService.determineFeatureLevel(result);
+        assertEquals(expectedLevel, actualLevel);
     }
 }
