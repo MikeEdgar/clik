@@ -3,16 +3,17 @@ package io.streamshub.clik.kafka;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import jakarta.inject.Inject;
 
-import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.GroupType;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
@@ -55,12 +56,16 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
 
         // Create consumer groups
         CompletableFuture.allOf(
-                createConsumerGroup("test-group-1", "test-topic"),
-                createConsumerGroup("test-group-2", "test-topic")
+                createConsumer(GroupType.CONSUMER, GroupProtocol.CLASSIC, "test-group-1", "test-topic"),
+                createConsumer(GroupType.CONSUMER, GroupProtocol.CONSUMER, "test-group-2", "test-topic"),
+                createConsumer(GroupType.SHARE, null, "test-group-3", "test-topic"),
+                createConsumer(GroupType.SHARE, null, "test-group-4", "test-topic"),
+                createConsumer(GroupType.STREAMS, null, "test-group-5", "test-topic"),
+                createConsumer(GroupType.STREAMS, null, "test-group-6", "test-topic")
         ).join();
 
         Collection<GroupInfo> groups = groupService.listGroups(admin(), null);
-        assertTrue(groups.size() >= 2, "Should have at least 2 groups");
+        assertEquals(6, groups.size());
 
         // Verify our test group IDs are present
         List<String> groupIds = groups.stream()
@@ -69,6 +74,10 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
                 .toList();
         assertTrue(groupIds.contains("test-group-1"));
         assertTrue(groupIds.contains("test-group-2"));
+        assertTrue(groupIds.contains("test-group-3"));
+        assertTrue(groupIds.contains("test-group-4"));
+        assertTrue(groupIds.contains("test-group-5"));
+        assertTrue(groupIds.contains("test-group-6"));
 
         // Verify basic metadata is present
         for (GroupInfo group : groups) {
@@ -88,7 +97,8 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
         topicService.createTopic(admin(), "test-topic", 3, 1, null);
 
         // Create consumer group
-        createConsumerGroup("consumer-group", "test-topic", "consumer").join();
+        createConsumer(GroupType.CONSUMER, GroupProtocol.CONSUMER, "consumer-group", "test-topic")
+                .join();
 
         // Filter by consumer type
         Collection<GroupInfo> consumerGroups = groupService.listGroups(admin(), "consumer");
@@ -109,19 +119,33 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = { "Consumer", "Classic" })
-    void testDescribeConsumerGroup(String groupProtocol) throws Exception {
+    @CsvSource({
+        "CLASSIC , CLASSIC ,",
+        "CLASSIC , CONSUMER,",
+        "CONSUMER, CONSUMER,",
+        "SHARE   ,         ,",
+        "STREAMS ,         ,",
+    })
+    void testDescribeConsumerGroup(GroupType type, GroupProtocol protocol) throws Exception {
         // Create test topic
         topicService.createTopic(admin(), "describe-topic", 3, 1, null);
 
+        // Produce some messages
+        produceMessages("describe-topic", 100);
+
         // Create consumer group
-        createConsumerGroup("describe-group", "describe-topic", groupProtocol.toLowerCase(Locale.ROOT))
-                .join();
+        createConsumer(type, protocol, "describe-group", "describe-topic").join();
+
+        // protocol becomes the type for "classic" consumer groups
+        GroupType expectedType = Optional.ofNullable(protocol)
+                .map(Enum::name)
+                .map(GroupType::parse)
+                .orElse(type);
 
         GroupInfo group = groupService.describeGroup(admin(), "describe-group");
         assertNotNull(group);
         assertEquals("describe-group", group.groupId());
-        assertEquals(groupProtocol, group.type());
+        assertEquals(expectedType, GroupType.parse(group.type()));
         assertNotNull(group.state());
         assertEquals(1, group.memberCount());
         assertNotNull(group.coordinator());
@@ -129,8 +153,15 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
         assertEquals(1, group.members().size());
     }
 
-    @Test
-    void testDescribeGroupWithMembers() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+        "CLASSIC , CLASSIC ,",
+        "CLASSIC , CONSUMER,",
+        "CONSUMER, CONSUMER,",
+        "SHARE   ,         ,",
+        "STREAMS ,         ,",
+    })
+    void testDescribeGroupWithMembers(GroupType type, GroupProtocol protocol) throws Exception {
         // Create test topic
         topicService.createTopic(admin(), "members-topic", 6, 1, null);
 
@@ -139,9 +170,9 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
 
         // Create multiple consumers in the same group
         CompletableFuture.allOf(
-                createConsumerGroup("multi-member-group", "members-topic"),
-                createConsumerGroup("multi-member-group", "members-topic"),
-                createConsumerGroup("multi-member-group", "members-topic")
+                createConsumer(type, protocol, "multi-member-group", "members-topic"),
+                createConsumer(type, protocol, "multi-member-group", "members-topic"),
+                createConsumer(type, protocol, "multi-member-group", "members-topic")
         ).join();
 
         GroupInfo group = groupService.describeGroup(admin(), "multi-member-group");
@@ -166,21 +197,27 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
         assertNull(group);
     }
 
-    @Test
-    void testDescribeGroupOffsets() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+        "CLASSIC , CONSUMER",
+        "CLASSIC , CLASSIC ",
+        "CONSUMER, CONSUMER",
+        "SHARE   ,         ",
+        "STREAMS ,         ",
+    })
+    void testDescribeGroupOffsets(GroupType type, GroupProtocol protocol) throws Exception {
         // Create test topic
         topicService.createTopic(admin(), "offset-topic", 2, 1, null);
 
-        // Produce some messages
-        produceMessages("offset-topic", 100);
-
         // Create consumer and consume some messages
-        Consumer<String, String> consumer = createConsumerGroup("offset-group", "offset-topic")
+        var consumer = createConsumer(type, protocol, "offset-group", "offset-topic")
                 .join();
 
-        // Poll and commit offsets
-        consumer.poll(Duration.ofSeconds(5));
-        consumer.commitSync();
+        // Produce some messages
+        produceMessages("offset-topic", 100);
+        consumer.poll(Duration.ofMillis(200));
+        consumer.commit();
+        consumer.close();
 
         GroupInfo group = groupService.describeGroup(admin(), "offset-group");
         assertNotNull(group);
@@ -202,13 +239,20 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
         }
     }
 
-    @Test
-    void testDescribeGroupNoOffsets() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+        "CLASSIC , CLASSIC ,",
+        "CLASSIC , CONSUMER,",
+        "CONSUMER, CONSUMER,",
+        "SHARE   ,         ,",
+        "STREAMS ,         ,",
+    })
+    void testDescribeGroupNoOffsets(GroupType type, GroupProtocol protocol) throws Exception {
         // Create test topic
         topicService.createTopic(admin(), "no-offset-topic", 2, 1, null);
 
         // Create consumer but don't poll or commit
-        createConsumerGroup("no-offset-group", "no-offset-topic").join();
+        createConsumer(type, protocol, "no-offset-group", "no-offset-topic").join();
 
         GroupInfo group = groupService.describeGroup(admin(), "no-offset-group");
         assertNotNull(group);
