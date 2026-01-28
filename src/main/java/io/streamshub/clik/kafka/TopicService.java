@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
@@ -19,15 +20,18 @@ import org.apache.kafka.clients.admin.CreatePartitionsResult;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
+import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TopicExistsException;
 
+import io.streamshub.clik.command.topic.options.OffsetsOption;
 import io.streamshub.clik.kafka.model.PartitionInfo;
 import io.streamshub.clik.kafka.model.TopicInfo;
 
@@ -67,7 +71,14 @@ public class TopicService {
      * Get detailed information about a topic
      */
     public TopicInfo describeTopic(Admin admin, String name) throws ExecutionException, InterruptedException {
-        Map<String, TopicInfo> topics = describeTopics(admin, Collections.singletonList(name));
+        return describeTopic(admin, name, Collections.emptyList());
+    }
+
+    /**
+     * Get detailed information about a topic
+     */
+    public TopicInfo describeTopic(Admin admin, String name, List<OffsetsOption> offsets) throws ExecutionException, InterruptedException {
+        Map<String, TopicInfo> topics = describeTopics(admin, Collections.singletonList(name), offsets);
         return topics.get(name);
     }
 
@@ -75,6 +86,13 @@ public class TopicService {
      * Get detailed information about multiple topics
      */
     public Map<String, TopicInfo> describeTopics(Admin admin, Collection<String> names) throws ExecutionException, InterruptedException {
+        return describeTopics(admin, names, Collections.emptyList());
+    }
+
+    /**
+     * Get detailed information about multiple topics
+     */
+    public Map<String, TopicInfo> describeTopics(Admin admin, Collection<String> names, List<OffsetsOption> offsetOptions) throws ExecutionException, InterruptedException {
         DescribeTopicsResult topicsResult = admin.describeTopics(names);
         Map<String, TopicDescription> descriptions = topicsResult.allTopicNames().get();
 
@@ -83,6 +101,11 @@ public class TopicService {
                 .map(name -> new ConfigResource(ConfigResource.Type.TOPIC, name))
                 .toList();
         Map<ConfigResource, org.apache.kafka.clients.admin.Config> configs = admin.describeConfigs(configResources).all().get();
+
+        List<Map<TopicPartition, ListOffsetsResultInfo>> offsetResults = Collections.emptyList();
+        if (!offsetOptions.isEmpty()) {
+            offsetResults = fetchOffsets(admin, descriptions, offsetOptions);
+        }
 
         Map<String, TopicInfo> result = new HashMap<>();
         for (String name : names) {
@@ -103,7 +126,7 @@ public class TopicService {
                         .replicationFactor(replicationFactor)
                         .internal(desc.isInternal())
                         .config(convertConfig(config))
-                        .partitionDetails(convertPartitions(desc.partitions()))
+                        .partitionDetails(convertPartitions(desc, offsetOptions, offsetResults))
                         .build();
 
                 result.put(name, topicInfo);
@@ -172,6 +195,32 @@ public class TopicService {
         result.all().get();
     }
 
+    private List<Map<TopicPartition, ListOffsetsResultInfo>> fetchOffsets(
+            Admin admin,
+            Map<String, TopicDescription> descriptions,
+            List<OffsetsOption> offsetOptions) {
+
+        Set<TopicPartition> allPartitions = descriptions.values()
+                .stream()
+                .flatMap(topic -> topic.partitions().stream().map(partition -> new TopicPartition(topic.name(), partition.partition())))
+                .distinct()
+                .collect(Collectors.toSet());
+
+        var offsetPromises = offsetOptions.stream()
+                .map(OffsetsOption::spec)
+                .map(spec -> {
+                    var offsetsRequest = allPartitions.stream()
+                            .map(partition -> Map.entry(partition, spec))
+                            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                    return admin.listOffsets(offsetsRequest).all().toCompletionStage().toCompletableFuture();
+                })
+                .toList();
+
+        return CompletableFuture.allOf(offsetPromises.toArray(CompletableFuture[]::new))
+            .thenApply(_ -> offsetPromises.stream().map(CompletableFuture::join).toList())
+            .join();
+    }
+
     private Map<String, String> convertConfig(org.apache.kafka.clients.admin.Config config) {
         if (config == null) {
             return Collections.emptyMap();
@@ -185,18 +234,38 @@ public class TopicService {
                 ));
     }
 
-    private List<PartitionInfo> convertPartitions(List<org.apache.kafka.common.TopicPartitionInfo> kafkaPartitions) {
-        if (kafkaPartitions == null) {
+    private List<PartitionInfo> convertPartitions(TopicDescription desc,
+            List<OffsetsOption> offsetOptions,
+            List<Map<TopicPartition, ListOffsetsResultInfo>> offsetResults) {
+
+        if (desc.partitions() == null) {
             return Collections.emptyList();
         }
 
         List<PartitionInfo> partitions = new ArrayList<>();
-        for (org.apache.kafka.common.TopicPartitionInfo kafkaPartition : kafkaPartitions) {
+        for (org.apache.kafka.common.TopicPartitionInfo kafkaPartition : desc.partitions()) {
+            var partitionKey = new TopicPartition(desc.name(), kafkaPartition.partition());
+
+            List<Long> offsetValues = offsetResults.stream()
+                    .map(e -> e.get(partitionKey))
+                    .map(o -> o != null ? o.offset() : null)
+                    .toList();
+
+            List<PartitionInfo.OffsetInfo> offsets = null;
+
+            if (!offsetValues.isEmpty()) {
+                offsets = new ArrayList<>(offsetValues.size());
+                for (int i = 0; i < offsetValues.size(); i++) {
+                    offsets.add(new PartitionInfo.OffsetInfo(offsetOptions.get(i).option(), offsetValues.get(i)));
+                }
+            }
+
             PartitionInfo partition = new PartitionInfo(
                     kafkaPartition.partition(),
                     kafkaPartition.leader() != null ? kafkaPartition.leader().id() : -1,
                     kafkaPartition.replicas().stream().map(Node::id).toList(),
-                    kafkaPartition.isr().stream().map(Node::id).toList()
+                    kafkaPartition.isr().stream().map(Node::id).toList(),
+                    offsets
             );
             partitions.add(partition);
         }

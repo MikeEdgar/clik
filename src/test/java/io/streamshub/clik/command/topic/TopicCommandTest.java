@@ -1,11 +1,16 @@
 package io.streamshub.clik.command.topic;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import io.quarkus.test.junit.TestProfile;
 import io.quarkus.test.junit.main.LaunchResult;
@@ -15,6 +20,7 @@ import io.streamshub.clik.config.ContextConfig;
 import io.streamshub.clik.config.ContextService;
 import io.streamshub.clik.kafka.TopicService;
 import io.streamshub.clik.test.ClikMainTestBase;
+import io.streamshub.clik.test.TestRecordProducer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -23,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusMainTest
 @TestProfile(ClikMainTestBase.Profile.class)
-class TopicCommandTest extends ClikMainTestBase {
+class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
 
     private AtomicBoolean initialized = new AtomicBoolean(false);
 
@@ -190,6 +196,57 @@ class TopicCommandTest extends ClikMainTestBase {
         assertTrue(output.contains("\"json-describe\""));
         assertTrue(output.contains("\"partitions\""));
         assertTrue(output.contains("\"partitionDetails\""));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "'earliest,latest'        , max-timestamp, 0, 10,  9",
+        "'-2,-1'                  , -3           , 0, 10,  9", // special value numerics for earliest/latest/max-timestamp
+        "'P102D,PT1S'             , P12D         , 0, -1,  9",
+        "'earliest,earliest-local', latest-tiered, 0,  0, -1",
+        "-2                       , '-4,-5'      , 0,  0, -1", // special value numerics for earliest/earliest-local/latest-tiered
+        "'2025-01-01T00:00:00Z'   , '0,1'        , 0,  0,  0",
+    })
+    void testDescribeTopicWithOffsets(String offsets1, String offsets2, String expected1, String expected2, String expected3) throws Exception {
+        topicService.createTopic(admin(), "describe-offsets", 10, 1, Collections.emptyMap());
+        var baseTime = Instant.now().minus(Duration.ofDays(101));
+
+        produceMessagesWithTimestamps("describe-offsets", 100,
+                baseTime.toEpochMilli(),
+                Duration.ofDays(1).toMillis());
+
+        LaunchResult result = launcher.launch(
+                "topic", "describe", "describe-offsets",
+                "--offsets", offsets1,
+                "--offsets", offsets2
+        );
+        assertEquals(0, result.exitCode());
+        List<String> output = result.getOutputStream();
+        int start = output.indexOf("Partition Details:") + 2;
+        int p = 0;
+
+        for (int l = start; l < output.size(); l++) {
+            String partitionLine = output.get(l);
+            assertTrue(partitionLine.matches(
+                    "^"         // start of line
+                    + "\\s+"    // variable whitespace
+                    + (p++)     // partition#
+                    + "\\s+"    // variable whitespace
+                    + "1"       // leader
+                    + "\\s+"    // variable whitespace
+                    + "\\[1\\]" // replicas
+                    + "\\s+"    // variable whitespace
+                    + "\\[1\\]" // ISR
+                    + "\\s+"    // variable whitespace
+                    + expected1 // expected offset 1
+                    + "\\s+"    // variable whitespace
+                    + expected2 // expected offset 2
+                    + "\\s+"    // variable whitespace
+                    + expected3 // expected offset 3
+                    + "\\s*"    // maybe variable whitespace
+                    + "$"       // end of line
+                    ), () -> "Partition line did not match: " + partitionLine);
+        }
     }
 
     @Test

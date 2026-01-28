@@ -2,22 +2,25 @@ package io.streamshub.clik.command.topic;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.Callable;
 
 import jakarta.inject.Inject;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.jboss.logging.Logger;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
 import com.github.freva.asciitable.AsciiTable;
-import com.github.freva.asciitable.Column;
+import com.github.freva.asciitable.ColumnData;
 import com.github.freva.asciitable.HorizontalAlign;
 
 import io.streamshub.clik.command.ContextualCommand;
+import io.streamshub.clik.command.topic.options.OffsetsOption;
 import io.streamshub.clik.kafka.KafkaClientFactory;
 import io.streamshub.clik.kafka.TopicService;
 import io.streamshub.clik.kafka.model.PartitionInfo;
@@ -31,12 +34,25 @@ import picocli.CommandLine;
 )
 public class DescribeTopicCommand extends ContextualCommand implements Callable<Integer> {
 
+    private static final Logger LOGGER = Logger.getLogger(DescribeTopicCommand.class);
+
     @CommandLine.Parameters(
             index = "0",
             description = "Topic name",
             completionCandidates = NameCandidate.Topic.class
     )
     String name;
+
+    @CommandLine.Option(
+            names = {"--offsets"},
+            description = "Comma-separated list of offsets to fetch",
+            paramLabel = "<offset-spec>",
+            arity = "1",
+            split = ",",
+            completionCandidates = OffsetsOption.Candidates.class,
+            converter = OffsetsOption.Converter.class
+    )
+    List<OffsetsOption> offsets = new ArrayList<>();
 
     @CommandLine.Option(
             names = {"-o", "--output"},
@@ -54,7 +70,7 @@ public class DescribeTopicCommand extends ContextualCommand implements Callable<
     @Override
     public Integer call() {
         try (Admin admin = clientFactory.createAdminClient(contextName)) {
-            TopicInfo topic = topicService.describeTopic(admin, name);
+            TopicInfo topic = topicService.describeTopic(admin, name, offsets);
 
             if (topic == null) {
                 err().println("Error: Topic \"" + name + "\" not found.");
@@ -93,6 +109,7 @@ public class DescribeTopicCommand extends ContextualCommand implements Callable<
                 return 1;
             }
             err().println("Error: Failed to describe topic: " + e.getMessage());
+            LOGGER.warn("Error: Failed to describe topic", e);
             return 1;
         }
     }
@@ -114,24 +131,22 @@ public class DescribeTopicCommand extends ContextualCommand implements Callable<
 
         if (topic.partitionDetails() != null && !topic.partitionDetails().isEmpty()) {
             out().println("Partition Details:");
-            List<PartitionRow> rows = new ArrayList<>();
-            for (PartitionInfo partition : topic.partitionDetails()) {
-                rows.add(new PartitionRow(
-                        String.valueOf(partition.id()),
-                        String.valueOf(partition.leader()),
-                        partition.replicas().toString(),
-                        partition.isr().toString()
+            List<ColumnData<PartitionInfo>> columns = new ArrayList<>();
+            columns.add(column("PARTITION", HorizontalAlign.RIGHT, p -> String.valueOf(p.id())));
+            columns.add(column("LEADER", HorizontalAlign.RIGHT, p -> String.valueOf(p.leader())));
+            columns.add(column("REPLICAS", HorizontalAlign.LEFT, p -> p.replicas().toString()));
+            columns.add(column("ISR", HorizontalAlign.LEFT, p -> p.isr().toString()));
+
+            for (int i = 0; i < offsets.size(); i++) {
+                int o = i;
+                columns.add(column(
+                        "OFFSET (" + offsets.get(i).option().toUpperCase(Locale.ROOT) + ')',
+                        HorizontalAlign.RIGHT,
+                        p -> String.valueOf(p.offsets().get(o).value())
                 ));
             }
 
-            String table = AsciiTable.getTable(AsciiTable.NO_BORDERS, rows, List.of(
-                    new Column().header("PARTITION").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.RIGHT).with(r -> r.partition),
-                    new Column().header("LEADER").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.RIGHT).with(r -> r.leader),
-                    new Column().header("REPLICAS").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.LEFT).with(r -> r.replicas),
-                    new Column().header("ISR").headerAlign(HorizontalAlign.LEFT).dataAlign(HorizontalAlign.LEFT).with(r -> r.isr)
-            ));
-
-            out().println(table);
+            out().println(AsciiTable.getTable(AsciiTable.NO_BORDERS, topic.partitionDetails(), columns));
         }
     }
 
@@ -154,20 +169,6 @@ public class DescribeTopicCommand extends ContextualCommand implements Callable<
             out().println(jsonMapper.writeValueAsString(topic));
         } catch (Exception e) {
             err().println("Error: Failed to generate JSON output: " + e.getMessage());
-        }
-    }
-
-    private static class PartitionRow {
-        final String partition;
-        final String leader;
-        final String replicas;
-        final String isr;
-
-        PartitionRow(String partition, String leader, String replicas, String isr) {
-            this.partition = partition;
-            this.leader = leader;
-            this.replicas = replicas;
-            this.isr = isr;
         }
     }
 }

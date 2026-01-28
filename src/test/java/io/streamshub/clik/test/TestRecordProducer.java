@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.stream.IntStream;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -66,12 +68,31 @@ public interface TestRecordProducer {
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
 
         CountDownLatch counter = new CountDownLatch(records.length);
+        Function<TestRecord, Integer> partition;
 
         try (Producer<String, String> producer = new KafkaProducer<>(props)) {
+            if (Arrays.stream(records).allMatch(rec -> rec.partition() == null)) {
+                /*
+                 * When none of the records specifies a partition, distribute them
+                 * round robin to all partitions in the topic.
+                 */
+                String topic = Arrays.stream(records).map(TestRecord::topic)
+                        .distinct()
+                        .reduce((_, _) -> {
+                            throw new IllegalStateException("More than one topic name not supported");
+                        })
+                        .orElse(null);
+                int partitionCount = producer.partitionsFor(topic).size();
+                AtomicInteger recordNumber = new AtomicInteger(0);
+                partition = _ -> recordNumber.getAndIncrement() % partitionCount;
+            } else {
+                partition = TestRecord::partition;
+            }
+
             for (TestRecord message : records) {
                 var rec = new ProducerRecord<String, String>(
                         message.topic(),
-                        message.partition(),
+                        partition.apply(message),
                         message.timestamp(),
                         message.key(),
                         message.value(),
