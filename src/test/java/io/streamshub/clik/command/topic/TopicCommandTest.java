@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.awaitility.Awaitility;
+import org.apache.kafka.common.config.TopicConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -213,20 +213,13 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
             String expected1, String expected2, String expected3) throws Exception {
 
         String topicName = "describe-offsets-" + UUID.randomUUID().toString();
-        topicService.createTopic(admin(), topicName, 10, 1, Collections.emptyMap());
-
-        // wait for all partitions to have a leader assigned
-        Awaitility.await().atMost(Duration.ofSeconds(10)).until(() -> {
-            return admin().describeTopics(List.of(topicName))
-                    .allTopicNames()
-                    .get()
-                    .get(topicName)
-                    .partitions()
-                    .stream()
-                    .allMatch(partition -> partition.leader() != null);
-        });
-
         var baseTime = Instant.now().minus(Duration.ofDays(101));
+        // retention must be older than the oldest timestamp
+        var retentionMs = baseTime.minus(Duration.ofMinutes(5)).toEpochMilli();
+
+        topicService.createTopic(admin(), topicName, 10, 1, Map.of(
+                TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs)
+        ));
 
         produceMessagesWithTimestamps(topicName,
                 messageCount,
