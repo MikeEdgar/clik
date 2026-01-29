@@ -120,6 +120,7 @@ public interface TestRecordProducer {
                 });
             }
 
+            producer.flush();
             counter.await(10, TimeUnit.SECONDS);
         }
     }
