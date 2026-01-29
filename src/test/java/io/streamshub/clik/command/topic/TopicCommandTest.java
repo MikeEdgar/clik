@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.kafka.common.config.TopicConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -208,7 +209,9 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
         "'2025-01-01T00:00:00Z'   , '0,1'        , 0,  0,  0", // 0 & 1 are 1970-01-01T00:00:00Z and 1970-01-01T00:00:00.001Z
     })
     void testDescribeTopicWithOffsets(String offsets1, String offsets2, String expected1, String expected2, String expected3) throws Exception {
-        topicService.createTopic(admin(), "describe-offsets", 10, 1, Collections.emptyMap());
+        topicService.createTopic(admin(), "describe-offsets", 10, 1, Map.of(
+                TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"
+        ));
         var baseTime = Instant.now().minus(Duration.ofDays(101));
 
         produceMessagesWithTimestamps("describe-offsets", 100,
