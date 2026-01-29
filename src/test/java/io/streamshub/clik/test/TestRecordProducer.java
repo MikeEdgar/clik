@@ -142,8 +142,8 @@ public interface TestRecordProducer {
                     long timestamp = baseTimestamp + (i * incrementMs);
                     return TestRecord.of(topic,
                             timestamp,
-                            "key-" + i + "-" + UUID.randomUUID().toString(),
-                            "value-" + i + "-" + UUID.randomUUID().toString());
+                            "key-" + i + ("-".repeat(500)) + UUID.randomUUID().toString(),
+                            "value-" + i + ("-".repeat(500)) + UUID.randomUUID().toString());
                 })
                 .toArray(TestRecord[]::new);
         produceRecords(records);
