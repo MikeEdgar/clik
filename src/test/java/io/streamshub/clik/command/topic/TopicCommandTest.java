@@ -214,7 +214,8 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
             String expected1, String expected2, String expected3) throws Exception {
 
         topicService.createTopic(admin(), "describe-offsets", 10, 1, Map.of(
-                TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "1"
+                TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "1",
+                TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "128"
         ));
         var baseTime = Instant.now().minus(Duration.ofDays(101));
 
