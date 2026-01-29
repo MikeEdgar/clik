@@ -5,7 +5,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.kafka.common.config.TopicConfig;
@@ -24,7 +24,6 @@ import io.streamshub.clik.kafka.TopicService;
 import io.streamshub.clik.test.ClikMainTestBase;
 import io.streamshub.clik.test.TestRecordProducer;
 
-import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -203,63 +202,63 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
 
     @ParameterizedTest
     @CsvSource({
-        "'earliest,latest'        , max-timestamp,  100, P1D,  0, 10,  9",
-        "'-2,-1'                  , -3           ,  100, P1D,  0, 10,  9", // special value numerics for earliest/latest/max-timestamp
-        "'P102D,PT1S'             , P12D         ,  100, P1D,  0, -1,  9",
-        "'earliest,earliest-local', latest-tiered,  100, P1D,  0,  0, -1",
-        "-2                       , '-4,-5'      , 1000, PT1M, 0,  0, -1", // special value numerics for earliest/earliest-local/latest-tiered
-        "'2025-01-01T00:00:00Z'   , '0,1'        , 1000, PT1M, 0,  0,  0", // 0 & 1 are 1970-01-01T00:00:00Z and 1970-01-01T00:00:00.001Z
+        "'earliest,latest'        , max-timestamp, 100, P1D, 0, 10,  9",
+        "'-2,-1'                  , -3           , 100, P1D, 0, 10,  9", // special value numerics for earliest/latest/max-timestamp
+        "'P102D,PT1S'             , P12D         , 100, P1D, 0, -1,  9",
+        "'earliest,earliest-local', latest-tiered, 100, P1D, 0,  0, -1",
+        "-2                       , '-4,-5'      , 100, P1D, 0,  0, -1", // special value numerics for earliest/earliest-local/latest-tiered
+        "'2025-01-01T00:00:00Z'   , '0,1'        , 100, P1D, 0,  0,  0", // 0 & 1 are 1970-01-01T00:00:00Z and 1970-01-01T00:00:00.001Z
     })
     void testDescribeTopicWithOffsets(String offsets1, String offsets2, int messageCount, String messageInterval,
             String expected1, String expected2, String expected3) throws Exception {
 
-        topicService.createTopic(admin(), "describe-offsets", 10, 1, Map.of(
-                TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "1",
-                TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "128"
-        ));
+        String topicName = "describe-offsets-" + UUID.randomUUID().toString();
         var baseTime = Instant.now().minus(Duration.ofDays(101));
+        // retention must be older than the oldest timestamp
+        var retentionMs = baseTime.minus(Duration.ofMinutes(5)).toEpochMilli();
 
-        produceMessagesWithTimestamps("describe-offsets",
+        topicService.createTopic(admin(), topicName, 10, 1, Map.of(
+                TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs)
+        ));
+
+        produceMessagesWithTimestamps(topicName,
                 messageCount,
                 baseTime.toEpochMilli(),
                 Duration.parse(messageInterval).toMillis());
 
-        // Retry for several seconds. The timeindex may not immediately be updated after producing messages
-        await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> {
-            LaunchResult result = launcher.launch(
-                    "topic", "describe", "describe-offsets",
-                    "--offsets", offsets1,
-                    "--offsets", offsets2
-            );
-            assertEquals(0, result.exitCode());
-            List<String> output = result.getOutputStream();
-            int start = output.indexOf("Partition Details:") + 2;
-            int p = 0;
+        LaunchResult result = launcher.launch(
+                "topic", "describe", topicName,
+                "--offsets", offsets1,
+                "--offsets", offsets2
+        );
+        assertEquals(0, result.exitCode());
+        List<String> output = result.getOutputStream();
+        int start = output.indexOf("Partition Details:") + 2;
+        int p = 0;
 
-            for (int l = start; l < output.size(); l++) {
-                String partitionLine = output.get(l);
-                assertTrue(partitionLine.matches(
-                        "^"         // start of line
-                        + "\\s+"    // variable whitespace
-                        + (p++)     // partition#
-                        + "\\s+"    // variable whitespace
-                        + "1"       // leader
-                        + "\\s+"    // variable whitespace
-                        + "\\[1\\]" // replicas
-                        + "\\s+"    // variable whitespace
-                        + "\\[1\\]" // ISR
-                        + "\\s+"    // variable whitespace
-                        + expected1 // expected offset 1
-                        + "\\s+"    // variable whitespace
-                        + expected2 // expected offset 2
-                        + "\\s+"    // variable whitespace
-                        + expected3 // expected offset 3
-                        + "\\s*"    // maybe variable whitespace
-                        + "$"       // end of line
-                        ), () -> "Partition line did not match: '" + partitionLine +
-                            System.lineSeparator() + "'. Full output: " + result.getOutput());
-            }
-        });
+        for (int l = start; l < output.size(); l++) {
+            String partitionLine = output.get(l);
+            assertTrue(partitionLine.matches(
+                    "^"         // start of line
+                    + "\\s+"    // variable whitespace
+                    + (p++)     // partition#
+                    + "\\s+"    // variable whitespace
+                    + "1"       // leader
+                    + "\\s+"    // variable whitespace
+                    + "\\[1\\]" // replicas
+                    + "\\s+"    // variable whitespace
+                    + "\\[1\\]" // ISR
+                    + "\\s+"    // variable whitespace
+                    + expected1 // expected offset 1
+                    + "\\s+"    // variable whitespace
+                    + expected2 // expected offset 2
+                    + "\\s+"    // variable whitespace
+                    + expected3 // expected offset 3
+                    + "\\s*"    // maybe variable whitespace
+                    + "$"       // end of line
+                    ), () -> "Partition line did not match: '" + partitionLine +
+                        System.lineSeparator() + "'. Full output: " + result.getOutput());
+        }
     }
 
     @Test
