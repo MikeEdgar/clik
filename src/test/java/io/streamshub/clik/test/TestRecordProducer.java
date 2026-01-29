@@ -6,7 +6,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
-import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -108,9 +107,9 @@ public interface TestRecordProducer {
 
                 producer.send(rec, (metadata, exception) -> {
                     if (exception != null) {
-                        LOGGER.infof(exception, "Exception writing record %s", rec);
+                        LOGGER.debugf(exception, "Exception writing record %s", rec);
                     } else {
-                        LOGGER.debugf("Wrote record at offset %d with timestamp %s: %s",
+                        LOGGER.tracef("Wrote record at offset %d with timestamp %s: %s",
                                 metadata.offset(),
                                 Instant.ofEpochMilli(metadata.timestamp()),
                                 rec);
@@ -139,10 +138,7 @@ public interface TestRecordProducer {
         var records = IntStream.range(0, count)
                 .mapToObj(i -> {
                     long timestamp = baseTimestamp + (i * incrementMs);
-                    return TestRecord.of(topic,
-                            timestamp,
-                            "key-" + i + UUID.randomUUID().toString(),
-                            "value-" + i + UUID.randomUUID().toString());
+                    return TestRecord.of(topic, timestamp, "key-" + i, "value-" + i);
                 })
                 .toArray(TestRecord[]::new);
         produceRecords(records);
