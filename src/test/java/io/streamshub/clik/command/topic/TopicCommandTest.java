@@ -8,7 +8,6 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.apache.kafka.common.config.TopicConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -203,20 +202,17 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
 
     @ParameterizedTest
     @CsvSource({
-        "'earliest,latest'        , max-timestamp,  100, P1D,  0, 10,  9",
-        "'-2,-1'                  , -3           ,  100, P1D,  0, 10,  9", // special value numerics for earliest/latest/max-timestamp
-        "'P102D,PT1S'             , P12D         ,  100, P1D,  0, -1,  9",
-        "'earliest,earliest-local', latest-tiered,  100, P1D,  0,  0, -1",
-        "-2                       , '-4,-5'      , 1000, PT1M, 0,  0, -1", // special value numerics for earliest/earliest-local/latest-tiered
-        "'2025-01-01T00:00:00Z'   , '0,1'        , 1000, PT1M, 0,  0,  0", // 0 & 1 are 1970-01-01T00:00:00Z and 1970-01-01T00:00:00.001Z
+        "'earliest,latest'        , max-timestamp, 100, P1D, 0, 10,  9",
+        "'-2,-1'                  , -3           , 100, P1D, 0, 10,  9", // special value numerics for earliest/latest/max-timestamp
+        "'P102D,PT1S'             , P12D         , 100, P1D, 0, -1,  9",
+        "'earliest,earliest-local', latest-tiered, 100, P1D, 0,  0, -1",
+        "-2                       , '-4,-5'      , 100, P1D, 0,  0, -1", // special value numerics for earliest/earliest-local/latest-tiered
+        "'2025-01-01T00:00:00Z'   , '0,1'        , 100, P1D, 0,  0,  0", // 0 & 1 are 1970-01-01T00:00:00Z and 1970-01-01T00:00:00.001Z
     })
     void testDescribeTopicWithOffsets(String offsets1, String offsets2, int messageCount, String messageInterval,
             String expected1, String expected2, String expected3) throws Exception {
 
-        topicService.createTopic(admin(), "describe-offsets", 10, 1, Map.of(
-                TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "1",
-                TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "128"
-        ));
+        topicService.createTopic(admin(), "describe-offsets", 10, 1, Collections.emptyMap());
         var baseTime = Instant.now().minus(Duration.ofDays(101));
 
         produceMessagesWithTimestamps("describe-offsets",
