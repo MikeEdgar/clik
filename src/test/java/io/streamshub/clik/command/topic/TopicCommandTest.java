@@ -205,7 +205,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
         "'P102D,PT1S'             , P12D         , 0, -1,  9",
         "'earliest,earliest-local', latest-tiered, 0,  0, -1",
         "-2                       , '-4,-5'      , 0,  0, -1", // special value numerics for earliest/earliest-local/latest-tiered
-        "'2025-01-01T00:00:00Z'   , '0,1'        , 0,  0,  0",
+        "'2025-01-01T00:00:00Z'   , '0,1'        , 0,  0,  0", // 0 & 1 are 1970-01-01T00:00:00Z and 1970-01-01T00:00:00.001Z
     })
     void testDescribeTopicWithOffsets(String offsets1, String offsets2, String expected1, String expected2, String expected3) throws Exception {
         topicService.createTopic(admin(), "describe-offsets", 10, 1, Collections.emptyMap());
@@ -245,7 +245,8 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
                     + expected3 // expected offset 3
                     + "\\s*"    // maybe variable whitespace
                     + "$"       // end of line
-                    ), () -> "Partition line did not match: " + partitionLine);
+                    ), () -> "Partition line did not match: '" + partitionLine +
+                        System.lineSeparator() + "'. Full output: " + result.getOutput());
         }
     }
 
