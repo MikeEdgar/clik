@@ -70,7 +70,7 @@ public interface TestRecordProducer {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-        props.put(ProducerConfig.LINGER_MS_CONFIG, "100");
+        props.put(ProducerConfig.LINGER_MS_CONFIG, "200");
 
         CountDownLatch counter = new CountDownLatch(records.length);
         Function<TestRecord, Integer> partition;
