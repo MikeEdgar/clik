@@ -26,11 +26,14 @@ import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 
 import io.streamshub.clik.command.ContextualCommand;
 import io.streamshub.clik.kafka.GroupService;
 import io.streamshub.clik.kafka.KafkaClientFactory;
+import io.streamshub.clik.kafka.model.GroupOffsetInfo;
 import io.streamshub.clik.support.NameCandidate;
+import io.streamshub.clik.support.RootCause;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.ArgSpec;
 import picocli.CommandLine.Model.CommandSpec;
@@ -180,7 +183,7 @@ public class AlterGroupCommand extends ContextualCommand implements Callable<Int
         }
 
         // Get current group offsets
-        Map<TopicPartition, OffsetAndMetadata> currentOffsets;
+        Map<TopicPartition, GroupOffsetInfo> currentOffsets;
         try {
             currentOffsets = groupService.getGroupOffsetMap(admin, groupId);
         } catch (Exception e) {
@@ -263,7 +266,7 @@ public class AlterGroupCommand extends ContextualCommand implements Callable<Int
         try {
             hasMembers = groupService.hasActiveMembers(admin, groupId);
         } catch (Exception e) {
-            if (e.getCause() instanceof org.apache.kafka.common.errors.GroupIdNotFoundException) {
+            if (RootCause.of(e) instanceof GroupIdNotFoundException) {
                 err().println("Error: Group \"" + groupId + "\" not found.");
                 err().println();
                 err().println("Run 'clik group list' to see available groups.");
@@ -325,7 +328,7 @@ public class AlterGroupCommand extends ContextualCommand implements Callable<Int
      * Process --shift-by
      * @return true when the shift-by value results in a negative partition offset, otherwise false.
      */
-    private boolean processShiftBy(Map<TopicPartition, OffsetAndMetadata> offsetsToAlter, Set<TopicPartition> groupPartitions, Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
+    private boolean processShiftBy(Map<TopicPartition, OffsetAndMetadata> offsetsToAlter, Set<TopicPartition> groupPartitions, Map<TopicPartition, GroupOffsetInfo> currentOffsets) {
         for (String spec : shiftBy) {
             var parsed = parseOffsetSpec(spec, groupPartitions, true);
             long shift = parsed.value();
@@ -371,7 +374,7 @@ public class AlterGroupCommand extends ContextualCommand implements Callable<Int
      * Process --by-duration
      * @return true when the duration format cannot be parsed, otherwise false.
      */
-    private boolean processByDuration(Admin admin, Map<TopicPartition, OffsetAndMetadata> offsetsToAlter, Set<TopicPartition> groupPartitions, Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
+    private boolean processByDuration(Admin admin, Map<TopicPartition, OffsetAndMetadata> offsetsToAlter, Set<TopicPartition> groupPartitions, Map<TopicPartition, GroupOffsetInfo> currentOffsets) {
         var latestOffsets = getLatestOffsets(admin, groupPartitions);
         var currentTimestamps = getTimestampsForOffsets(currentOffsets, latestOffsets);
 
@@ -526,7 +529,7 @@ public class AlterGroupCommand extends ContextualCommand implements Callable<Int
     }
 
     private Map<TopicPartition, Instant> getTimestampsForOffsets(
-            Map<TopicPartition, OffsetAndMetadata> currentOffsets,
+            Map<TopicPartition, GroupOffsetInfo> currentOffsets,
             Map<TopicPartition, Long> latestOffsets) {
 
         Map<TopicPartition, Instant> timestamps = HashMap.newHashMap(currentOffsets.size());
