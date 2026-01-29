@@ -1,6 +1,7 @@
 package io.streamshub.clik.test;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -18,8 +19,11 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.jboss.logging.Logger;
 
 public interface TestRecordProducer {
+
+    static final Logger LOGGER = Logger.getLogger(TestRecordProducer.class);
 
     record TestHeader(
             String key,
@@ -101,7 +105,15 @@ public interface TestRecordProducer {
                                     (headers, header) -> headers.add(header.key(), header.value()),
                                     (h1, _) -> h1));
 
-                producer.send(rec, (_, _) -> {
+                producer.send(rec, (metadata, exception) -> {
+                    if (exception != null) {
+                        LOGGER.debugf(exception, "Exception writing record %s", rec);
+                    } else {
+                        LOGGER.tracef("Wrote record at offset %d with timestamp %s: %s",
+                                metadata.offset(),
+                                Instant.ofEpochMilli(metadata.timestamp()),
+                                rec);
+                    }
                     counter.countDown();
                 });
             }
