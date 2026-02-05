@@ -4,21 +4,13 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Properties;
-import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
@@ -31,21 +23,13 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.GroupListing;
-import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.MemberToRemove;
 import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
-import org.apache.kafka.clients.consumer.CloseOptions;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.GroupState;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.acl.AclBindingFilter;
-import org.apache.kafka.common.errors.GroupIdNotFoundException;
-import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.serialization.StringDeserializer;
 import org.jboss.logging.Logger;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -54,9 +38,7 @@ import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
 
 import io.streamshub.clik.config.ContextService;
-
-import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assertions.fail;
+import io.streamshub.clik.kafka.GroupService;
 
 @TestInstance(Lifecycle.PER_CLASS)
 public abstract class CommonTestBase {
@@ -68,7 +50,7 @@ public abstract class CommonTestBase {
     static String kafkaBootstrapServers;
 
     Admin admin;
-    List<Consumer<String, String>> consumers = new ArrayList<>();
+    List<TestConsumerFacade> consumers = new ArrayList<>();
 
     protected static void delete(Path root) {
         if (root != null && Files.exists(root)) {
@@ -113,8 +95,8 @@ public abstract class CommonTestBase {
             }
         } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            fail(e);
+        } catch (Exception _) {
+            // Ignore
         }
     }
 
@@ -131,9 +113,14 @@ public abstract class CommonTestBase {
     private void removeLingeringMembers(Map<String, GroupListing> allGroups) {
         var nonEmptyGroups = allGroups.values()
                 .stream()
+                .filter(listing -> List.of(GroupType.CONSUMER, GroupType.CLASSIC).contains(listing.type().orElse(GroupType.UNKNOWN)))
                 .filter(listing -> !listing.groupState().map(GroupState.EMPTY::equals).orElse(true))
                 .map(GroupListing::groupId)
                 .toList();
+
+        if (nonEmptyGroups.isEmpty()) {
+            return;
+        }
 
         var memberRemoval = admin.describeConsumerGroups(nonEmptyGroups)
             .all()
@@ -161,24 +148,12 @@ public abstract class CommonTestBase {
     }
 
     private void deleteConsumerGroups(Map<String, GroupListing> allGroups) throws Exception {
-        admin.deleteConsumerGroups(allGroups.keySet())
-            .deletedGroups()
-            .entrySet()
-            .stream()
-            .map(e -> {
-                return e.getValue().toCompletionStage().handle((_, error) -> {
-                    if (error == null ||
-                            error instanceof GroupIdNotFoundException ||
-                            error instanceof GroupNotEmptyException) {
-                        return (Void) null;
-                    }
+        GroupService groupService = new GroupService();
 
-                    throw new CompletionException(error);
-                }).toCompletableFuture();
-            })
-            .reduce(CompletableFuture::allOf)
-            .orElseGet(() -> CompletableFuture.completedFuture(null))
-            .get(10, TimeUnit.SECONDS);
+        groupService.deleteGroups(admin, allGroups.values()
+                .stream()
+                .map(GroupListing::groupId)
+                .toList());
     }
 
     public void deleteConsumerGroups() {
@@ -192,8 +167,8 @@ public abstract class CommonTestBase {
             }
         } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            fail(e);
+        } catch (Exception _) {
+            // Ignore
         }
     }
 
@@ -205,19 +180,8 @@ public abstract class CommonTestBase {
             }
         } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
-        } catch (Exception e) {
-            fail(e);
-        }
-    }
-
-    protected <K, V> void close(Consumer<K, V> consumer) {
-        try {
-            String groupId = consumer.groupMetadata().groupId();
-            var removal = new MemberToRemove(consumer.groupMetadata().groupInstanceId().orElseThrow());
-            consumer.close(CloseOptions.timeout(Duration.ofSeconds(5)));
-            admin.removeMembersFromConsumerGroup(groupId, new RemoveMembersFromConsumerGroupOptions(List.of(removal)));
         } catch (Exception _) {
-            // Ignore cleanup errors
+            // Ignore
         }
     }
 
@@ -235,22 +199,30 @@ public abstract class CommonTestBase {
     @AfterEach
     protected void tearDown() {
         // Close all consumers
-        for (Consumer<String, String> consumer : consumers) {
-            close(consumer);
-        }
-
+        consumers.forEach(TestConsumerFacade::close);
         consumers.clear();
 
         try (var _ = admin()) {
-            deleteAcls();
-            deleteConsumerGroups();
-            deleteTopics();
+            try {
+                deleteAcls();
+            } catch (Exception _) {
+                // Ignore
+            }
+            try {
+                deleteConsumerGroups();
+            } catch (Exception _) {
+                // Ignore
+            }
+            try {
+                deleteTopics();
+            } catch (Exception _) {
+                // Ignore
+            }
         } finally {
             admin = null;
+            // Clean up config directory always
+            delete(configDir());
         }
-
-        // Clean up config directory always
-        delete(configDir());
     }
 
     public String kafkaBootstrapServers() {
@@ -278,112 +250,15 @@ public abstract class CommonTestBase {
         return admin;
     }
 
-    protected Consumer<String, String> createConsumer(String... topics) {
-        String clientId = "test-client-" + UUID.randomUUID().toString();
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, clientId);
-        props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "120000"); // 120 seconds
-
-        Consumer<String, String> consumer = new KafkaConsumer<>(props);
-        consumers.add(consumer);
-
-        var assignment = Arrays.stream(topics)
-            .map(consumer::partitionsFor)
-            .flatMap(Collection::stream)
-            .map(p -> new TopicPartition(p.topic(), p.partition()))
-            .collect(Collectors.toSet());
-
-        consumer.assign(assignment);
-        assignment.forEach(consumer::position);
-
-        return consumer;
+    protected CompletableFuture<? extends TestConsumerFacade> createConsumer(GroupType type, GroupProtocol protocol, String groupId, String... topics) {
+        return TestConsumerFacade.create(admin(), kafkaBootstrapServers(), type, protocol, groupId, topics)
+                .thenApply(consumer -> {
+                    consumers.add(consumer);
+                    return consumer;
+                });
     }
 
-    protected CompletableFuture<Consumer<String, String>> createConsumerGroup(String groupId, String topic) {
-        return createConsumerGroup(groupId, topic, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT));
-    }
-
-    protected CompletableFuture<Consumer<String, String>> createConsumerGroup(String groupId, String topic, String groupProtocol) {
-        String clientId = "test-client-" + UUID.randomUUID().toString();
-        Properties props = new Properties();
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol);
-        props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, clientId);
-
-        if (GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT).equals(groupProtocol)) {
-            // Set very long session timeout to keep group alive during tests
-            props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "60000"); // 60 seconds
-            props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "20000"); // 20 seconds
-        }
-
-        props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "120000"); // 120 seconds
-        Consumer<String, String> consumer = new KafkaConsumer<>(props);
-        consumers.add(consumer);
-        Instant beginTime = Instant.now();
-
-        return CompletableFuture.supplyAsync(() -> {
-            consumer.subscribe(Collections.singleton(topic));
-
-            await().atMost(20, TimeUnit.SECONDS).until(() -> {
-                consumer.poll(Duration.ofMillis(200));
-                return isMember(groupId, clientId, beginTime);
-            });
-
-            LOGGER.infof("Client instance %s took %s to become a member of group %s",
-                    clientId,
-                    Duration.between(beginTime, Instant.now()),
-                    groupId);
-            return consumer;
-        });
-    }
-
-    private boolean isMember(String groupId, String clientId, Instant beginTime) {
-        try {
-            var group = admin().describeConsumerGroups(Set.of(groupId))
-                    .all()
-                    .toCompletionStage()
-                    .toCompletableFuture()
-                    .join()
-                    .get(groupId);
-            var allMembers = group.members().stream()
-                    .map(MemberDescription::groupInstanceId)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
-                    .toList();
-
-            return switch(group.groupState()) {
-                case UNKNOWN, DEAD, EMPTY -> {
-                    if (Duration.between(beginTime, Instant.now()).compareTo(Duration.ofSeconds(3)) > 0) {
-                        LOGGER.debugf("State of group %s invalid: %s. Members: %s",
-                                groupId, group.groupState(), allMembers);
-                    }
-                    yield false;
-                }
-                default -> {
-                    if (allMembers.stream().anyMatch(memberId -> memberId.contains(clientId))) {
-                        yield true;
-                    }
-
-                    if (Duration.between(beginTime, Instant.now()).compareTo(Duration.ofSeconds(3)) > 0) {
-                        LOGGER.debugf("Group %s (state: %s) does not include clientId '%s'. Known members: %s",
-                                groupId, group.groupState(), clientId, allMembers);
-                    }
-
-                    yield false;
-                }
-            };
-        } catch (CompletionException _) {
-            return false;
-        }
+    protected CompletableFuture<? extends TestConsumerFacade> createClassicConsumer(String groupId, String... topics) {
+        return createConsumer(GroupType.CONSUMER, GroupProtocol.CLASSIC, groupId, topics);
     }
 }

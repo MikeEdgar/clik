@@ -60,7 +60,10 @@ public class DeleteGroupCommand extends ContextualCommand implements Callable<In
         }
 
         try (Admin admin = clientFactory.createAdminClient(contextName)) {
-            groupService.deleteGroups(admin, groupIds);
+            var errors = groupService.deleteGroups(admin, groupIds);
+
+            errors.forEach((groupId, error) ->
+                err().println("Error deleting group \"" + groupId + "\": " + error.toString()));
 
             if (groupIds.size() == 1) {
                 out().println("Group \"" + groupIds.get(0) + "\" deleted.");
@@ -68,7 +71,7 @@ public class DeleteGroupCommand extends ContextualCommand implements Callable<In
                 out().println(groupIds.size() + " groups deleted.");
             }
 
-            return 0;
+            return errors.isEmpty() ? 0 : 1;
         } catch (IllegalStateException e) {
             err().println("Error: " + e.getMessage());
             return 1;

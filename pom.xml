@@ -17,7 +17,7 @@
     <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
     <quarkus.platform.version>3.31.2</quarkus.platform.version>
     <surefire-plugin.version>3.5.4</surefire-plugin.version>
-    <kafka.version>4.1.1</kafka.version>
+    <kafka.version>4.2.0</kafka.version>
   </properties>
 
   <scm>
@@ -34,11 +34,23 @@
     </license>
   </licenses>
 
+  <repositories>
+    <repository>
+      <id>apache-staging</id>
+      <url>https://repository.apache.org/content/repositories/staging/</url>
+    </repository>
+  </repositories>
+
   <dependencyManagement>
     <dependencies>
       <dependency>
         <groupId>org.apache.kafka</groupId>
         <artifactId>kafka-clients</artifactId>
+        <version>${kafka.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.kafka</groupId>
+        <artifactId>kafka-streams</artifactId>
         <version>${kafka.version}</version>
       </dependency>
       <dependency>
@@ -102,6 +114,11 @@
     <dependency>
       <groupId>org.awaitility</groupId>
       <artifactId>awaitility</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.kafka</groupId>
+      <artifactId>kafka-streams</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>
