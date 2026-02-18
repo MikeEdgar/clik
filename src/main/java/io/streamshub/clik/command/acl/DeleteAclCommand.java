@@ -117,6 +117,7 @@ public class DeleteAclCommand extends ContextualCommand implements Callable<Inte
                         ? "1 ACL binding"
                         : matchingAcls.size() + " ACL bindings";
                 out().print("Delete " + aclCount + "? This cannot be undone. [y/N]: ");
+                out().flush();
 
                 String response;
                 try (Scanner scanner = new Scanner(System.in)) {

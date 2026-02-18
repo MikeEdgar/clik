@@ -198,6 +198,7 @@ public class AlterGroupCommand extends ContextualCommand implements Callable<Int
         // Prompt for confirmation unless --yes
         if (!autoConfirm) {
             out().print("Alter offsets for group \"" + groupId + "\"? This cannot be undone. [y/N]: ");
+            out().flush();
             String response;
             try (Scanner scanner = new Scanner(System.in)) {
                 response = scanner.nextLine().trim().toLowerCase();

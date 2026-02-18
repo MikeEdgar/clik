@@ -44,6 +44,7 @@ public class DeleteContextCommand extends BaseCommand implements Callable<Intege
         // Prompt for confirmation unless --yes
         if (!autoConfirm) {
             out().print("Delete context \"" + name + "\"? This cannot be undone. [y/N]: ");
+            out().flush();
             String response;
             try (Scanner scanner = new Scanner(System.in)) {
                 response = scanner.nextLine().trim().toLowerCase();
