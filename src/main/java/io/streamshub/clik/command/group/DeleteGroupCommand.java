@@ -48,6 +48,7 @@ public class DeleteGroupCommand extends ContextualCommand implements Callable<In
                     ? "group \"" + groupIds.get(0) + "\""
                     : groupIds.size() + " groups";
             out().print("Delete " + groupList + "? This cannot be undone. [y/N]: ");
+            out().flush();
             String response;
             try (Scanner scanner = new Scanner(System.in)) {
                 response = scanner.nextLine().trim().toLowerCase();

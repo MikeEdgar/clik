@@ -48,6 +48,7 @@ public class DeleteTopicCommand extends ContextualCommand implements Callable<In
                     ? "topic \"" + names.get(0) + "\""
                     : names.size() + " topics";
             out().print("Delete " + topicList + "? This cannot be undone. [y/N]: ");
+            out().flush();
             String response;
             try (Scanner scanner = new Scanner(System.in)) {
                 response = scanner.nextLine().trim().toLowerCase();
