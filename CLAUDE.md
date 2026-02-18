@@ -70,24 +70,25 @@ The codebase follows a standard Maven project layout:
   - `command/group/` - Consumer group management commands
   - `command/cluster/` - Cluster management commands
   - `command/acl/` - ACL management commands
+  - `command/feature/` - Feature management commands
   - `command/produce/` - Message producer command
   - `command/consume/` - Message consumer command
   - `config/` - Configuration services (ContextService, ConfigurationLoader, ContextValidator)
-  - `kafka/` - Kafka services (KafkaClientFactory, TopicService, GroupService, ClusterService, AclService)
-  - `kafka/model/` - Data models (TopicInfo, GroupInfo, ClusterInfo, AclInfo, ConsumedMessage, etc.)
+  - `kafka/` - Kafka services (KafkaClientFactory, TopicService, GroupService, ClusterService, AclService, FeatureService)
+  - `kafka/model/` - Data models (TopicInfo, GroupInfo, ClusterInfo, AclInfo, FeatureInfo, ConsumedMessage, etc.)
   - `support/` - Utility classes (Encoding, FormatParser, format tokens, MessageComponents)
   - `version/` - Application version provider
 - `src/main/resources/` - Configuration files and resources
 - `src/test/java/` - Test code
 - `src/test/resources/` - Test fixtures and resources
-- `specs/` - Feature specifications (CONTEXT.md, TOPIC.md, GROUP.md, CLUSTER.md, ACL.md, PRODUCE_CONSUME.md)
+- `specs/` - Feature specifications (CONTEXT.md, TOPIC.md, GROUP.md, CLUSTER.md, ACL.md, FEATURE.md, PRODUCE_CONSUME.md)
 
 ### Main Entry Point
 
 `Clik.java` (`src/main/java/io/streamshub/clik/Clik.java`) is the top-level Picocli command annotated with `@TopCommand`. It defines:
 - The CLI application name: "clik"
 - Built-in help and version options
-- Subcommands structure (context, topic, and group management commands)
+- Subcommands structure (context, topic, group, cluster, ACL, feature, produce, and consume management commands)
 - Version provider that pulls version from `quarkus.application.version` config property
 
 ### Implemented Features
@@ -137,6 +138,15 @@ See `specs/PRODUCE_CONSUME.md` for complete specification.
 - Producer: Multiple input sources, format string support, binary encoding (base64/hex), headers, timestamps
 - Consumer: Offset control, continuous mode, multiple output formats, partition filtering
 - Tests: 54 passing (produce) + 14 passing (consume) + 61 passing (support)
+
+#### Feature Management (✅ COMPLETED)
+See `specs/FEATURE.md` for complete specification.
+- Commands: list, describe, alter (with upgrade/downgrade/disable)
+- Key services: FeatureService
+- Data models: FeatureInfo
+- Kafka version mapping for metadata.version feature
+- Upgrade/downgrade validation with confirmation prompts
+- Tests: 6 passing (service) + 14 passing (integration including actual feature modification tests)
 
 ### Configuration
 
@@ -294,12 +304,15 @@ Specification: `specs/CLUSTER.md`
 ### ACL Management (✅ COMPLETED)
 Specification: `specs/ACL.md`
 
+### Feature Management (✅ COMPLETED)
+Specification: `specs/FEATURE.md`
+
 ### Producer and Consumer (✅ COMPLETED)
 Specification: `specs/PRODUCE_CONSUME.md`
 
 ### Overall Test Coverage
 
-**Total Tests: 389 passing (2 skipped)**
-- Unit tests: 127 (ContextService, ConfigurationLoader, ContextValidator, TopicService, GroupService, ClusterService, KafkaClientFactory, Encoding, FormatParser, OutputFormatter)
-- Integration tests: 262 (ContextCommandTest: 29, TopicCommandTest: 27, GroupCommandTest: 28, ClusterCommandTest: 7, AclCommandTest: 31, ProduceCommandTest: 54, ConsumeCommandTest: 14 + native IT variants)
+**Total Tests: 424 passing (2 skipped)**
+- Unit tests: 133 (ContextService, ConfigurationLoader, ContextValidator, TopicService, GroupService, ClusterService, FeatureService, KafkaClientFactory, Encoding, FormatParser, OutputFormatter)
+- Integration tests: 291 (ContextCommandTest: 29, TopicCommandTest: 33, GroupCommandTest: 34, ClusterCommandTest: 7, AclCommandTest: 31, FeatureCommandTest: 14, ProduceCommandTest: 58, ConsumeCommandTest: 14 + native IT variants)
 - All tests passing in both JVM and native modes

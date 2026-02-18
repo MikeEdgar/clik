@@ -85,7 +85,7 @@
     <dependency>
       <!-- Artifact name changes in 3.31+ -->
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5</artifactId>
+      <artifactId>quarkus-junit</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -96,7 +96,7 @@
     <dependency>
       <!-- Artifact name changes in 3.31+ -->
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5-mockito</artifactId>
+      <artifactId>quarkus-junit-mockito</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

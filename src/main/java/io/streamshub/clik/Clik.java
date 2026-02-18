@@ -5,6 +5,7 @@ import io.streamshub.clik.command.cluster.ClusterCommand;
 import io.streamshub.clik.command.completion.CompletionCommand;
 import io.streamshub.clik.command.consume.ConsumeCommand;
 import io.streamshub.clik.command.context.ContextCommand;
+import io.streamshub.clik.command.feature.FeatureCommand;
 import io.streamshub.clik.command.group.GroupCommand;
 import io.streamshub.clik.command.produce.ProduceCommand;
 import io.streamshub.clik.command.topic.TopicCommand;
@@ -25,6 +26,7 @@ import picocli.CommandLine.IVersionProvider;
                 AclCommand.class,
                 ClusterCommand.class,
                 ContextCommand.class,
+                FeatureCommand.class,
                 TopicCommand.class,
                 GroupCommand.class,
                 ProduceCommand.class,
