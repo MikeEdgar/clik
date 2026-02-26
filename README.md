@@ -96,6 +96,16 @@ clik acl list
 
 See [specs/ACL.md](specs/ACL.md) for complete documentation.
 
+### ⚙️ Feature Management
+View and manage Kafka cluster features, including metadata.version upgrades for cluster migrations.
+
+```bash
+clik feature list
+clik feature alter metadata.version --upgrade-to 29
+```
+
+See [specs/FEATURE.md](specs/FEATURE.md) for complete documentation.
+
 ### 📨 Message Production
 Produce messages from files, stdin, or interactively with support for keys, headers, and timestamps.
 
@@ -177,6 +187,7 @@ Most commands support multiple output formats via the `-o, --output` flag:
 - [Consumer Group Management](specs/GROUP.md) - Monitoring and managing consumer groups
 - [Cluster Management](specs/CLUSTER.md) - Viewing cluster information and topology
 - [ACL Management](specs/ACL.md) - Managing Access Control Lists for security
+- [Feature Management](specs/FEATURE.md) - Managing cluster features and version upgrades
 - [Message Production & Consumption](specs/PRODUCE_CONSUME.md) - Producing and consuming messages
 
 ### Development
