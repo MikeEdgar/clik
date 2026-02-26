@@ -31,16 +31,16 @@ import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.jboss.logging.Logger;
-import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.streamshub.clik.config.ContextService;
 import io.streamshub.clik.kafka.GroupService;
 
 @TestInstance(Lifecycle.PER_CLASS)
+@ExtendWith(io.streamshub.clik.test.callback.LoggingCallback.class)
 public abstract class CommonTestBase {
 
     private static final Logger LOGGER = Logger.getLogger(CommonTestBase.class);
@@ -183,17 +183,6 @@ public abstract class CommonTestBase {
         } catch (Exception _) {
             // Ignore
         }
-    }
-
-    @BeforeAll
-    void initialize() {
-        LOGGER.infof("***** Before tests in %s", getClass().getName());
-    }
-
-    @AfterAll
-    void complete() {
-        delete(xdgConfigHome);
-        LOGGER.infof("***** After tests in %s", getClass().getName());
     }
 
     @AfterEach
