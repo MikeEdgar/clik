@@ -170,9 +170,12 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
 
         // Create multiple consumers in the same group
         CompletableFuture.allOf(
-                createConsumer(type, protocol, "multi-member-group", "members-topic"),
-                createConsumer(type, protocol, "multi-member-group", "members-topic"),
                 createConsumer(type, protocol, "multi-member-group", "members-topic")
+                    .thenAccept(c -> c.commit()),
+                createConsumer(type, protocol, "multi-member-group", "members-topic")
+                    .thenAccept(c -> c.commit()),
+                createConsumer(type, protocol, "multi-member-group", "members-topic")
+                    .thenAccept(c -> c.commit())
         ).join();
 
         GroupInfo group = groupService.describeGroup(admin(), "multi-member-group");

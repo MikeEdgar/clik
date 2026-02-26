@@ -53,12 +53,24 @@ public class LoggingCallback implements
 
     @Override
     public void afterTestExecution(ExtensionContext context) throws Exception {
-        LOGGER.infof("After test execution %s", fullDisplayName(context));
+        var thrown = context.getExecutionException();
+
+        if (thrown.isEmpty()) {
+            LOGGER.infof("After test execution %s", fullDisplayName(context));
+        } else {
+            LOGGER.warnf(thrown.get(), "After exceptional test execution %s", fullDisplayName(context));
+        }
     }
 
     @Override
     public void afterEach(ExtensionContext context) throws Exception {
-        LOGGER.infof("After test %s", fullDisplayName(context));
+        var thrown = context.getExecutionException();
+
+        if (thrown.isEmpty()) {
+            LOGGER.infof("After test %s", fullDisplayName(context));
+        } else {
+            LOGGER.warnf(thrown.get(), "After exceptional test %s", fullDisplayName(context));
+        }
     }
 
     @Override
