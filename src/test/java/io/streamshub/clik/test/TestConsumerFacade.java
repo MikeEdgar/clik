@@ -18,11 +18,14 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.ListShareGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.MemberDescription;
 import org.apache.kafka.clients.admin.MemberToRemove;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -50,6 +53,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TaskMetadata;
 import org.apache.kafka.streams.kstream.KStream;
 import org.jboss.logging.Logger;
 
@@ -66,6 +70,8 @@ public sealed interface TestConsumerFacade {
     void seek(Map<TopicPartition, Long> offsets);
 
     ConsumerRecords<String, String> poll(Duration duration);
+
+    boolean offsetsCommitted();
 
     void commit();
 
@@ -308,6 +314,11 @@ public sealed interface TestConsumerFacade {
         }
 
         @Override
+        public boolean offsetsCommitted() {
+            return !consumer.committed(consumer.assignment()).isEmpty();
+        }
+
+        @Override
         public void commit() {
             consumer.commitSync();
         }
@@ -446,6 +457,24 @@ public sealed interface TestConsumerFacade {
         }
 
         @Override
+        public boolean offsetsCommitted() {
+            String groupId = properties.getProperty(ConsumerConfig.GROUP_ID_CONFIG);
+            var subscription = consumer.get().subscription();
+
+            var offsets = admin().listShareGroupOffsets(Map.of(groupId, new ListShareGroupOffsetsSpec()))
+                .all()
+                .toCompletionStage()
+                .toCompletableFuture()
+                .join();
+
+            return offsets.get(groupId)
+                    .keySet()
+                    .stream()
+                    .map(TopicPartition::topic)
+                    .anyMatch(subscription::contains);
+        }
+
+        @Override
         public void commit() {
             consumer.get().commitSync();
         }
@@ -569,6 +598,17 @@ public sealed interface TestConsumerFacade {
         public ConsumerRecords<String, String> poll(Duration duration) {
             // No-op
             return ConsumerRecords.empty();
+        }
+
+        @Override
+        public boolean offsetsCommitted() {
+            return streams.get()
+                    .metadataForLocalThreads()
+                    .stream()
+                    .map(meta -> Stream.concat(meta.activeTasks().stream(), meta.standbyTasks().stream())
+                        .map(TaskMetadata::committedOffsets)
+                        .anyMatch(Predicate.not(Map::isEmpty)))
+                    .anyMatch(Boolean.TRUE::equals);
         }
 
         @Override

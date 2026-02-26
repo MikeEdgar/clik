@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import jakarta.inject.Inject;
 
@@ -22,6 +23,7 @@ import io.streamshub.clik.kafka.model.OffsetLagInfo;
 import io.streamshub.clik.test.ClikTestBase;
 import io.streamshub.clik.test.TestRecordProducer;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -218,8 +220,13 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
 
         // Produce some messages
         produceMessages("offset-topic", 100);
-        consumer.poll(Duration.ofMillis(200));
-        consumer.commit();
+
+        await().atMost(5, TimeUnit.SECONDS).until(() -> {
+            consumer.poll(Duration.ofMillis(200));
+            consumer.commit();
+            return consumer.offsetsCommitted();
+        });
+
         consumer.close();
 
         GroupInfo group = groupService.describeGroup(admin(), "offset-group");
