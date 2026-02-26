@@ -3,14 +3,15 @@ package io.streamshub.clik.command.group;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,14 +26,58 @@ import io.streamshub.clik.config.ContextConfig;
 import io.streamshub.clik.config.ContextService;
 import io.streamshub.clik.kafka.GroupService;
 import io.streamshub.clik.kafka.TopicService;
+import io.streamshub.clik.kafka.model.GroupOffsetInfo;
 import io.streamshub.clik.test.ClikMainTestBase;
 import io.streamshub.clik.test.TestRecordProducer;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * Integration tests for consumer group management commands.
+ *
+ * <h2>Group Type Coverage Strategy</h2>
+ * <p>
+ * These tests comprehensively cover all Kafka 4.1 group types: CLASSIC, CONSUMER, SHARE, and STREAMS.
+ * Most functional tests use {@code @ParameterizedTest} with {@code @CsvSource} to execute the same
+ * test logic across multiple group type combinations:
+ * </p>
+ * <ul>
+ *   <li><b>CLASSIC/CLASSIC</b> - Classic consumer group with classic protocol</li>
+ *   <li><b>CLASSIC/CONSUMER</b> - Classic consumer group with consumer protocol</li>
+ *   <li><b>CONSUMER</b> - Consumer group type</li>
+ *   <li><b>SHARE</b> - Share group type (Kafka 4.1+)</li>
+ *   <li><b>STREAMS</b> - Streams group type (limited support in Kafka 4.1)</li>
+ * </ul>
+ *
+ * <h3>STREAMS Group Limitations</h3>
+ * <p>
+ * Due to known limitations in Kafka 4.1, STREAMS groups are <b>excluded</b> from describe and alter
+ * operations (describeGroup and alterOffsets APIs do not support STREAMS groups). However, STREAMS
+ * groups <b>are included</b> in list and delete operations, which work correctly.
+ * </p>
+ *
+ * <h3>Test Execution Count</h3>
+ * <p>
+ * Parameterized tests significantly increase test coverage without code duplication:
+ * </p>
+ * <ul>
+ *   <li>Alter commands: 6 tests × 4 group types = 24 executions</li>
+ *   <li>Delete command: 1 test × 5 group types = 5 executions (includes STREAMS)</li>
+ *   <li>Describe commands: 5 tests × 4 group types = 20 executions</li>
+ * </ul>
+ *
+ * <h3>Helper Methods</h3>
+ * <p>
+ * Tests use {@code createConsumer(GroupType, GroupProtocol, groupId, topic)} from
+ * {@link io.streamshub.clik.test.CommonTestBase} to create consumers of the appropriate type.
+ * </p>
+ *
+ * @see io.streamshub.clik.kafka.GroupServiceTest for unit-level group type coverage
+ */
 @QuarkusMainTest
 @TestProfile(ClikMainTestBase.Profile.class)
 class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
@@ -78,8 +123,8 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         topicService.createTopic(admin(), "group-test-topic", 3, 1, Collections.emptyMap());
 
         CompletableFuture.allOf(
-                createConsumerGroup("test-group-1", "group-test-topic"),
-                createConsumerGroup("test-group-2", "group-test-topic")
+                createClassicConsumer("test-group-1", "group-test-topic"),
+                createClassicConsumer("test-group-2", "group-test-topic")
         ).join();
 
         LaunchResult result = launcher.launch("group", "list");
@@ -99,9 +144,9 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         topicService.createTopic(admin(), "name-test-topic", 2, 1, Collections.emptyMap());
 
         CompletableFuture.allOf(
-                createConsumerGroup("alpha-group", "name-test-topic"),
-                createConsumerGroup("beta-group", "name-test-topic"),
-                createConsumerGroup("gamma-group", "name-test-topic")
+                createClassicConsumer("alpha-group", "name-test-topic"),
+                createClassicConsumer("beta-group", "name-test-topic"),
+                createClassicConsumer("gamma-group", "name-test-topic")
         ).join();
 
         LaunchResult result = launcher.launch("group", "list", "-o", "name");
@@ -116,7 +161,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     void testListGroupsJsonFormat() throws Exception {
         // Create test topic and consumer group
         topicService.createTopic(admin(), "json-group-topic", 2, 1, Collections.emptyMap());
-        createConsumerGroup("json-group", "json-group-topic").join();
+        createClassicConsumer("json-group", "json-group-topic").join();
 
         LaunchResult result = launcher.launch("group", "list", "-o", "json");
         assertEquals(0, result.exitCode());
@@ -132,7 +177,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     void testListGroupsYamlFormat() throws Exception {
         // Create test topic and consumer group
         topicService.createTopic(admin(), "yaml-group-topic", 2, 1, Collections.emptyMap());
-        createConsumerGroup("yaml-group", "yaml-group-topic").join();
+        createClassicConsumer("yaml-group", "yaml-group-topic").join();
 
         LaunchResult result = launcher.launch("group", "list", "-o", "yaml");
         assertEquals(0, result.exitCode());
@@ -148,7 +193,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     void testListGroupsFilterByType() throws Exception {
         // Create test topic and consumer group
         topicService.createTopic(admin(), "filter-topic", 2, 1, Collections.emptyMap());
-        createConsumerGroup("consumer-group-1", "filter-topic", "classic").join();
+        createConsumer(GroupType.CONSUMER, GroupProtocol.CLASSIC, "consumer-group-1", "filter-topic").join();
 
         // Filter by consumer type
         LaunchResult consumerResult = launcher.launch("group", "list", "--type", "classic");
@@ -161,35 +206,55 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         assertTrue(shareResult.getOutput().contains("No groups found"));
     }
 
-    @Test
-    void testDescribeGroup() throws Exception {
-        // Create test topic and consumer group
-        topicService.createTopic(admin(), "describe-topic", 3, 1, Collections.emptyMap());
-        createConsumerGroup("describe-group", "describe-topic").join();
+    @ParameterizedTest
+    @CsvSource({
+        "CLASSIC , CLASSIC ,",
+        "CLASSIC , CONSUMER,",
+        "CONSUMER, CONSUMER,",
+        "SHARE   ,         ,",
+        // "STREAMS ,         ,", // Kafka 4.1 limitation - describe not supported for STREAMS groups
+    })
+    void testDescribeGroup(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+        String topicName = "describe-topic-" + groupType.name().toLowerCase();
+        String groupId = "describe-group-" + groupType.name().toLowerCase();
 
-        LaunchResult result = launcher.launch("group", "describe", "describe-group");
+        // Create test topic and consumer group
+        topicService.createTopic(admin(), topicName, 3, 1, Collections.emptyMap());
+        createConsumer(groupType, groupProtocol, groupId, topicName).join();
+
+        LaunchResult result = launcher.launch("group", "describe", groupId);
         assertEquals(0, result.exitCode());
         String output = result.getOutput();
-        assertTrue(output.contains("Group: describe-group"));
+        assertTrue(output.contains("Group: " + groupId));
         assertTrue(output.contains("Type:"));
         assertTrue(output.contains("State:"));
     }
 
-    @Test
-    void testDescribeGroupWithMembers() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+        "CLASSIC , CLASSIC ,",
+        "CLASSIC , CONSUMER,",
+        "CONSUMER, CONSUMER,",
+        "SHARE   ,         ,",
+        // "STREAMS ,         ,", // Kafka 4.1 limitation - describe not supported for STREAMS groups
+    })
+    void testDescribeGroupWithMembers(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+        String topicName = "members-topic-" + groupType.name().toLowerCase();
+        String groupId = "multi-member-group-" + groupType.name().toLowerCase();
+
         // Create test topic and multiple consumers
-        topicService.createTopic(admin(), "members-topic", 6, 1, Collections.emptyMap());
+        topicService.createTopic(admin(), topicName, 6, 1, Collections.emptyMap());
 
         CompletableFuture.allOf(
-                createConsumerGroup("multi-member-group", "members-topic"),
-                createConsumerGroup("multi-member-group", "members-topic"),
-                createConsumerGroup("multi-member-group", "members-topic")
+                createConsumer(groupType, groupProtocol, groupId, topicName),
+                createConsumer(groupType, groupProtocol, groupId, topicName),
+                createConsumer(groupType, groupProtocol, groupId, topicName)
         ).join();
 
-        LaunchResult result = launcher.launch("group", "describe", "multi-member-group");
+        LaunchResult result = launcher.launch("group", "describe", groupId);
         assertEquals(0, result.exitCode());
         String output = result.getOutput();
-        assertTrue(output.contains("Group: multi-member-group"));
+        assertTrue(output.contains("Group: " + groupId));
         assertTrue(output.contains("Members:"));
         assertTrue(output.contains("MEMBER ID"));
         assertTrue(output.contains("HOST"));
@@ -203,32 +268,52 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         assertTrue(result.getErrorOutput().contains("not found"));
     }
 
-    @Test
-    void testDescribeGroupJsonFormat() throws Exception {
-        // Create test topic and consumer group
-        topicService.createTopic(admin(), "json-describe-topic", 2, 1, Collections.emptyMap());
-        createConsumerGroup("json-describe-group", "json-describe-topic").join();
+    @ParameterizedTest
+    @CsvSource({
+        "CLASSIC , CLASSIC ,",
+        "CLASSIC , CONSUMER,",
+        "CONSUMER, CONSUMER,",
+        "SHARE   ,         ,",
+        // "STREAMS ,         ,", // Kafka 4.1 limitation - describe not supported for STREAMS groups
+    })
+    void testDescribeGroupJsonFormat(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+        String topicName = "json-describe-topic-" + groupType.name().toLowerCase();
+        String groupId = "json-describe-group-" + groupType.name().toLowerCase();
 
-        LaunchResult result = launcher.launch("group", "describe", "json-describe-group", "-o", "json");
+        // Create test topic and consumer group
+        topicService.createTopic(admin(), topicName, 2, 1, Collections.emptyMap());
+        createConsumer(groupType, groupProtocol, groupId, topicName).join();
+
+        LaunchResult result = launcher.launch("group", "describe", groupId, "-o", "json");
         assertEquals(0, result.exitCode());
         String output = result.getOutput();
         assertTrue(output.contains("\"groupId\""));
-        assertTrue(output.contains("\"json-describe-group\""));
+        assertTrue(output.contains("\"" + groupId + "\""));
         assertTrue(output.contains("\"type\""));
         assertTrue(output.contains("\"state\""));
     }
 
-    @Test
-    void testDescribeGroupYamlFormat() throws Exception {
-        // Create test topic and consumer group
-        topicService.createTopic(admin(), "yaml-describe-topic", 2, 1, Collections.emptyMap());
-        createConsumerGroup("yaml-describe-group", "yaml-describe-topic").join();
+    @ParameterizedTest
+    @CsvSource({
+        "CLASSIC , CLASSIC ,",
+        "CLASSIC , CONSUMER,",
+        "CONSUMER, CONSUMER,",
+        "SHARE   ,         ,",
+        // "STREAMS ,         ,", // Kafka 4.1 limitation - describe not supported for STREAMS groups
+    })
+    void testDescribeGroupYamlFormat(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+        String topicName = "yaml-describe-topic-" + groupType.name().toLowerCase();
+        String groupId = "yaml-describe-group-" + groupType.name().toLowerCase();
 
-        LaunchResult result = launcher.launch("group", "describe", "yaml-describe-group", "-o", "yaml");
+        // Create test topic and consumer group
+        topicService.createTopic(admin(), topicName, 2, 1, Collections.emptyMap());
+        createConsumer(groupType, groupProtocol, groupId, topicName).join();
+
+        LaunchResult result = launcher.launch("group", "describe", groupId, "-o", "yaml");
         assertEquals(0, result.exitCode());
         String output = result.getOutput();
         assertTrue(output.contains("groupId:"));
-        assertTrue(output.contains("yaml-describe-group"));
+        assertTrue(output.contains(groupId));
         assertTrue(output.contains("type:"));
         assertTrue(output.contains("state:"));
     }
@@ -243,24 +328,33 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         assertTrue(result.getErrorOutput().contains("No current context set"));
     }
 
-    @Test
-    void testDescribeGroupWithOffsets() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+        "CLASSIC , CLASSIC ,",
+        "CLASSIC , CONSUMER,",
+        "CONSUMER, CONSUMER,",
+        "SHARE   ,         ,",
+        // "STREAMS ,         ,", // Kafka 4.1 limitation - describe not supported for STREAMS groups
+    })
+    void testDescribeGroupWithOffsets(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+        String topicName = "offset-test-topic-" + groupType.name().toLowerCase();
+        String groupId = "offset-test-group-" + groupType.name().toLowerCase();
+
         // Create test topic
-        topicService.createTopic(admin(), "offset-test-topic", 2, 1, Collections.emptyMap());
+        topicService.createTopic(admin(), topicName, 2, 1, Collections.emptyMap());
 
         // Produce some messages
-        produceMessages("offset-test-topic", 50);
+        produceMessages(topicName, 50);
 
         // Create consumer and consume messages
-        Consumer<String, String> consumer = createConsumerGroup("offset-test-group", "offset-test-topic")
-                .join();
+        var consumer = createConsumer(groupType, groupProtocol, groupId, topicName).join();
+        consumer.poll(Duration.ofSeconds(1));
+        consumer.commit();
 
-        consumer.commitSync();
-
-        LaunchResult result = launcher.launch("group", "describe", "offset-test-group");
+        LaunchResult result = launcher.launch("group", "describe", groupId);
         assertEquals(0, result.exitCode());
         String output = result.getOutput();
-        assertTrue(output.contains("Group: offset-test-group"));
+        assertTrue(output.contains("Group: " + groupId));
         assertTrue(output.contains("Topic Lag:"));
         assertTrue(output.contains("TOPIC"));
         assertTrue(output.contains("PARTITION"));
@@ -269,54 +363,66 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         assertTrue(output.contains("LAG"));
     }
 
-    @Test
-    void testDeleteGroup() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+        "CLASSIC , CLASSIC ,",
+        "CLASSIC , CONSUMER,",
+        "CONSUMER, CONSUMER,",
+        "SHARE   ,         ,",
+        "STREAMS ,         ,", // STREAMS deletion works (only describe/alter have limitations)
+    })
+    void testDeleteGroup(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+        String topicName = "delete-test-topic-" + groupType.name().toLowerCase();
+        String groupId = "delete-test-group-" + groupType.name().toLowerCase();
+
         // Create test topic and consumer group
-        topicService.createTopic(admin(), "delete-test-topic", 2, 1, Collections.emptyMap());
-        Consumer<String, String> consumer = createConsumerGroup("delete-test-group", "delete-test-topic").join();
+        topicService.createTopic(admin(), topicName, 2, 1, Collections.emptyMap());
+        var consumer = createConsumer(groupType, groupProtocol, groupId, topicName).join();
 
         // Close the consumer so the group becomes empty/eligible for deletion
-        close(consumer);
+        consumer.close();
 
-        LaunchResult result = launcher.launch("group", "delete", "delete-test-group", "--yes");
+        LaunchResult result = launcher.launch("group", "delete", groupId, "--yes");
         assertEquals(0, result.exitCode());
-        assertTrue(result.getOutput().contains("Group \"delete-test-group\" deleted"));
+        assertTrue(result.getOutput().contains("Group \"" + groupId + "\" deleted"));
 
-        // Verify group was deleted
-        var groups = groupService.listGroups(admin(), null);
-        assertFalse(groups.stream().anyMatch(g -> g.groupId().equals("delete-test-group")));
+        // Verify group was deleted - there may be a small delay, hence await
+        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+            var groups = groupService.listGroups(admin(), null);
+            assertEquals(0, groups.size(), () -> "Groups still exist: " + groups);
+        });
     }
 
     @Test
     void testDeleteMultipleGroups() throws Exception {
         // Create test topic and consumer groups
         topicService.createTopic(admin(), "multi-delete-topic", 2, 1, Collections.emptyMap());
-        var consumer1 = createConsumerGroup("delete1", "multi-delete-topic");
-        var consumer2 = createConsumerGroup("delete2", "multi-delete-topic");
-        var consumer3 = createConsumerGroup("delete3", "multi-delete-topic");
+        var consumer1 = createConsumer(GroupType.CONSUMER, GroupProtocol.CLASSIC, "delete1", "multi-delete-topic");
+        var consumer2 = createConsumer(GroupType.CONSUMER, GroupProtocol.CONSUMER, "delete2", "multi-delete-topic");
+        var consumer3 = createConsumer(GroupType.SHARE, null, "delete3", "multi-delete-topic");
         CompletableFuture.allOf(consumer1, consumer2, consumer3).join();
 
         // Close all consumers so the groups become empty/eligible for deletion
-        close(consumer1.join());
-        close(consumer2.join());
-        close(consumer3.join());
+        consumer1.join().close();
+        consumer2.join().close();
+        consumer3.join().close();
 
         LaunchResult result = launcher.launch("group", "delete", "delete1", "delete2", "delete3", "--yes");
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("3 groups deleted"));
 
-        // Verify groups were deleted
-        var groups = groupService.listGroups(admin(), null);
-        assertFalse(groups.stream().anyMatch(g -> g.groupId().equals("delete1")));
-        assertFalse(groups.stream().anyMatch(g -> g.groupId().equals("delete2")));
-        assertFalse(groups.stream().anyMatch(g -> g.groupId().equals("delete3")));
+        // Verify groups were deleted - there may be a small delay, hence await
+        await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+            var groups = groupService.listGroups(admin(), null);
+            assertEquals(0, groups.size(), () -> "Groups still exist: " + groups);
+        });
     }
 
     @Test
     void testDeleteGroupNotFound() {
         LaunchResult result = launcher.launch("group", "delete", "nonexistent-group", "--yes");
         assertEquals(1, result.exitCode());
-        assertTrue(result.getErrorOutput().contains("Failed to delete group(s)"));
+        assertTrue(result.getErrorOutput().contains("Error deleting group"));
     }
 
     @Test
@@ -329,119 +435,161 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         assertTrue(result.getErrorOutput().contains("No current context set"));
     }
 
-    @Test
-    void testAlterGroupToEarliest() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+        "CLASSIC , CLASSIC ,",
+        "CLASSIC , CONSUMER,",
+        "CONSUMER, CONSUMER,",
+        "SHARE   ,         ,",
+        // "STREAMS ,         ,", // Kafka 4.1 limitation - alter not supported for STREAMS groups
+    })
+    void testAlterGroupToEarliest(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+        String topicName = "alter-earliest-topic-" + groupType.name().toLowerCase();
+        String groupId = "alter-earliest-group-" + groupType.name().toLowerCase();
+
         // Create topic and produce messages
-        topicService.createTopic(admin(), "alter-earliest-topic", 3, 1, Collections.emptyMap());
-        produceMessages("alter-earliest-topic", 100);
+        topicService.createTopic(admin(), topicName, 3, 1, Collections.emptyMap());
+        produceMessages(topicName, 100);
 
         // Create consumer group and consume messages
-        Consumer<String, String> consumer = createConsumerGroup("alter-earliest-group", "alter-earliest-topic").join();
-        var assignment = consumer.assignment();
-        consumer.seekToEnd(assignment);
-        assignment.forEach(consumer::position);
-        consumer.commitSync();
-        close(consumer);
+        var consumer = createConsumer(groupType, groupProtocol, groupId, topicName).join();
+        consumer.seekToEnd();
+        consumer.commit();
+        consumer.close();
 
         // Verify offsets are not at earliest
-        var offsetsBefore = groupService.getGroupOffsetMap(admin(), "alter-earliest-group");
+        var offsetsBefore = groupService.getGroupOffsetMap(admin(), groupId);
         assertTrue(offsetsBefore.values().stream().anyMatch(o -> o.offset() > 0));
 
         // Alter offsets to earliest
-        LaunchResult result = launcher.launch("group", "alter", "alter-earliest-group",
+        LaunchResult result = launcher.launch("group", "alter", groupId,
                 "--to-earliest", "--yes");
 
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Altered offsets"));
-        assertTrue(result.getOutput().contains("alter-earliest-group"));
+        assertTrue(result.getOutput().contains(groupId));
 
         // Verify offsets were reset to 0
-        var offsetsAfter = groupService.getGroupOffsetMap(admin(), "alter-earliest-group");
-        for (OffsetAndMetadata offset : offsetsAfter.values()) {
+        var offsetsAfter = groupService.getGroupOffsetMap(admin(), groupId);
+        for (GroupOffsetInfo offset : offsetsAfter.values()) {
             assertEquals(0, offset.offset());
         }
     }
 
-    @Test
-    void testAlterGroupToLatest() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+        "CLASSIC , CLASSIC ,",
+        "CLASSIC , CONSUMER,",
+        "CONSUMER, CONSUMER,",
+        "SHARE   ,         ,",
+        // "STREAMS ,         ,", // Kafka 4.1 limitation - alter not supported for STREAMS groups
+    })
+    void testAlterGroupToLatest(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+        String topicName = "alter-latest-topic-" + groupType.name().toLowerCase();
+        String groupId = "alter-latest-group-" + groupType.name().toLowerCase();
+
         // Create topic and produce messages
-        topicService.createTopic(admin(), "alter-latest-topic", 2, 1, Collections.emptyMap());
-        produceMessages("alter-latest-topic", 50);
+        topicService.createTopic(admin(), topicName, 1, 1, Collections.emptyMap());
+        produceMessages(topicName, 100);
 
         // Create consumer group with offsets at 0
-        Consumer<String, String> consumer = createConsumerGroup("alter-latest-group", "alter-latest-topic").join();
-        var assignment = consumer.assignment();
-        consumer.seekToBeginning(assignment);
-        assignment.forEach(consumer::position);
-        consumer.commitSync();
-        close(consumer);
+        var consumer = createConsumer(groupType, groupProtocol, groupId, topicName).join();
+        consumer.commit();
+        consumer.close();
 
         // Alter offsets to latest
-        LaunchResult result = launcher.launch("group", "alter", "alter-latest-group",
+        LaunchResult result = launcher.launch("group", "alter", groupId,
                 "--to-latest", "--yes");
 
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Altered offsets"));
 
         // Verify offsets are at end (50 messages / 2 partitions = ~25 per partition)
-        var offsetsAfter = groupService.getGroupOffsetMap(admin(), "alter-latest-group");
-        for (OffsetAndMetadata offset : offsetsAfter.values()) {
-            assertTrue(offset.offset() >= 20);  // Should be around 25
+        var offsetsAfter = groupService.getGroupOffsetMap(admin(), groupId);
+        for (GroupOffsetInfo offset : offsetsAfter.values()) {
+            assertTrue(offset.offset() >= 20, () -> "Offset was " + offset.offset());  // Should be around 25
         }
     }
 
-    @Test
-    void testAlterGroupToSpecificOffset() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+        "CLASSIC , CLASSIC ,",
+        "CLASSIC , CONSUMER,",
+        "CONSUMER, CONSUMER,",
+        "SHARE   ,         ,",
+        // "STREAMS ,         ,", // Kafka 4.1 limitation - alter not supported for STREAMS groups
+    })
+    void testAlterGroupToSpecificOffset(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+        String topicName = "alter-offset-topic-" + groupType.name().toLowerCase();
+        String groupId = "alter-offset-group-" + groupType.name().toLowerCase();
+
         // Create topic
-        topicService.createTopic(admin(), "alter-offset-topic", 2, 1, Collections.emptyMap());
-        produceMessages("alter-offset-topic", 100);
+        topicService.createTopic(admin(), topicName, 2, 1, Collections.emptyMap());
+        produceMessages(topicName, 100);
 
         // Create consumer group
-        Consumer<String, String> consumer = createConsumerGroup("alter-offset-group", "alter-offset-topic").join();
-        consumer.commitSync();
-        close(consumer);
+        var consumer = createConsumer(groupType, groupProtocol, groupId, topicName).join();
+        consumer.seekToBeginning();
+        consumer.commit();
+        consumer.close();
 
         // Alter specific partition to offset 10
-        LaunchResult result = launcher.launch("group", "alter", "alter-offset-group",
-                "--to-offset", "10=alter-offset-topic:0", "--yes");
+        LaunchResult result = launcher.launch("group", "alter", groupId,
+                "--to-offset", "10=" + topicName + ":0", "--yes");
 
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Altered offsets"));
 
         // Verify only partition 0 was changed to offset 10
-        var offsets = groupService.getGroupOffsetMap(admin(), "alter-offset-group");
-        OffsetAndMetadata partition0 = offsets.get(new TopicPartition("alter-offset-topic", 0));
+        var offsets = groupService.getGroupOffsetMap(admin(), groupId);
+        GroupOffsetInfo partition0 = offsets.get(new TopicPartition(topicName, 0));
         assertNotNull(partition0);
         assertEquals(10, partition0.offset());
     }
 
-    @Test
-    void testAlterGroupShiftBy() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+        "CLASSIC , CLASSIC ,",
+        "CLASSIC , CONSUMER,",
+        "CONSUMER, CONSUMER,",
+        "SHARE   ,         ,",
+        // "STREAMS ,         ,", // Kafka 4.1 limitation - alter not supported for STREAMS groups
+    })
+    void testAlterGroupShiftBy(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+        String topicName = "shift-topic-" + groupType.name().toLowerCase();
+        String groupId = "shift-group-" + groupType.name().toLowerCase();
+
         // Create topic with 3 partitions
-        topicService.createTopic(admin(), "shift-topic", 3, 1, Collections.emptyMap());
-        produceMessages("shift-topic", 100);
+        topicService.createTopic(admin(), topicName, 3, 1, Collections.emptyMap());
+        produceMessages(topicName, 99);
 
         // Create consumer group
-        Consumer<String, String> consumer = createConsumerGroup("shift-group", "shift-topic").join();
-        consumer.commitSync();
-        close(consumer);
+        var consumer = createConsumer(groupType, groupProtocol, groupId, topicName).join();
+        // Seek to the middle of each partition to give buffer for the shift-by operation
+        consumer.seek(Map.of(
+                new TopicPartition(topicName, 0), 16L,
+                new TopicPartition(topicName, 1), 16L,
+                new TopicPartition(topicName, 2), 16L
+        ));
+        consumer.commit();
+        consumer.close();
 
         // Get current offsets
-        var offsetsBefore = groupService.getGroupOffsetMap(admin(), "shift-group");
+        var offsetsBefore = groupService.getGroupOffsetMap(admin(), groupId);
 
         // Shift partition 0 forward by 5, partition 2 back by 3, leave partition 1 unchanged
-        LaunchResult result = launcher.launch("group", "alter", "shift-group",
-                "--shift-by", "5=shift-topic:0",
-                "--shift-by", "-3=shift-topic:2",
+        LaunchResult result = launcher.launch("group", "alter", groupId,
+                "--shift-by", "5=" + topicName + ":0",
+                "--shift-by", "-3=" + topicName + ":2",
                 "--yes");
 
         assertEquals(0, result.exitCode());
 
         // Verify only specified partitions were shifted
-        var offsetsAfter = groupService.getGroupOffsetMap(admin(), "shift-group");
-        TopicPartition partition0 = new TopicPartition("shift-topic", 0);
-        TopicPartition partition1 = new TopicPartition("shift-topic", 1);
-        TopicPartition partition2 = new TopicPartition("shift-topic", 2);
+        var offsetsAfter = groupService.getGroupOffsetMap(admin(), groupId);
+        TopicPartition partition0 = new TopicPartition(topicName, 0);
+        TopicPartition partition1 = new TopicPartition(topicName, 1);
+        TopicPartition partition2 = new TopicPartition(topicName, 2);
 
         long before0 = offsetsBefore.get(partition0).offset();
         long after0 = offsetsAfter.get(partition0).offset();
@@ -456,33 +604,43 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         assertEquals(before2 - 3, after2, "Partition 2 should be shifted back by 3");
     }
 
-    @Test
-    void testAlterGroupToDatetime() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+        "CLASSIC , CLASSIC ,",
+        "CLASSIC , CONSUMER,",
+        "CONSUMER, CONSUMER,",
+        "SHARE   ,         ,",
+        // "STREAMS ,         ,", // Kafka 4.1 limitation - alter not supported for STREAMS groups
+    })
+    void testAlterGroupToDatetime(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+        String topicName = "datetime-topic-" + groupType.name().toLowerCase();
+        String groupId = "datetime-group-" + groupType.name().toLowerCase();
+
         // Create topic
-        topicService.createTopic(admin(), "datetime-topic", 1, 1, Collections.emptyMap());
+        topicService.createTopic(admin(), topicName, 1, 1, Collections.emptyMap());
 
         // Produce messages with specific timestamps
         var baseTimestamp = Instant.now().minus(Duration.ofHours(1)); // 1 hour ago
-        produceMessagesWithTimestamps("datetime-topic", 50, baseTimestamp.toEpochMilli(), 60000); // 1 message per minute
+        produceMessagesWithTimestamps(topicName, 50, baseTimestamp.toEpochMilli(), 60000); // 1 message per minute
 
         // Create consumer group
-        var consumer = createConsumerGroup("datetime-group", "datetime-topic").join();
-        consumer.commitSync();
+        var consumer = createConsumer(groupType, groupProtocol, groupId, topicName).join();
+        consumer.commit();
         // Close so that the group may be altered
-        close(consumer);
+        consumer.close();
 
         // Reset to timestamp 30 minutes ago (should be around message 30)
         long targetTimestamp = baseTimestamp.plus(Duration.ofMinutes(30)).toEpochMilli(); // 30 minutes after base
         String isoTimestamp = Instant.ofEpochMilli(targetTimestamp).toString();
 
-        LaunchResult result = launcher.launch("group", "alter", "datetime-group",
+        LaunchResult result = launcher.launch("group", "alter", groupId,
                 "--to-datetime", isoTimestamp, "--yes");
 
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Altered offsets"));
 
         // Verify offsets were set to approximately the target timestamp
-        var offsets = groupService.getGroupOffsetMap(admin(), "datetime-group");
+        var offsets = groupService.getGroupOffsetMap(admin(), groupId);
         var offsetValue = offsets.values().iterator().next().offset();
         assertEquals(30, offsetValue);
     }
@@ -494,7 +652,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         "119, PT-1H, 59", // 119 - 60 = 59
         "120, PT-1H, 61", // 120 is "next" offset, so the calculation uses "now" and "now" - 60 > 60, so 61 is next
     })
-    void testAlterGroupByDuration(int startOffset, String duration, int expectedOffset) throws Exception {
+    void testAlterGroupByDuration(long startOffset, String duration, int expectedOffset) throws Exception {
         // Create topic
         topicService.createTopic(admin(), "duration-topic", 1, 1, Collections.emptyMap());
 
@@ -502,12 +660,10 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         var baseTimestamp = Instant.now().minus(Duration.ofHours(2)); // 2 hours ago
         produceMessagesWithTimestamps("duration-topic", 120, baseTimestamp.toEpochMilli(), 60000); // 1 message per minute
 
-        var consumer = createConsumerGroup("duration-group", "duration-topic").join();
-        for (var partition : consumer.assignment()) {
-            consumer.seek(partition, startOffset);
-        }
-        consumer.commitSync();
-        close(consumer);
+        var consumer = createConsumer(GroupType.CONSUMER, GroupProtocol.CLASSIC, "duration-group", "duration-topic").join();
+        consumer.seek(Map.of(new TopicPartition("duration-topic", 0), startOffset));
+        consumer.commit();
+        consumer.close();
 
         LaunchResult result = launcher.launch("group", "alter", "duration-group",
                 "--by-duration", duration, "--yes");
@@ -530,12 +686,11 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         var baseTimestamp = Instant.now().minus(Duration.ofHours(2)); // 2 hours ago
         produceMessagesWithTimestamps("duration-topic", 120, baseTimestamp.toEpochMilli(), 60000); // 1 message per minute
 
-        var consumer = createConsumerGroup("duration-group", "duration-topic").join();
-        for (var partition : consumer.assignment()) {
-            consumer.seek(partition, 120);
-        }
-        consumer.commitSync();
-        close(consumer);
+        var consumer = createConsumer(GroupType.CONSUMER, GroupProtocol.CLASSIC, "duration-group", "duration-topic")
+                .join();
+        consumer.seek(Map.of(new TopicPartition("duration-topic", 0), 120L));
+        consumer.commit();
+        consumer.close();
 
         LaunchResult result = launcher.launch("group", "alter", "duration-group",
                 "--by-duration", "PT1H", "--yes");
@@ -549,33 +704,57 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         assertEquals(120, offsetValue);
     }
 
-    @Test
-    void testAlterGroupDeleteOffsets() throws Exception {
+    @ParameterizedTest
+    @CsvSource({
+        "CLASSIC , CLASSIC ,",
+        "CLASSIC , CONSUMER,",
+        "CONSUMER, CONSUMER,",
+        "SHARE   ,         ,",
+        // "STREAMS ,         ,", // Kafka 4.1 limitation - alter not supported for STREAMS groups
+    })
+    void testAlterGroupDeleteOffsets(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+        String topicName1 = "delete-offset-topic1-" + groupType.name().toLowerCase();
+        String topicName2 = "delete-offset-topic2-" + groupType.name().toLowerCase();
+        String groupId = "delete-offset-group-" + groupType.name().toLowerCase();
+
         // Create topic
-        topicService.createTopic(admin(), "delete-offset-topic", 2, 1, Collections.emptyMap());
-        produceMessages("delete-offset-topic", 50);
+        topicService.createTopic(admin(), topicName1, 1, 1, Collections.emptyMap());
+        topicService.createTopic(admin(), topicName2, 1, 1, Collections.emptyMap());
+        produceMessages(topicName1, 50);
+        produceMessages(topicName2, 50);
 
         // Create consumer group
-        Consumer<String, String> consumer = createConsumerGroup("delete-offset-group", "delete-offset-topic").join();
-        consumer.commitSync();
-        close(consumer);
+        var consumer = createConsumer(groupType, groupProtocol, groupId, topicName1, topicName2).join();
+        consumer.commit();
 
         // Verify offsets exist
-        var offsetsBefore = groupService.getGroupOffsetMap(admin(), "delete-offset-group");
-        assertEquals(2, offsetsBefore.size());
+        await().atMost(5, TimeUnit.SECONDS).until(() -> {
+            var offsetsBefore = groupService.getGroupOffsetMap(admin(), groupId);
+            assertEquals(2, offsetsBefore.size());
+
+            if (offsetsBefore.values().stream().anyMatch(Objects::isNull)) {
+                // Keep polling until offsets are present for both topics
+                consumer.poll(Duration.ofMillis(200));
+                return false;
+            }
+
+            return true;
+        });
+
+        consumer.close();
 
         // Delete offsets for partition 0
-        LaunchResult result = launcher.launch("group", "alter", "delete-offset-group",
-                "--delete", "delete-offset-topic:0", "--yes");
+        LaunchResult result = launcher.launch("group", "alter", groupId,
+                "--delete", topicName1, "--yes");
 
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Deleted offsets"));
 
-        // Verify partition 0 offset was deleted
-        var offsetsAfter = groupService.getGroupOffsetMap(admin(), "delete-offset-group");
+        // Verify topic1 was deleted
+        var offsetsAfter = groupService.getGroupOffsetMap(admin(), groupId);
         assertEquals(1, offsetsAfter.size());
-        assertFalse(offsetsAfter.containsKey(new TopicPartition("delete-offset-topic", 0)));
-        assertTrue(offsetsAfter.containsKey(new TopicPartition("delete-offset-topic", 1)));
+        assertFalse(offsetsAfter.containsKey(new TopicPartition(topicName1, 0)), () -> "offsetsAfter: " + offsetsAfter);
+        assertTrue(offsetsAfter.containsKey(new TopicPartition(topicName2, 0)), () -> "offsetsAfter: " + offsetsAfter);
     }
 
     @Test
@@ -587,11 +766,10 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         produceMessages("topic-b", 50);
 
         // Create consumer group consuming from both topics
-        Consumer<String, String> consumer = createConsumerGroup("multi-topic-group", "topic-a").join();
-        consumer.subscribe(List.of("topic-a", "topic-b"));
+        var consumer = createClassicConsumer("multi-topic-group", "topic-a", "topic-b").join();
         consumer.poll(Duration.ofSeconds(3));
-        consumer.commitSync();
-        close(consumer);
+        consumer.commit();
+        consumer.close();
 
         // Reset only topic-a to earliest
         LaunchResult result = launcher.launch("group", "alter", "multi-topic-group",
@@ -601,7 +779,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
 
         // Verify only topic-a partitions were reset
         var offsets = groupService.getGroupOffsetMap(admin(), "multi-topic-group");
-        for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+        for (Map.Entry<TopicPartition, GroupOffsetInfo> entry : offsets.entrySet()) {
             if (entry.getKey().topic().equals("topic-a")) {
                 assertEquals(0, entry.getValue().offset());
             } else if (entry.getKey().topic().equals("topic-b")) {
@@ -616,7 +794,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         topicService.createTopic(admin(), "active-topic", 2, 1, Collections.emptyMap());
 
         // Create consumer group with active consumer (don't close it)
-        Consumer<String, String> consumer = createConsumerGroup("active-group", "active-topic").join();
+        var consumer = createClassicConsumer("active-group", "active-topic").join();
 
         // Try to alter offsets - should fail
         LaunchResult result = launcher.launch("group", "alter", "active-group",
@@ -627,7 +805,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         assertTrue(result.getErrorOutput().contains("Stop all consumers"));
 
         // Clean up
-        close(consumer);
+        consumer.close();
     }
 
     @Test
@@ -643,8 +821,8 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     void testAlterGroupNoOffsets() throws Exception {
         // Create topic and group
         topicService.createTopic(admin(), "no-offsets-topic", 1, 1, Collections.emptyMap());
-        Consumer<String, String> consumer = createConsumerGroup("no-offsets-group", "no-offsets-topic").join();
-        close(consumer);
+        var consumer = createClassicConsumer("no-offsets-group", "no-offsets-topic").join();
+        consumer.close();
         groupService.deleteGroupOffsets(admin(), "no-offsets-group", Set.of(new TopicPartition("no-offsets-topic", 0)));
 
         LaunchResult result = launcher.launch("group", "alter", "no-offsets-group",
@@ -659,10 +837,10 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     void testAlterGroupNoOptions() throws Exception {
         // Create topic and group
         topicService.createTopic(admin(), "no-opts-topic", 1, 1, Collections.emptyMap());
-        Consumer<String, String> consumer = createConsumerGroup("no-opts-group", "no-opts-topic").join();
+        var consumer = createClassicConsumer("no-opts-group", "no-opts-topic").join();
         consumer.poll(Duration.ofMillis(100));
-        consumer.commitSync();
-        close(consumer);
+        consumer.commit();
+        consumer.close();
 
         // Try to alter without any options
         LaunchResult result = launcher.launch("group", "alter", "no-opts-group");
