@@ -32,17 +32,17 @@ source <(clik completion generate)
 Persist in user preferences
 
 ```shell
-clik completion generate > ~/.local/share/bash-completion/clik
+clik completion generate > ~/.local/share/bash-completion/completions/clik
 ```
 
-Persist globally
+Persist system-wide (commands assume non-root using `sudo`)
 
 ```shell
-# Linux
-clik completion generate > /etc/bash_completion.d/clik
+# May first require `sudo mkdir -p /usr/local/share/bash-completion/completions`
+clik completion generate | sudo tee /usr/local/share/bash-completion/completions/clik > /dev/null
 
-# MacOS
-clik completion generate > /usr/local/etc/bash_completion.d/clik
+# Alternate
+clik completion generate | sudo tee /etc/bash_completion.d/clik > /dev/null
 ```
 
 ## Features
