@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.kafka.common.config.TopicConfig;
 import org.junit.jupiter.api.BeforeEach;
@@ -238,16 +240,16 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
 
         for (int l = start; l < output.size(); l++) {
             String partitionLine = output.get(l);
-            assertTrue(partitionLine.matches(
+            Pattern expectedPattern = Pattern.compile(
                     "^"         // start of line
                     + "\\s+"    // variable whitespace
                     + (p++)     // partition#
                     + "\\s+"    // variable whitespace
-                    + "1"       // leader
+                    + "0"       // leader (node Id)
                     + "\\s+"    // variable whitespace
-                    + "\\[1\\]" // replicas
+                    + "\\[0\\]" // replicas (node Id list)
                     + "\\s+"    // variable whitespace
-                    + "\\[1\\]" // ISR
+                    + "\\[0\\]" // ISR (node Id list)
                     + "\\s+"    // variable whitespace
                     + expected1 // expected offset 1
                     + "\\s+"    // variable whitespace
@@ -256,8 +258,17 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
                     + expected3 // expected offset 3
                     + "\\s*"    // maybe variable whitespace
                     + "$"       // end of line
-                    ), () -> "Partition line did not match: '" + partitionLine +
-                        System.lineSeparator() + "'. Full output: " + result.getOutput());
+                    );
+            Matcher lineMatcher = expectedPattern.matcher(partitionLine);
+
+            assertTrue(
+                    lineMatcher.matches(), 
+                    () -> """
+                            Partition line did not match: '%s%n'.
+                            Pattern: %s
+                            Full output: %s
+                            """
+                        .formatted(partitionLine, expectedPattern.pattern(), result.getOutput()));
         }
     }
 
