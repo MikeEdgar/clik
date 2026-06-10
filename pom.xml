@@ -85,7 +85,7 @@
     <dependency>
       <groupId>com.github.freva</groupId>
       <artifactId>ascii-table</artifactId>
-      <version>1.9.0</version>
+      <version>1.12.1</version>
     </dependency>
     <dependency>
       <!-- Artifact name changes in 3.31+ -->
