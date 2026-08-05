@@ -45,9 +45,12 @@ clik topic create <name> [OPTIONS]
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `-p, --partitions <count>` | Number of partitions | 1 |
-| `-r, --replication-factor <count>` | Replication factor | 1 |
+| `-p, --partitions <count>` | Number of partitions. Cannot be used with `--replica-assignment`. | 1 |
+| `-r, --replication-factor <count>` | Replication factor. Mutually exclusive with `--replica-assignment`. | 1 |
+| `--replica-assignment <assignment>` | Manual replica assignment: comma-separated list of colon-separated broker node IDs, one entry per partition (e.g. `101:102,102:103,103:101`). Mutually exclusive with `--replication-factor`. | - |
 | `-c, --config <key=value>` | Topic configuration (repeatable) | - |
+
+The `--replica-assignment` format mirrors the `kafka-topics.sh --replica-assignment` option. Each comma-separated group defines one partition; the colon-separated values within a group are the broker node IDs for that partition's replicas in order (leader first). The number of partitions is derived from the number of groups — `--partitions` must not be specified alongside it.
 
 **Examples:**
 
@@ -64,6 +67,19 @@ clik topic create logs \
   --replication-factor 3 \
   --config retention.ms=86400000 \
   --config compression.type=zstd
+
+# Create topic with manual replica assignment (3 partitions, replication factor 2)
+# Partition 0: leader on broker 101, replica on 102
+# Partition 1: leader on broker 102, replica on 103
+# Partition 2: leader on broker 103, replica on 101
+clik topic create custom-topic \
+  --replica-assignment 101:102,102:103,103:101
+
+# Equivalent using repeated flags
+clik topic create custom-topic \
+  --replica-assignment 101:102 \
+  --replica-assignment 102:103 \
+  --replica-assignment 103:101
 ```
 
 **Behavior:**
@@ -72,7 +88,7 @@ clik topic create logs \
 2. Validate topic name (Kafka naming rules)
 3. Check if topic already exists (error if exists)
 4. Create AdminClient with context configuration
-5. Create topic with specified partitions, replication factor, and configs
+5. Create topic with specified partitions, replication factor, and configs; or with a manual replica assignment if `--replica-assignment` is provided
 6. Print success message
 
 **Output:**
@@ -88,6 +104,9 @@ Topic "test-topic" created.
 - Invalid configuration keys or values
 - No current context set
 - Authorization failure
+- `--replica-assignment` and `--replication-factor` are both specified
+- `--replica-assignment` and `--partitions` are both specified
+- `--replica-assignment` contains a non-integer broker ID
 
 ### Command: `clik topic list`
 
