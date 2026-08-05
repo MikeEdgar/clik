@@ -42,7 +42,17 @@ public class TopicService {
      * Create a new topic
      */
     public void createTopic(Admin admin, String name, int partitions, int replicationFactor, Map<String, String> configs) throws ExecutionException, InterruptedException {
-        NewTopic newTopic = new NewTopic(name, partitions, (short) replicationFactor);
+        createTopic(admin, new NewTopic(name, partitions, (short) replicationFactor), configs);
+    }
+
+    /**
+     * Create a new topic with a manual replica assignment
+     */
+    public void createTopic(Admin admin, String name, Map<Integer, List<Integer>> replicaAssignment, Map<String, String> configs) throws ExecutionException, InterruptedException {
+        createTopic(admin, new NewTopic(name, replicaAssignment), configs);
+    }
+
+    private void createTopic(Admin admin, NewTopic newTopic, Map<String, String> configs) throws ExecutionException, InterruptedException {
         if (configs != null && !configs.isEmpty()) {
             newTopic.configs(configs);
         }
@@ -52,7 +62,7 @@ public class TopicService {
             result.all().get();
         } catch (ExecutionException e) {
             if (e.getCause() instanceof TopicExistsException) {
-                throw new IllegalArgumentException("Topic \"" + name + "\" already exists.", e);
+                throw new IllegalArgumentException("Topic \"" + newTopic.name() + "\" already exists.", e);
             }
             throw e;
         }

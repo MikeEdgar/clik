@@ -109,6 +109,46 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
+    void testCreateTopicWithReplicaAssignment() throws Exception {
+        // Dev-services Kafka runs a single broker (nodeId=0); use 3 partitions each with 1 replica on broker 0
+        LaunchResult result = launcher.launch("topic", "create", "replica-assignment-topic",
+                "--replica-assignment", "0,0,0");
+        assertEquals(0, result.exitCode(), () -> "Output: %s\nError: %s"
+                .formatted(result.getOutput(), result.getErrorOutput()));
+        assertTrue(result.getOutput().contains("Topic \"replica-assignment-topic\" created"));
+
+        var topicInfo = topicService.describeTopic(admin(), "replica-assignment-topic");
+        assertNotNull(topicInfo);
+        assertEquals(3, topicInfo.partitions());
+        topicInfo.partitionDetails().forEach(p -> assertEquals(List.of(0), p.replicas()));
+    }
+
+    @Test
+    void testCreateTopicReplicaAssignmentWithPartitionsFails() throws Exception {
+        LaunchResult result = launcher.launch("topic", "create", "ra-partitions-conflict",
+                "--replica-assignment", "0",
+                "--partitions", "1");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("--partitions cannot be used with --replica-assignment"));
+    }
+
+    @Test
+    void testCreateTopicReplicaAssignmentInvalidFormat() throws Exception {
+        LaunchResult result = launcher.launch("topic", "create", "ra-invalid-format",
+                "--replica-assignment", "abc:xyz");
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("Invalid --replica-assignment format"));
+    }
+
+    @Test
+    void testCreateTopicReplicaAssignmentAndReplicationFactorFails() throws Exception {
+        LaunchResult result = launcher.launch("topic", "create", "ra-rf-conflict",
+                "--replica-assignment", "0",
+                "--replication-factor", "1");
+        assertEquals(2, result.exitCode());
+    }
+
+    @Test
     void testListTopicsEmpty() {
         LaunchResult result = launcher.launch("topic", "list");
         assertEquals(0, result.exitCode());
