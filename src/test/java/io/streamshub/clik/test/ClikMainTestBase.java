@@ -8,6 +8,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.main.LaunchResult;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public abstract class ClikMainTestBase extends CommonTestBase {
 
@@ -37,5 +40,15 @@ public abstract class ClikMainTestBase extends CommonTestBase {
             overrides.put("quarkus.kafka.devservices.port", String.valueOf(randomPort));
             return overrides;
         }
+    }
+
+    protected static void assertExitCodeEquals(int expected, LaunchResult result) {
+        assertEquals(
+                expected,
+                result.exitCode(),
+                () -> """
+                   Output: %s
+                   Error: %s""".formatted(result.getOutput(), result.getErrorOutput())
+       );
     }
 }
