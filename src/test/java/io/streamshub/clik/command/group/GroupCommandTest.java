@@ -494,14 +494,20 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
 
         // Create consumer group with offsets at 0
         var consumer = createConsumer(groupType, groupProtocol, groupId, topicName).join();
-        consumer.commit();
+
+        await().atMost(5, TimeUnit.SECONDS).until(() -> {
+            consumer.poll(Duration.ofMillis(200));
+            consumer.commit();
+            return consumer.offsetsCommitted();
+        });
+
         consumer.close();
 
         // Alter offsets to latest
         LaunchResult result = launcher.launch("group", "alter", groupId,
                 "--to-latest", "--yes");
 
-        assertEquals(0, result.exitCode());
+        assertExitCodeEquals(0, result);
         assertTrue(result.getOutput().contains("Altered offsets"));
 
         // Verify offsets are at end (50 messages / 2 partitions = ~25 per partition)
@@ -625,7 +631,13 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
 
         // Create consumer group
         var consumer = createConsumer(groupType, groupProtocol, groupId, topicName).join();
-        consumer.commit();
+
+        await().atMost(5, TimeUnit.SECONDS).until(() -> {
+            consumer.poll(Duration.ofMillis(200));
+            consumer.commit();
+            return consumer.offsetsCommitted();
+        });
+
         // Close so that the group may be altered
         consumer.close();
 
@@ -636,7 +648,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         LaunchResult result = launcher.launch("group", "alter", groupId,
                 "--to-datetime", isoTimestamp, "--yes");
 
-        assertEquals(0, result.exitCode());
+        assertExitCodeEquals(0, result);
         assertTrue(result.getOutput().contains("Altered offsets"));
 
         // Verify offsets were set to approximately the target timestamp
@@ -725,16 +737,16 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
 
         // Create consumer group
         var consumer = createConsumer(groupType, groupProtocol, groupId, topicName1, topicName2).join();
-        consumer.commit();
 
         // Verify offsets exist
         await().atMost(5, TimeUnit.SECONDS).until(() -> {
             var offsetsBefore = groupService.getGroupOffsetMap(admin(), groupId);
-            assertEquals(2, offsetsBefore.size());
 
-            if (offsetsBefore.values().stream().anyMatch(Objects::isNull)) {
+            if (offsetsBefore.size() != 2
+                    || offsetsBefore.values().stream().anyMatch(Objects::isNull)) {
                 // Keep polling until offsets are present for both topics
                 consumer.poll(Duration.ofMillis(200));
+                consumer.commit();
                 return false;
             }
 
@@ -747,7 +759,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         LaunchResult result = launcher.launch("group", "alter", groupId,
                 "--delete", topicName1, "--yes");
 
-        assertEquals(0, result.exitCode());
+        assertExitCodeEquals(0, result);
         assertTrue(result.getOutput().contains("Deleted offsets"));
 
         // Verify topic1 was deleted

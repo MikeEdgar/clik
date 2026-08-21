@@ -15,6 +15,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -60,6 +62,8 @@ import org.jboss.logging.Logger;
 import static org.awaitility.Awaitility.await;
 
 public sealed interface TestConsumerFacade {
+
+    static final ExecutorService TASKS = Executors.newVirtualThreadPerTaskExecutor();
 
     String groupId();
 
@@ -200,7 +204,7 @@ public sealed interface TestConsumerFacade {
                             assignable);
 
                     return new TestConsumer(admin, props, consumer);
-                });
+                }, TASKS);
             } else {
                 var assignment = Arrays.stream(topics)
                         .map(consumer::partitionsFor)
@@ -398,7 +402,7 @@ public sealed interface TestConsumerFacade {
                         commitResult);
 
                 return new TestShareConsumer(admin, props, new AtomicReference<>(consumer));
-            });
+            }, TASKS);
         }
 
         private static ShareConsumer<String, String> create(Properties props, String... topics) {
@@ -518,7 +522,7 @@ public sealed interface TestConsumerFacade {
                 });
 
                 return new TestStreamsConsumer(admin, props, new AtomicReference<>(streams));
-            });
+            }, TASKS);
         }
 
         private static KafkaStreams create(Admin admin, Properties props, String... topics) {
