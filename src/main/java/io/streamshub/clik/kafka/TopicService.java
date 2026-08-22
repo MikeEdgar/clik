@@ -8,7 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -34,6 +33,10 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import io.streamshub.clik.command.topic.options.OffsetsOption;
 import io.streamshub.clik.kafka.model.PartitionInfo;
 import io.streamshub.clik.kafka.model.TopicInfo;
+import io.streamshub.clik.support.Futures;
+import io.streamshub.clik.support.RootCause;
+
+import static io.streamshub.clik.support.Futures.join;
 
 @ApplicationScoped
 public class TopicService {
@@ -41,28 +44,28 @@ public class TopicService {
     /**
      * Create a new topic
      */
-    public void createTopic(Admin admin, String name, int partitions, int replicationFactor, Map<String, String> configs) throws ExecutionException, InterruptedException {
+    public void createTopic(Admin admin, String name, int partitions, int replicationFactor, Map<String, String> configs) {
         createTopic(admin, new NewTopic(name, partitions, (short) replicationFactor), configs);
     }
 
     /**
      * Create a new topic with a manual replica assignment
      */
-    public void createTopic(Admin admin, String name, Map<Integer, List<Integer>> replicaAssignment, Map<String, String> configs) throws ExecutionException, InterruptedException {
+    public void createTopic(Admin admin, String name, Map<Integer, List<Integer>> replicaAssignment, Map<String, String> configs) {
         createTopic(admin, new NewTopic(name, replicaAssignment), configs);
     }
 
-    private void createTopic(Admin admin, NewTopic newTopic, Map<String, String> configs) throws ExecutionException, InterruptedException {
+    private void createTopic(Admin admin, NewTopic newTopic, Map<String, String> configs) {
         if (configs != null && !configs.isEmpty()) {
             newTopic.configs(configs);
         }
 
         CreateTopicsResult result = admin.createTopics(Collections.singleton(newTopic));
         try {
-            result.all().get();
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof TopicExistsException) {
-                throw new IllegalArgumentException("Topic \"" + newTopic.name() + "\" already exists.", e);
+            join(result.all());
+        } catch (Exception e) {
+            if (RootCause.of(e) instanceof TopicExistsException cause) {
+                throw new IllegalArgumentException("Topic \"" + newTopic.name() + "\" already exists.", cause);
             }
             throw e;
         }
@@ -71,23 +74,23 @@ public class TopicService {
     /**
      * List all topic names
      */
-    public Set<String> listTopics(Admin admin, boolean includeInternal) throws ExecutionException, InterruptedException {
+    public Set<String> listTopics(Admin admin, boolean includeInternal) {
         ListTopicsOptions options = new ListTopicsOptions().listInternal(includeInternal);
         ListTopicsResult result = admin.listTopics(options);
-        return result.names().get();
+        return Futures.join(result.names());
     }
 
     /**
      * Get detailed information about a topic
      */
-    public TopicInfo describeTopic(Admin admin, String name) throws ExecutionException, InterruptedException {
+    public TopicInfo describeTopic(Admin admin, String name) {
         return describeTopic(admin, name, Collections.emptyList());
     }
 
     /**
      * Get detailed information about a topic
      */
-    public TopicInfo describeTopic(Admin admin, String name, List<OffsetsOption> offsets) throws ExecutionException, InterruptedException {
+    public TopicInfo describeTopic(Admin admin, String name, List<OffsetsOption> offsets) {
         Map<String, TopicInfo> topics = describeTopics(admin, Collections.singletonList(name), offsets);
         return topics.get(name);
     }
@@ -95,22 +98,22 @@ public class TopicService {
     /**
      * Get detailed information about multiple topics
      */
-    public Map<String, TopicInfo> describeTopics(Admin admin, Collection<String> names) throws ExecutionException, InterruptedException {
+    public Map<String, TopicInfo> describeTopics(Admin admin, Collection<String> names) {
         return describeTopics(admin, names, Collections.emptyList());
     }
 
     /**
      * Get detailed information about multiple topics
      */
-    public Map<String, TopicInfo> describeTopics(Admin admin, Collection<String> names, List<OffsetsOption> offsetOptions) throws ExecutionException, InterruptedException {
+    public Map<String, TopicInfo> describeTopics(Admin admin, Collection<String> names, List<OffsetsOption> offsetOptions) {
         DescribeTopicsResult topicsResult = admin.describeTopics(names);
-        Map<String, TopicDescription> descriptions = topicsResult.allTopicNames().get();
+        Map<String, TopicDescription> descriptions = join(topicsResult.allTopicNames());
 
         // Get configurations for all topics
         List<ConfigResource> configResources = names.stream()
                 .map(name -> new ConfigResource(ConfigResource.Type.TOPIC, name))
                 .toList();
-        Map<ConfigResource, org.apache.kafka.clients.admin.Config> configs = admin.describeConfigs(configResources).all().get();
+        Map<ConfigResource, org.apache.kafka.clients.admin.Config> configs = join(admin.describeConfigs(configResources).all());
 
         List<Map<TopicPartition, ListOffsetsResultInfo>> offsetResults = Collections.emptyList();
         if (!offsetOptions.isEmpty()) {
@@ -149,7 +152,7 @@ public class TopicService {
     /**
      * Alter topic configuration
      */
-    public void alterTopicConfig(Admin admin, String name, Map<String, String> configs, List<String> deleteConfigs) throws ExecutionException, InterruptedException {
+    public void alterTopicConfig(Admin admin, String name, Map<String, String> configs, List<String> deleteConfigs) {
         ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, name);
 
         List<AlterConfigOp> ops = new ArrayList<>();
@@ -174,35 +177,35 @@ public class TopicService {
 
         if (!ops.isEmpty()) {
             Map<ConfigResource, Collection<AlterConfigOp>> alterConfigs = Collections.singletonMap(resource, ops);
-            admin.incrementalAlterConfigs(alterConfigs).all().get();
+            join(admin.incrementalAlterConfigs(alterConfigs).all());
         }
     }
 
     /**
      * Increase partition count for a topic
      */
-    public void increasePartitions(Admin admin, String name, int newTotalCount) throws ExecutionException, InterruptedException {
+    public void increasePartitions(Admin admin, String name, int newTotalCount) {
         Map<String, NewPartitions> newPartitions = Collections.singletonMap(
             name,
             NewPartitions.increaseTo(newTotalCount)
         );
         CreatePartitionsResult result = admin.createPartitions(newPartitions);
-        result.all().get();
+        join(result.all());
     }
 
     /**
      * Delete a single topic
      */
-    public void deleteTopic(Admin admin, String name) throws ExecutionException, InterruptedException {
+    public void deleteTopic(Admin admin, String name) {
         deleteTopics(admin, Collections.singletonList(name));
     }
 
     /**
      * Delete multiple topics
      */
-    public void deleteTopics(Admin admin, Collection<String> names) throws ExecutionException, InterruptedException {
+    public void deleteTopics(Admin admin, Collection<String> names) {
         DeleteTopicsResult result = admin.deleteTopics(names);
-        result.all().get();
+        join(result.all());
     }
 
     private List<Map<TopicPartition, ListOffsetsResultInfo>> fetchOffsets(

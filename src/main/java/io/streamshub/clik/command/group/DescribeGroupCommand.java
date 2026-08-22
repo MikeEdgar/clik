@@ -99,7 +99,7 @@ public class DescribeGroupCommand extends ContextualCommand implements Callable<
         }
         out().println();
 
-        if (group.members() != null && !group.members().isEmpty()) {
+        if (group.hasMembers()) {
             out().println("Members:");
             List<MemberRow> rows = new ArrayList<>();
             for (GroupMemberInfo member : group.members()) {
@@ -123,16 +123,16 @@ public class DescribeGroupCommand extends ContextualCommand implements Callable<
             out().println();
         }
 
-        if (group.offsets() != null && !group.offsets().isEmpty()) {
+        if (group.hasOffsets()) {
             out().println("Topic Lag:");
             List<OffsetRow> rows = new ArrayList<>();
             for (OffsetLagInfo offset : group.offsets()) {
                 rows.add(new OffsetRow(
                         offset.topic(),
                         String.valueOf(offset.partition()),
-                        offset.currentOffset() != null ? String.valueOf(offset.currentOffset()) : "-",
-                        offset.logEndOffset() != null ? String.valueOf(offset.logEndOffset()) : "-",
-                        offset.lag() != null ? String.valueOf(offset.lag()) : "-"
+                        offset.optionalCurrentOffset().map(String::valueOf).orElse("-"),
+                        offset.optionalLogEndOffset().map(String::valueOf).orElse("-"),
+                        offset.optionalLag().map(String::valueOf).orElse("-")
                 ));
             }
 

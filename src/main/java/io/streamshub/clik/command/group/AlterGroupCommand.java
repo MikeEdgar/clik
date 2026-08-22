@@ -176,7 +176,7 @@ public class AlterGroupCommand extends ContextualCommand implements Callable<Int
                 .allMatch(Collection::isEmpty);
     }
 
-    private int process(Admin admin) throws Exception {
+    private int process(Admin admin) {
         // Check if group exists and has no active members
         if (!validGroup(admin)) {
             return 1;
@@ -194,7 +194,7 @@ public class AlterGroupCommand extends ContextualCommand implements Callable<Int
         Set<TopicPartition> groupPartitions = currentOffsets.keySet();
 
         if (groupPartitions.isEmpty()) {
-            err().println("Error: Group \"" + groupId + "\" has no committed offsets.");
+            err().printf("Error: Group \"%s\" has no committed offsets.%n", groupId);
             return 1;
         }
 
@@ -268,7 +268,7 @@ public class AlterGroupCommand extends ContextualCommand implements Callable<Int
             hasMembers = groupService.hasActiveMembers(admin, groupId);
         } catch (Exception e) {
             if (RootCause.of(e) instanceof GroupIdNotFoundException) {
-                err().println("Error: Group \"" + groupId + "\" not found.");
+                err().printf("Error: Group \"%s\" not found.%n", groupId);
                 err().println();
                 err().println("Run 'clik group list' to see available groups.");
                 return false;
@@ -278,7 +278,7 @@ public class AlterGroupCommand extends ContextualCommand implements Callable<Int
         }
 
         if (hasMembers) {
-            err().println("Error: Group \"" + groupId + "\" has active members.");
+            err().printf("Error: Group \"%s\" has active members.%n", groupId);
             err().println("Stop all consumers before altering offsets.");
             return false;
         }

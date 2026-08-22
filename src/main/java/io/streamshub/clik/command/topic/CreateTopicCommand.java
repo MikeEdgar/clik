@@ -88,10 +88,7 @@ public class CreateTopicCommand extends ContextualCommand implements Callable<In
             }
             out().println("Topic \"" + name + "\" created.");
             return 0;
-        } catch (IllegalArgumentException e) {
-            err().println("Error: " + e.getMessage());
-            return 1;
-        } catch (IllegalStateException e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
             err().println("Error: " + e.getMessage());
             return 1;
         } catch (Exception e) {
@@ -117,7 +114,7 @@ public class CreateTopicCommand extends ContextualCommand implements Callable<In
             for (String part : parts) {
                 try {
                     brokers.add(Integer.parseInt(part.strip()));
-                } catch (NumberFormatException e) {
+                } catch (NumberFormatException _) {
                     throw new IllegalArgumentException(
                             "Invalid --replica-assignment format: \"" + part.strip() + "\" is not a valid broker ID");
                 }

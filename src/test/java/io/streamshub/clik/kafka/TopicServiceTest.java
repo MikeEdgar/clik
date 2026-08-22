@@ -31,7 +31,7 @@ class TopicServiceTest extends ClikTestBase {
     TopicService topicService;
 
     @Test
-    void testCreateTopic() throws Exception {
+    void testCreateTopic() {
         topicService.createTopic(admin(), "test-topic", 3, 1, null);
         awaitTopics("test-topic");
 
@@ -43,7 +43,7 @@ class TopicServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testCreateTopicWithConfig() throws Exception {
+    void testCreateTopicWithConfig() {
         Map<String, String> configs = Map.of(
                 "retention.ms", "86400000",
                 "cleanup.policy", "delete"
@@ -59,7 +59,7 @@ class TopicServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testCreateTopicAlreadyExists() throws Exception {
+    void testCreateTopicAlreadyExists() {
         var admin = admin();
         topicService.createTopic(admin, "duplicate-topic", 1, 1, null);
         awaitTopics("duplicate-topic");
@@ -71,13 +71,13 @@ class TopicServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testListTopicsEmpty() throws Exception {
+    void testListTopicsEmpty() {
         Set<String> topics = topicService.listTopics(admin(), false);
         assertTrue(topics.isEmpty());
     }
 
     @Test
-    void testListTopics() throws Exception {
+    void testListTopics() {
         topicService.createTopic(admin(), "topic1", 1, 1, null);
         topicService.createTopic(admin(), "topic2", 1, 1, null);
         topicService.createTopic(admin(), "topic3", 1, 1, null);
@@ -91,7 +91,7 @@ class TopicServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testDescribeTopic() throws Exception {
+    void testDescribeTopic() {
         topicService.createTopic(admin(), "describe-topic", 5, 1, null);
         awaitTopics("describe-topic");
 
@@ -106,7 +106,7 @@ class TopicServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testDescribeTopics() throws Exception {
+    void testDescribeTopics() {
         topicService.createTopic(admin(), "multi-topic1", 2, 1, null);
         topicService.createTopic(admin(), "multi-topic2", 3, 1, null);
         awaitTopics("multi-topic1", "multi-topic2");
@@ -126,7 +126,7 @@ class TopicServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testAlterTopicConfig() throws Exception {
+    void testAlterTopicConfig() {
         topicService.createTopic(admin(), "alter-topic", 1, 1, null);
         awaitTopics("alter-topic");
 
@@ -143,7 +143,7 @@ class TopicServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testAlterTopicConfigDelete() throws Exception {
+    void testAlterTopicConfigDelete() {
         Map<String, String> initialConfigs = Map.of(
                 "retention.ms", "3600000",
                 "max.message.bytes", "2000000"
@@ -164,7 +164,7 @@ class TopicServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testAlterTopicConfigSetAndDelete() throws Exception {
+    void testAlterTopicConfigSetAndDelete() {
         Map<String, String> initialConfigs = Map.of(
                 "retention.ms", "3600000",
                 "max.message.bytes", "2000000"
@@ -183,7 +183,7 @@ class TopicServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testDeleteTopic() throws Exception {
+    void testDeleteTopic() {
         topicService.createTopic(admin(), "delete-topic", 1, 1, null);
         awaitTopics("delete-topic");
 
@@ -192,7 +192,7 @@ class TopicServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testDeleteMultipleTopics() throws Exception {
+    void testDeleteMultipleTopics() {
         topicService.createTopic(admin(), "delete-topic1", 1, 1, null);
         topicService.createTopic(admin(), "delete-topic2", 1, 1, null);
         topicService.createTopic(admin(), "delete-topic3", 1, 1, null);
@@ -208,7 +208,7 @@ class TopicServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testIncreasePartitions() throws Exception {
+    void testIncreasePartitions() {
         topicService.createTopic(admin(), "partition-test", 3, 1, null);
         awaitTopics("partition-test");
 

@@ -54,37 +54,47 @@ public class InputParser {
             FormatToken token = tokens.get(i);
 
             if (token instanceof LiteralToken(String literal)) {
-                // Match literal string
-                if (!line.startsWith(literal, linePos)) {
-                    throw new IllegalArgumentException(
-                        "Expected '" + literal + "' at position " + linePos);
-                }
-                linePos += literal.length();
+                linePos = processLiteralToken(line, linePos, literal);
             } else if (token instanceof PlaceholderToken placeholder) {
-                // Extract value up to next delimiter
-                String value;
-
-                // Find next literal delimiter (or end of line)
-                if (i + 1 < tokens.size() && tokens.get(i + 1) instanceof LiteralToken(String nextLiteral)) {
-                    int nextPos = line.indexOf(nextLiteral, linePos);
-                    if (nextPos == -1) {
-                        throw new IllegalArgumentException(
-                            "Expected delimiter '" + nextLiteral + "' not found");
-                    }
-                    value = line.substring(linePos, nextPos);
-                    linePos = nextPos;
-                } else {
-                    // Last placeholder, consume rest of line
-                    value = line.substring(linePos);
-                    linePos = line.length();
-                }
-
-                // Process the placeholder
-                processPlaceholder(placeholder, value, components);
+                linePos = processPlaceholderToken(line, linePos, components, placeholder, i);
             }
         }
 
         return components.build();
+    }
+
+    private int processLiteralToken(String line, int linePos, String literal) {
+        // Match literal string
+        if (!line.startsWith(literal, linePos)) {
+            throw new IllegalArgumentException(
+                "Expected '" + literal + "' at position " + linePos);
+        }
+
+        return linePos + literal.length();
+    }
+
+    private int processPlaceholderToken(String line, int linePos, KafkaRecord.Builder components, PlaceholderToken placeholder, int i) {
+        // Extract value up to next delimiter
+        String value;
+
+        // Find next literal delimiter (or end of line)
+        if (i + 1 < tokens.size() && tokens.get(i + 1) instanceof LiteralToken(String nextLiteral)) {
+            int nextPos = line.indexOf(nextLiteral, linePos);
+            if (nextPos == -1) {
+                throw new IllegalArgumentException(
+                    "Expected delimiter '" + nextLiteral + "' not found");
+            }
+            value = line.substring(linePos, nextPos);
+            linePos = nextPos;
+        } else {
+            // Last placeholder, consume rest of line
+            value = line.substring(linePos);
+            linePos = line.length();
+        }
+
+        // Process the placeholder
+        processPlaceholder(placeholder, value, components);
+        return linePos;
     }
 
     private void processPlaceholder(PlaceholderToken placeholder, String value, KafkaRecord.Builder components) {

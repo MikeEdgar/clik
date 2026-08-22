@@ -25,7 +25,7 @@ class FeatureServiceTest extends ClikTestBase {
     FeatureService featureService;
 
     @Test
-    void testListFeatures() throws Exception {
+    void testListFeatures() {
         List<FeatureInfo> features = featureService.listFeatures(admin());
         assertNotNull(features);
         assertFalse(features.isEmpty());
@@ -37,7 +37,7 @@ class FeatureServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testListFeaturesContainsBothFinalizedAndSupported() throws Exception {
+    void testListFeaturesContainsBothFinalizedAndSupported() {
         List<FeatureInfo> features = featureService.listFeatures(admin());
 
         // Should have at least one finalized feature
@@ -52,7 +52,7 @@ class FeatureServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testDescribeFeatureFound() throws Exception {
+    void testDescribeFeatureFound() {
         FeatureInfo feature = featureService.describeFeature(admin(), "metadata.version");
 
         assertNotNull(feature);
@@ -64,13 +64,13 @@ class FeatureServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testDescribeFeatureNotFound() throws Exception {
+    void testDescribeFeatureNotFound() {
         FeatureInfo feature = featureService.describeFeature(admin(), "non.existent.feature");
         assertNull(feature, "Non-existent feature should return null");
     }
 
     @Test
-    void testKafkaVersionMapping() throws Exception {
+    void testKafkaVersionMapping() {
         FeatureInfo feature = featureService.describeFeature(admin(), "metadata.version");
 
         assertNotNull(feature);

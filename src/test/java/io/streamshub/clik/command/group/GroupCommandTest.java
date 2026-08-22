@@ -118,7 +118,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testListGroupsTable() throws Exception {
+    void testListGroupsTable() {
         // Create test topic and consumer groups
         topicService.createTopic(admin(), "group-test-topic", 3, 1, Collections.emptyMap());
 
@@ -139,7 +139,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testListGroupsNameFormat() throws Exception {
+    void testListGroupsNameFormat() {
         // Create test topic and consumer groups
         topicService.createTopic(admin(), "name-test-topic", 2, 1, Collections.emptyMap());
 
@@ -158,7 +158,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testListGroupsJsonFormat() throws Exception {
+    void testListGroupsJsonFormat() {
         // Create test topic and consumer group
         topicService.createTopic(admin(), "json-group-topic", 2, 1, Collections.emptyMap());
         createClassicConsumer("json-group", "json-group-topic").join();
@@ -174,7 +174,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testListGroupsYamlFormat() throws Exception {
+    void testListGroupsYamlFormat() {
         // Create test topic and consumer group
         topicService.createTopic(admin(), "yaml-group-topic", 2, 1, Collections.emptyMap());
         createClassicConsumer("yaml-group", "yaml-group-topic").join();
@@ -190,7 +190,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testListGroupsFilterByType() throws Exception {
+    void testListGroupsFilterByType() {
         // Create test topic and consumer group
         topicService.createTopic(admin(), "filter-topic", 2, 1, Collections.emptyMap());
         createConsumer(GroupType.CONSUMER, GroupProtocol.CLASSIC, "consumer-group-1", "filter-topic").join();
@@ -214,7 +214,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         "SHARE   ,         ,",
         // "STREAMS ,         ,", // Kafka 4.1 limitation - describe not supported for STREAMS groups
     })
-    void testDescribeGroup(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+    void testDescribeGroup(GroupType groupType, GroupProtocol groupProtocol) {
         String topicName = "describe-topic-" + groupType.name().toLowerCase();
         String groupId = "describe-group-" + groupType.name().toLowerCase();
 
@@ -238,7 +238,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         "SHARE   ,         ,",
         // "STREAMS ,         ,", // Kafka 4.1 limitation - describe not supported for STREAMS groups
     })
-    void testDescribeGroupWithMembers(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+    void testDescribeGroupWithMembers(GroupType groupType, GroupProtocol groupProtocol) {
         String topicName = "members-topic-" + groupType.name().toLowerCase();
         String groupId = "multi-member-group-" + groupType.name().toLowerCase();
 
@@ -276,7 +276,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         "SHARE   ,         ,",
         // "STREAMS ,         ,", // Kafka 4.1 limitation - describe not supported for STREAMS groups
     })
-    void testDescribeGroupJsonFormat(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+    void testDescribeGroupJsonFormat(GroupType groupType, GroupProtocol groupProtocol) {
         String topicName = "json-describe-topic-" + groupType.name().toLowerCase();
         String groupId = "json-describe-group-" + groupType.name().toLowerCase();
 
@@ -301,7 +301,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         "SHARE   ,         ,",
         // "STREAMS ,         ,", // Kafka 4.1 limitation - describe not supported for STREAMS groups
     })
-    void testDescribeGroupYamlFormat(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+    void testDescribeGroupYamlFormat(GroupType groupType, GroupProtocol groupProtocol) {
         String topicName = "yaml-describe-topic-" + groupType.name().toLowerCase();
         String groupId = "yaml-describe-group-" + groupType.name().toLowerCase();
 
@@ -371,7 +371,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
         "SHARE   ,         ,",
         "STREAMS ,         ,", // STREAMS deletion works (only describe/alter have limitations)
     })
-    void testDeleteGroup(GroupType groupType, GroupProtocol groupProtocol) throws Exception {
+    void testDeleteGroup(GroupType groupType, GroupProtocol groupProtocol) {
         String topicName = "delete-test-topic-" + groupType.name().toLowerCase();
         String groupId = "delete-test-group-" + groupType.name().toLowerCase();
 
@@ -394,7 +394,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testDeleteMultipleGroups() throws Exception {
+    void testDeleteMultipleGroups() {
         // Create test topic and consumer groups
         topicService.createTopic(admin(), "multi-delete-topic", 2, 1, Collections.emptyMap());
         var consumer1 = createConsumer(GroupType.CONSUMER, GroupProtocol.CLASSIC, "delete1", "multi-delete-topic");
@@ -801,7 +801,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testAlterGroupActiveMembers() throws Exception {
+    void testAlterGroupActiveMembers() {
         // Create topic
         topicService.createTopic(admin(), "active-topic", 2, 1, Collections.emptyMap());
 
@@ -830,7 +830,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testAlterGroupNoOffsets() throws Exception {
+    void testAlterGroupNoOffsets() {
         // Create topic and group
         topicService.createTopic(admin(), "no-offsets-topic", 1, 1, Collections.emptyMap());
         var consumer = createClassicConsumer("no-offsets-group", "no-offsets-topic").join();
@@ -846,7 +846,7 @@ class GroupCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testAlterGroupNoOptions() throws Exception {
+    void testAlterGroupNoOptions() {
         // Create topic and group
         topicService.createTopic(admin(), "no-opts-topic", 1, 1, Collections.emptyMap());
         var consumer = createClassicConsumer("no-opts-group", "no-opts-topic").join();

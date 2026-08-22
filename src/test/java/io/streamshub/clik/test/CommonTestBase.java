@@ -147,7 +147,7 @@ public abstract class CommonTestBase {
         memberRemoval.forEach(admin::removeMembersFromConsumerGroup);
     }
 
-    private void deleteConsumerGroups(Map<String, GroupListing> allGroups) throws Exception {
+    private void deleteConsumerGroups(Map<String, GroupListing> allGroups) {
         GroupService groupService = new GroupService();
 
         groupService.deleteGroups(admin, allGroups.values()
@@ -165,8 +165,6 @@ public abstract class CommonTestBase {
                 deleteConsumerGroups(allGroups);
                 allGroups = allGroups(admin);
             }
-        } catch (InterruptedException _) {
-            Thread.currentThread().interrupt();
         } catch (Exception _) {
             // Ignore
         }

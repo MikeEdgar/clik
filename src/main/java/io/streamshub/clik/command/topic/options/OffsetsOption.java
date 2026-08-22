@@ -20,12 +20,19 @@ public record OffsetsOption(String option, OffsetSpec spec) {
     private static final String MAX_TIMESTAMP = "max-timestamp";
     private static final String EARLIEST_LOCAL = "earliest-local";
     private static final String LATEST_TIERED = "latest-tiered";
-    //private static final String EARLIEST_PENDING_UPLOAD = "earliest-pending-upload";
+    private static final String EARLIEST_PENDING_UPLOAD = "earliest-pending-upload";
 
     public static class Candidates implements Iterable<String> {
         @Override
         public Iterator<String> iterator() {
-            return List.of(EARLIEST, LATEST, MAX_TIMESTAMP, EARLIEST_LOCAL, LATEST_TIERED).iterator();
+            return List.of(
+                    EARLIEST,
+                    LATEST,
+                    MAX_TIMESTAMP,
+                    EARLIEST_LOCAL,
+                    LATEST_TIERED,
+                    EARLIEST_PENDING_UPLOAD)
+                .iterator();
         }
     }
 
@@ -47,8 +54,8 @@ public record OffsetsOption(String option, OffsetSpec spec) {
                     yield OffsetSpec.earliestLocal();
                 case LATEST_TIERED:
                     yield OffsetSpec.latestTiered();
-                //case EARLIEST_PENDING_UPLOAD:
-                //    yield OffsetSpec.earliestPendingUpload();
+                case EARLIEST_PENDING_UPLOAD:
+                    yield OffsetSpec.earliestPendingUpload();
                 default:
                     long timestamp;
 
@@ -67,8 +74,8 @@ public record OffsetsOption(String option, OffsetSpec spec) {
                         yield OffsetSpec.earliestLocal();
                     } else if (timestamp == ListOffsetsRequest.LATEST_TIERED_TIMESTAMP) {
                         yield OffsetSpec.latestTiered();
-                    //} else if (timestamp == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP) {
-                    //    yield OffsetSpec.earliestPendingUpload();
+                    } else if (timestamp == ListOffsetsRequest.EARLIEST_PENDING_UPLOAD_TIMESTAMP) {
+                        yield OffsetSpec.earliestPendingUpload();
                     } else {
                         yield OffsetSpec.forTimestamp(timestamp);
                     }

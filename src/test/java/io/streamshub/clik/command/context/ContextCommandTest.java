@@ -37,6 +37,11 @@ class ContextCommandTest extends ClikMainTestBase {
         this.contextService = new ContextService(xdgConfigHome().toString());
     }
 
+    private void assertDoesNotExist(LaunchResult result) {
+        assertEquals(1, result.exitCode());
+        assertTrue(result.getErrorOutput().contains("does not exist"));
+    }
+
     @Test
     @Launch({"context", "create", "test-context", "--bootstrap-servers", "localhost:9092"})
     void testCreateContextWithBootstrapServers(LaunchResult result) {
@@ -211,8 +216,7 @@ class ContextCommandTest extends ClikMainTestBase {
     @Test
     @Launch(value = {"context", "use", "nonexistent"}, exitCode = 1)
     void testUseContextNotFound(LaunchResult result) {
-        assertEquals(1, result.exitCode());
-        assertTrue(result.getErrorOutput().contains("does not exist"));
+        assertDoesNotExist(result);
     }
 
     @Test
@@ -294,8 +298,7 @@ class ContextCommandTest extends ClikMainTestBase {
     @Test
     @Launch(value = {"context", "delete", "nonexistent", "--yes"}, exitCode = 1)
     void testDeleteContextNotFound(LaunchResult result) {
-        assertEquals(1, result.exitCode());
-        assertTrue(result.getErrorOutput().contains("does not exist"));
+        assertDoesNotExist(result);
     }
 
     @Test
@@ -321,8 +324,7 @@ class ContextCommandTest extends ClikMainTestBase {
     @Test
     @Launch(value = {"context", "describe", "nonexistent"}, exitCode = 1)
     void testDescribeContextNotFound(LaunchResult result) {
-        assertEquals(1, result.exitCode());
-        assertTrue(result.getErrorOutput().contains("does not exist"));
+        assertDoesNotExist(result);
     }
 
     @Test
@@ -381,7 +383,7 @@ class ContextCommandTest extends ClikMainTestBase {
 
         // Verify the context was overwritten
         var context = contextService.loadContext("test-context");
-        assertEquals(context.getCommon().get("bootstrap.servers"), "localhost:9092");
+        assertEquals("localhost:9092", context.getCommon().get("bootstrap.servers"));
     }
 
     @Test
@@ -426,8 +428,7 @@ class ContextCommandTest extends ClikMainTestBase {
     @Test
     @Launch(value = {"context", "rename", "nonexistent", "new-name"}, exitCode = 1)
     void testRenameContextNotFound(LaunchResult result) {
-        assertEquals(1, result.exitCode());
-        assertTrue(result.getErrorOutput().contains("does not exist"));
+        assertDoesNotExist(result);
     }
 
     @Test

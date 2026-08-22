@@ -22,6 +22,14 @@ public record GroupInfo(
         offsets = offsets != null ? List.copyOf(offsets) : null;
     }
 
+    public boolean hasMembers() {
+        return members != null && !members.isEmpty();
+    }
+
+    public boolean hasOffsets() {
+        return offsets != null && !offsets.isEmpty();
+    }
+
     public static Builder builder() {
         return new Builder();
     }

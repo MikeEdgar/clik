@@ -57,6 +57,7 @@ public class ContextValidator {
 
         // Merge configuration for admin client
         Properties properties = configurationLoader.mergeConfiguration(config, KafkaClientType.ADMIN);
+        String errorMessage;
 
         // Attempt to connect to the cluster
         try (Admin admin = Admin.create(properties)) {
@@ -69,8 +70,13 @@ public class ContextValidator {
                     .get(CONNECTION_TIMEOUT_SECONDS, TimeUnit.SECONDS);
 
             return ValidationResult.success();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            errorMessage = e.getMessage();
         } catch (Exception e) {
-            return ValidationResult.failure("Connection failed: " + e.getMessage());
+            errorMessage = e.getMessage();
         }
+
+        return ValidationResult.failure("Connection failed: " + errorMessage);
     }
 }

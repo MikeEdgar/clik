@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import jakarta.inject.Inject;
 
@@ -33,12 +34,12 @@ public class AlterTopicCommand extends ContextualCommand implements Callable<Int
     String name;
 
     @CommandLine.Option(
-            names = {"-c", "--config"},
-            description = "Set configuration (key=value, repeatable)",
+            names = {"--config", "-c"},
+            description = "Topic configuration (repeatable, format: key=value)",
             paramLabel = "config",
             completionCandidates = ConfigCandidates.Topic.class
     )
-    List<String> configs = new ArrayList<>();
+    Map<String, String> configs = new HashMap<>();
 
     @CommandLine.Option(
             names = {"--delete-config"},
@@ -67,52 +68,19 @@ public class AlterTopicCommand extends ContextualCommand implements Callable<Int
             return 1;
         }
 
-        // Parse config key=value pairs
-        Map<String, String> configMap = new HashMap<>();
-        for (String config : configs) {
-            String[] parts = config.split("=", 2);
-            if (parts.length != 2) {
-                err().println("Error: Invalid config format: " + config);
-                err().println("Expected format: key=value");
-                return 1;
-            }
-            configMap.put(parts[0].trim(), parts[1].trim());
-        }
-
-        // Validate partition count if specified
-        int currentPartitions = 0;
-        if (partitions != null) {
-            try (Admin admin = clientFactory.createAdminClient(contextName)) {
-                TopicInfo topicInfo = topicService.describeTopic(admin, name);
-                currentPartitions = topicInfo.partitions();
-
-                if (partitions <= currentPartitions) {
-                    err().println("Error: New partition count (" + partitions +
-                        ") must be greater than current count (" + currentPartitions + ").");
-                    err().println("Kafka does not support decreasing partition count.");
-                    return 1;
-                }
-            } catch (Exception e) {
-                // Handle topic not found error
-                Throwable cause = e.getCause();
-                if (cause instanceof UnknownTopicOrPartitionException) {
-                    err().println("Error: Topic \"" + name + "\" not found.");
-                    err().println();
-                    err().println("Run 'clik topic list' to see available topics.");
-                    return 1;
-                }
-                err().println("Error: Failed to describe topic: " + e.getMessage());
-                return 1;
-            }
-        }
-
         try (Admin admin = clientFactory.createAdminClient(contextName)) {
+            AtomicInteger currentPartitions = new AtomicInteger(0);
+
+            if (!validatePartitions(admin, currentPartitions)) {
+                return 1;
+            }
+
             boolean configsAltered = false;
             boolean partitionsAltered = false;
 
             // Alter configs if specified
-            if (!configMap.isEmpty() || !deleteConfigs.isEmpty()) {
-                topicService.alterTopicConfig(admin, name, configMap, deleteConfigs);
+            if (!configs.isEmpty() || !deleteConfigs.isEmpty()) {
+                topicService.alterTopicConfig(admin, name, configs, deleteConfigs);
                 configsAltered = true;
             }
 
@@ -122,7 +90,7 @@ public class AlterTopicCommand extends ContextualCommand implements Callable<Int
                 partitionsAltered = true;
             }
 
-            printResults(configsAltered, partitionsAltered, currentPartitions);
+            printResults(configsAltered, partitionsAltered, currentPartitions.get());
             return 0;
         } catch (IllegalStateException e) {
             err().println("Error: " + e.getMessage());
@@ -130,7 +98,7 @@ public class AlterTopicCommand extends ContextualCommand implements Callable<Int
         } catch (Exception e) {
             Throwable cause = e.getCause();
             if (cause instanceof UnknownTopicOrPartitionException) {
-                err().println("Error: Topic \"" + name + "\" not found.");
+                err().printf("Error: Topic \"%s\" not found.%n", name);
                 err().println();
                 err().println("Run 'clik topic list' to see available topics.");
                 return 1;
@@ -140,19 +108,40 @@ public class AlterTopicCommand extends ContextualCommand implements Callable<Int
         }
     }
 
+    private boolean validatePartitions(Admin admin, AtomicInteger currentPartitions) {
+        if (partitions != null) {
+            TopicInfo topicInfo = topicService.describeTopic(admin, name);
+            int currPartitions = topicInfo.partitions();
+
+            if (partitions <= currPartitions) {
+                err().printf("Error: New partition count (%d) must be greater than current count (%d).%n", 
+                        partitions,
+                        currPartitions);
+                err().println("Kafka does not support decreasing partition count.");
+                return false;
+            }
+
+            currentPartitions.set(currPartitions);
+        }
+
+        return true;
+    }
+
     /**
      * Build success message
      */
     private void printResults(boolean configsAltered, boolean partitionsAltered, int currentPartitions) {
         // Build success message
         if (configsAltered && partitionsAltered) {
-            out().println("Topic \"" + name + "\" partitions increased from " +
-                currentPartitions + " to " + partitions + " and configuration altered.");
+            out().printf("Topic \"%s\" partitions increased from %d to %d and configuration altered.%n",
+                    name, currentPartitions, partitions);
         } else if (partitionsAltered) {
-            out().println("Topic \"" + name + "\" partitions increased from " +
-                currentPartitions + " to " + partitions + ".");
+            out().printf("Topic \"%s\" partitions increased from %d to %d.%n",
+                    name,
+                    currentPartitions,
+                    partitions);
         } else {
-            out().println("Topic \"" + name + "\" configuration altered.");
+            out().printf("Topic \"%s\" configuration altered.%n", name);
         }
     }
 }

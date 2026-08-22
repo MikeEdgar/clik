@@ -35,7 +35,7 @@ class ClusterServiceTest extends ClikTestBase {
     ClusterService clusterService;
 
     @Test
-    void testDescribeClusterBasicInfo() throws Exception {
+    void testDescribeClusterBasicInfo() {
         ClusterInfo cluster = clusterService.describeCluster(admin());
 
         assertNotNull(cluster, "Cluster info should not be null");
@@ -47,7 +47,7 @@ class ClusterServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testNodeInfoValidation() throws Exception {
+    void testNodeInfoValidation() {
         ClusterInfo cluster = clusterService.describeCluster(admin());
 
         for (NodeInfo node : cluster.nodes()) {
@@ -60,7 +60,7 @@ class ClusterServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testControllerPresence() throws Exception {
+    void testControllerPresence() {
         ClusterInfo cluster = clusterService.describeCluster(admin());
 
         int controllerId = cluster.controllerId();
@@ -71,7 +71,7 @@ class ClusterServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testNodesSortedById() throws Exception {
+    void testNodesSortedById() {
         ClusterInfo cluster = clusterService.describeCluster(admin());
 
         var nodes = cluster.nodes();
@@ -82,7 +82,7 @@ class ClusterServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testQuorumInfoInKRaftMode() throws Exception {
+    void testQuorumInfoInKRaftMode() {
         ClusterInfo cluster = clusterService.describeCluster(admin());
 
         // This test handles both ZooKeeper and KRaft modes
@@ -98,7 +98,7 @@ class ClusterServiceTest extends ClikTestBase {
     }
 
     @Test
-    void testQuorumRolesInKRaftMode() throws Exception {
+    void testQuorumRolesInKRaftMode() {
         ClusterInfo cluster = clusterService.describeCluster(admin());
 
         // This test handles both ZooKeeper and KRaft modes
