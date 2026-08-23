@@ -43,12 +43,12 @@ public class OutputFormatter {
     /**
      * Format a Kafka record according to the parsed format string.
      *
-     * @param record The record to format
+     * @param kafkaRecord The record to format
      * @return Formatted string
      */
-    public String format(KafkaRecord record) {
+    public String format(KafkaRecord kafkaRecord) {
         StringBuilder result = new StringBuilder();
-        Map<String, Deque<byte[]>> headers = record.headers()
+        Map<String, Deque<byte[]>> headers = kafkaRecord.headers()
                 .stream()
                 .collect(groupingBy(
                         KafkaRecord.Header::key,
@@ -62,7 +62,7 @@ public class OutputFormatter {
             if (token instanceof LiteralToken(String literal)) {
                 result.append(literal);
             } else if (token instanceof PlaceholderToken placeholder) {
-                String value = formatPlaceholder(record, headers, placeholder);
+                String value = formatPlaceholder(kafkaRecord, headers, placeholder);
                 result.append(value != null ? value : "");
             }
         }
@@ -70,20 +70,20 @@ public class OutputFormatter {
         return result.toString();
     }
 
-    private String formatPlaceholder(KafkaRecord record, Map<String, Deque<byte[]>> headers, PlaceholderToken placeholder) {
+    private String formatPlaceholder(KafkaRecord kafkaRecord, Map<String, Deque<byte[]>> headers, PlaceholderToken placeholder) {
         PlaceholderType type = placeholder.type();
         String encoding = placeholder.encoding();
         String name = placeholder.name();
 
         return switch (type) {
-            case KEY -> encodeValue(record.keyBytes(), encoding);
-            case VALUE -> encodeValue(record.valueBytes(), encoding);
-            case PARTITION -> record.partition() != null ? String.valueOf(record.partition()) : "";
-            case OFFSET -> record.offset() != null ? String.valueOf(record.offset()) : "";
-            case TIMESTAMP -> record.timestamp() != null ? String.valueOf(record.timestamp()) : "";
+            case KEY -> encodeValue(kafkaRecord.keyBytes(), encoding);
+            case VALUE -> encodeValue(kafkaRecord.valueBytes(), encoding);
+            case PARTITION -> kafkaRecord.partition() != null ? String.valueOf(kafkaRecord.partition()) : "";
+            case OFFSET -> kafkaRecord.offset() != null ? String.valueOf(kafkaRecord.offset()) : "";
+            case TIMESTAMP -> kafkaRecord.timestamp() != null ? String.valueOf(kafkaRecord.timestamp()) : "";
             case HEADER -> {
                 if (name != null) {
-                    // Named header: %{h.name} or %{base64:h.name}
+                    // Named header: %{h.name} or %{base64:h.name} (NOSONAR)
                     var remainingValues = headers.getOrDefault(name, EMPTY);
                     var result = remainingValues.stream()
                         .map(value -> name + "=" + encodeValue(value, encoding))

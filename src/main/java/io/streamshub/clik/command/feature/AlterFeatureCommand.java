@@ -67,7 +67,7 @@ public class AlterFeatureCommand extends ContextualCommand implements Callable<I
             FeatureInfo feature = featureService.describeFeature(admin, featureName);
 
             if (feature == null) {
-                err().println("Error: Feature \"" + featureName + "\" not found.");
+                err().printf("Error: Feature \"%s\" not found.%n", featureName);
                 err().println();
                 err().println("Run 'clik feature list' to see available features.");
                 return 1;
@@ -98,51 +98,57 @@ public class AlterFeatureCommand extends ContextualCommand implements Callable<I
         }
     }
 
-    private int handleUpgrade(Admin admin, FeatureInfo feature, short targetLevel) throws Exception {
+    private int handleUpgrade(Admin admin, FeatureInfo feature, short targetLevel) {
         // Validation
         if (feature.finalizedMaxVersion() != null && targetLevel <= feature.finalizedMaxVersion()) {
-            err().println("Error: Target level " + targetLevel +
-                " must be greater than current finalized level " + feature.finalizedMaxVersion());
+            err().printf("Error: Target level %s must be greater than current finalized level %s%n", 
+                    targetLevel,
+                    feature.finalizedMaxVersion());
             return 1;
         }
 
         if (feature.supportedMaxVersion() != null && targetLevel > feature.supportedMaxVersion()) {
-            err().println("Error: Target level " + targetLevel +
-                " exceeds maximum supported level " + feature.supportedMaxVersion());
+            err().printf("Error: Target level %s exceeds maximum supported level %s%n",
+                    targetLevel,
+                    feature.supportedMaxVersion());
             return 1;
         }
 
         // Execute upgrade
         featureService.updateFeature(admin, featureName, targetLevel, false);
-        out().println("Upgraded feature \"" + featureName + "\" to level " + targetLevel);
+        out().printf("Upgraded feature \"%s\" to level %s%n", featureName, targetLevel);
 
         return 0;
     }
 
-    private int handleDowngrade(Admin admin, FeatureInfo feature, short targetLevel) throws Exception {
+    private int handleDowngrade(Admin admin, FeatureInfo feature, short targetLevel) {
         // Validation
         if (feature.finalizedMaxVersion() == null) {
-            err().println("Error: Feature \"" + featureName + "\" is not finalized and cannot be downgraded.");
+            err().printf("Error: Feature \"%s\" is not finalized and cannot be downgraded.%n", featureName);
             return 1;
         }
 
         if (targetLevel >= feature.finalizedMaxVersion()) {
-            err().println("Error: Target level " + targetLevel +
-                " must be less than current finalized level " + feature.finalizedMaxVersion());
+            err().printf("Error: Target level %s must be less than current finalized level %s%n",
+                    targetLevel,
+                    feature.finalizedMaxVersion());
             return 1;
         }
 
         if (feature.supportedMinVersion() != null && targetLevel < feature.supportedMinVersion()) {
-            err().println("Error: Target level " + targetLevel +
-                " is below minimum supported level " + feature.supportedMinVersion());
+            err().printf("Error: Target level %s is below minimum supported level %s%n",
+                    targetLevel,
+                    feature.supportedMinVersion());
             return 1;
         }
 
         // Confirmation prompt
         if (!autoConfirm) {
             out().println("WARNING: Downgrading features can cause cluster instability.");
-            out().print("Downgrade feature \"" + featureName + "\" from " +
-                feature.finalizedMaxVersion() + " to " + targetLevel + "? [y/N]: ");
+            out().printf("Downgrade feature \"%s\" from %s to %s? [y/N]: ",
+                    featureName,
+                    feature.finalizedMaxVersion(),
+                    targetLevel);
             out().flush();
 
             String response;
@@ -158,15 +164,15 @@ public class AlterFeatureCommand extends ContextualCommand implements Callable<I
 
         // Execute downgrade
         featureService.updateFeature(admin, featureName, targetLevel, true);
-        out().println("Downgraded feature \"" + featureName + "\" to level " + targetLevel);
+        out().printf("Downgraded feature \"%s\" to level %s%n", featureName, targetLevel);
 
         return 0;
     }
 
-    private int handleDisable(Admin admin, FeatureInfo feature) throws Exception {
+    private int handleDisable(Admin admin, FeatureInfo feature) {
         // Validation
         if (feature.finalizedMaxVersion() == null) {
-            err().println("Error: Feature \"" + featureName + "\" is not finalized and cannot be disabled.");
+            err().printf("Error: Feature \"%s\" is not finalized and cannot be disabled.%n", featureName);
             return 1;
         }
 
@@ -189,7 +195,7 @@ public class AlterFeatureCommand extends ContextualCommand implements Callable<I
 
         // Execute disable
         featureService.disableFeature(admin, featureName);
-        out().println("Disabled feature \"" + featureName + "\"");
+        out().printf("Disabled feature \"%s\"%n", featureName);
 
         return 0;
     }

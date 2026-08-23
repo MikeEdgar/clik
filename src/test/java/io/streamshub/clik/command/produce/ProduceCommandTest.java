@@ -1,5 +1,6 @@
 package io.streamshub.clik.command.produce;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,6 +19,8 @@ import org.apache.kafka.common.header.Header;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import io.quarkus.test.junit.TestProfile;
 import io.quarkus.test.junit.main.LaunchResult;
@@ -262,7 +265,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceWithValue() throws Exception {
+    void testProduceWithValue() {
         // Create test topic
         topicService.createTopic(admin(), "value-topic", 1, 1, Collections.emptyMap());
 
@@ -277,7 +280,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceWithValueAndKey() throws Exception {
+    void testProduceWithValueAndKey() {
         // Create test topic
         topicService.createTopic(admin(), "value-key-topic", 1, 1, Collections.emptyMap());
 
@@ -293,7 +296,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceWithValueAndPartition() throws Exception {
+    void testProduceWithValueAndPartition() {
         // Create test topic with multiple partitions
         topicService.createTopic(admin(), "value-partition-topic", 3, 1, Collections.emptyMap());
 
@@ -309,7 +312,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceWithSingleHeader() throws Exception {
+    void testProduceWithSingleHeader() {
         // Create test topic
         topicService.createTopic(admin(), "single-header-topic", 1, 1, Collections.emptyMap());
 
@@ -328,7 +331,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceWithMultipleHeaders() throws Exception {
+    void testProduceWithMultipleHeaders() {
         // Create test topic
         topicService.createTopic(admin(), "multi-header-topic", 1, 1, Collections.emptyMap());
 
@@ -357,7 +360,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceWithDuplicateHeaderKeys() throws Exception {
+    void testProduceWithDuplicateHeaderKeys() {
         // Create test topic
         topicService.createTopic(admin(), "dup-header-topic", 1, 1, Collections.emptyMap());
 
@@ -400,15 +403,15 @@ class ProduceCommandTest extends ClikMainTestBase {
         List<ConsumerRecord<String, String>> records = consumeRecords("file-header-topic", 2);
         assertEquals(2, records.size());
 
-        for (ConsumerRecord<String, String> record : records) {
-            Header header = record.headers().lastHeader("batch");
+        for (ConsumerRecord<String, String> r : records) {
+            Header header = r.headers().lastHeader("batch");
             assertNotNull(header);
             assertEquals("true", new String(header.value(), StandardCharsets.UTF_8));
         }
     }
 
     @Test
-    void testProduceWithTimestampEpochMillis() throws Exception {
+    void testProduceWithTimestampEpochMillis() {
         // Create test topic
         topicService.createTopic(admin(), "timestamp-epoch-topic", 1, 1, Collections.emptyMap());
 
@@ -425,7 +428,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceWithTimestampISO8601() throws Exception {
+    void testProduceWithTimestampISO8601() {
         // Create test topic
         topicService.createTopic(admin(), "timestamp-iso-topic", 1, 1, Collections.emptyMap());
 
@@ -444,7 +447,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceWithValueHeadersAndTimestamp() throws Exception {
+    void testProduceWithValueHeadersAndTimestamp() {
         // Create test topic
         topicService.createTopic(admin(), "combined-topic", 1, 1, Collections.emptyMap());
 
@@ -464,16 +467,16 @@ class ProduceCommandTest extends ClikMainTestBase {
         List<ConsumerRecord<String, String>> records = consumeRecords("combined-topic", 1);
         assertEquals(1, records.size());
 
-        ConsumerRecord<String, String> record = records.get(0);
-        assertEquals("test-key", record.key());
-        assertEquals("test message", record.value());
-        assertEquals(expectedTimestamp, record.timestamp());
+        ConsumerRecord<String, String> r = records.get(0);
+        assertEquals("test-key", r.key());
+        assertEquals("test message", r.value());
+        assertEquals(expectedTimestamp, r.timestamp());
 
-        Header typeHeader = record.headers().lastHeader("type");
+        Header typeHeader = r.headers().lastHeader("type");
         assertNotNull(typeHeader);
         assertEquals("test", new String(typeHeader.value(), StandardCharsets.UTF_8));
 
-        Header versionHeader = record.headers().lastHeader("version");
+        Header versionHeader = r.headers().lastHeader("version");
         assertNotNull(versionHeader);
         assertEquals("1.0", new String(versionHeader.value(), StandardCharsets.UTF_8));
     }
@@ -525,7 +528,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceHeaderWithEqualsInValue() throws Exception {
+    void testProduceHeaderWithEqualsInValue() {
         // Create test topic
         topicService.createTopic(admin(), "header-equals-topic", 1, 1, Collections.emptyMap());
 
@@ -545,7 +548,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceEmptyValue() throws Exception {
+    void testProduceEmptyValue() {
         // Create test topic
         topicService.createTopic(admin(), "empty-value-topic", 1, 1, Collections.emptyMap());
 
@@ -560,7 +563,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceWithBase64Value() throws Exception {
+    void testProduceWithBase64Value() {
         // Create test topic
         topicService.createTopic(admin(), "base64-value-topic", 1, 1, Collections.emptyMap());
 
@@ -576,7 +579,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceWithHexValue() throws Exception {
+    void testProduceWithHexValue() {
         // Create test topic
         topicService.createTopic(admin(), "hex-value-topic", 1, 1, Collections.emptyMap());
 
@@ -592,7 +595,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceWithBase64Key() throws Exception {
+    void testProduceWithBase64Key() {
         // Create test topic
         topicService.createTopic(admin(), "base64-key-topic", 1, 1, Collections.emptyMap());
 
@@ -611,7 +614,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceWithHexKey() throws Exception {
+    void testProduceWithHexKey() {
         // Create test topic
         topicService.createTopic(admin(), "hex-key-topic", 1, 1, Collections.emptyMap());
 
@@ -629,7 +632,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceWithBase64Header() throws Exception {
+    void testProduceWithBase64Header() {
         // Create test topic
         topicService.createTopic(admin(), "base64-header-topic", 1, 1, Collections.emptyMap());
 
@@ -650,7 +653,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceWithHexHeader() throws Exception {
+    void testProduceWithHexHeader() {
         // Create test topic
         topicService.createTopic(admin(), "hex-header-topic", 1, 1, Collections.emptyMap());
 
@@ -672,7 +675,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceWithMixedEncodings() throws Exception {
+    void testProduceWithMixedEncodings() {
         // Create test topic
         topicService.createTopic(admin(), "mixed-encoding-topic", 1, 1, Collections.emptyMap());
 
@@ -688,49 +691,36 @@ class ProduceCommandTest extends ClikMainTestBase {
         List<ConsumerRecord<String, String>> records = consumeRecords("mixed-encoding-topic", 1);
         assertEquals(1, records.size());
 
-        ConsumerRecord<String, String> record = records.get(0);
+        ConsumerRecord<String, String> r = records.get(0);
 
         // Hex key ("mix" in hex)
-        assertEquals("mix", record.key());
+        assertEquals("mix", r.key());
 
         // Base64 value
-        assertEquals("Test", record.value());
+        assertEquals("Test", r.value());
 
         // Plain text header
-        Header header = record.headers().lastHeader("type");
+        Header header = r.headers().lastHeader("type");
         assertNotNull(header);
         assertEquals("plain-text", new String(header.value(), StandardCharsets.UTF_8));
     }
 
-    @Test
-    void testProduceInvalidBase64() {
+    @ParameterizedTest
+    @CsvSource({
+        "'base64:Invalid!@#$%', 'Invalid base64 encoding'",
+        "'hex:abc',             'odd number of characters'",
+        "'hex:gg',              'Invalid hex encoding'"
+    })
+    void testProduceInvalidEncodedValues(String value, String expectedError) {
         // Invalid base64 characters
-        LaunchResult result = launcher.launch("produce", "test-topic", "--value", "base64:Invalid!@#$%");
+        LaunchResult result = launcher.launch("produce", "test-topic", "--value", value);
         assertEquals(1, result.exitCode());
-        assertTrue(result.getErrorOutput().contains("Invalid base64 encoding") ||
+        assertTrue(result.getErrorOutput().contains(expectedError) ||
                    result.getErrorOutput().contains("Failed to produce messages"));
     }
 
     @Test
-    void testProduceInvalidHexOddLength() {
-        // Hex with odd number of characters
-        LaunchResult result = launcher.launch("produce", "test-topic", "--value", "hex:abc");
-        assertEquals(1, result.exitCode());
-        assertTrue(result.getErrorOutput().contains("odd number of characters") ||
-                   result.getErrorOutput().contains("Failed to produce messages"));
-    }
-
-    @Test
-    void testProduceInvalidHexCharacters() {
-        // Hex with invalid characters
-        LaunchResult result = launcher.launch("produce", "test-topic", "--value", "hex:gg");
-        assertEquals(1, result.exitCode());
-        assertTrue(result.getErrorOutput().contains("Invalid hex encoding") ||
-                   result.getErrorOutput().contains("Failed to produce messages"));
-    }
-
-    @Test
-    void testProduceBackwardsCompatiblePlainText() throws Exception {
+    void testProduceBackwardsCompatiblePlainText() {
         // Create test topic
         topicService.createTopic(admin(), "plain-text-topic", 1, 1, Collections.emptyMap());
 
@@ -746,11 +736,11 @@ class ProduceCommandTest extends ClikMainTestBase {
         List<ConsumerRecord<String, String>> records = consumeRecords("plain-text-topic", 1);
         assertEquals(1, records.size());
 
-        ConsumerRecord<String, String> record = records.get(0);
-        assertEquals("simple-key", record.key());
-        assertEquals("simple value", record.value());
+        ConsumerRecord<String, String> r = records.get(0);
+        assertEquals("simple-key", r.key());
+        assertEquals("simple value", r.value());
 
-        Header header = record.headers().lastHeader("type");
+        Header header = r.headers().lastHeader("type");
         assertNotNull(header);
         assertEquals("text", new String(header.value(), StandardCharsets.UTF_8));
     }
@@ -758,7 +748,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     // ========== Format String (--input) Tests ==========
 
     @Test
-    void testProduceWithInputFormatKeyValue() throws Exception {
+    void testProduceWithInputFormatKeyValue() throws IOException {
         // Create test topic
         topicService.createTopic(admin(), "format-kv-topic", 1, 1, Collections.emptyMap());
 
@@ -1010,7 +1000,7 @@ class ProduceCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testProduceInputFormatConflictWithValue() throws Exception {
+    void testProduceInputFormatConflictWithValue() {
         // --input cannot be used with --value
         LaunchResult result = launcher.launch("produce", "test-topic", "--value", "test", "--input", "%k %v");
         assertEquals(1, result.exitCode());
@@ -1182,13 +1172,13 @@ class ProduceCommandTest extends ClikMainTestBase {
         List<ConsumerRecord<String, String>> records = consumeRecords("format-all-fields-topic", 1);
         assertEquals(1, records.size());
 
-        ConsumerRecord<String, String> record = records.get(0);
-        assertEquals("mykey", record.key());
-        assertEquals("myvalue", record.value());
-        assertEquals(1735401600000L, record.timestamp());
-        assertEquals(2, record.partition());
+        ConsumerRecord<String, String> r = records.get(0);
+        assertEquals("mykey", r.key());
+        assertEquals("myvalue", r.value());
+        assertEquals(1735401600000L, r.timestamp());
+        assertEquals(2, r.partition());
 
-        Header header = record.headers().lastHeader("type");
+        Header header = r.headers().lastHeader("type");
         assertNotNull(header);
         assertEquals("json", new String(header.value(), StandardCharsets.UTF_8));
     }
@@ -1248,20 +1238,20 @@ class ProduceCommandTest extends ClikMainTestBase {
         List<ConsumerRecord<String, String>> records = consumeRecords("format-multi-generic-topic", 1);
         assertEquals(1, records.size());
 
-        ConsumerRecord<String, String> record = records.get(0);
-        assertEquals("key1", record.key());
-        assertEquals("value1", record.value());
+        ConsumerRecord<String, String> r = records.get(0);
+        assertEquals("key1", r.key());
+        assertEquals("value1", r.value());
 
         // Verify all three headers are present
-        Header typeHeader = record.headers().lastHeader("type");
+        Header typeHeader = r.headers().lastHeader("type");
         assertNotNull(typeHeader);
         assertEquals("json", new String(typeHeader.value(), StandardCharsets.UTF_8));
 
-        Header versionHeader = record.headers().lastHeader("version");
+        Header versionHeader = r.headers().lastHeader("version");
         assertNotNull(versionHeader);
         assertEquals("1.0", new String(versionHeader.value(), StandardCharsets.UTF_8));
 
-        Header sourceHeader = record.headers().lastHeader("source");
+        Header sourceHeader = r.headers().lastHeader("source");
         assertNotNull(sourceHeader);
         assertEquals("cli", new String(sourceHeader.value(), StandardCharsets.UTF_8));
     }

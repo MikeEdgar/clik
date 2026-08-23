@@ -3,7 +3,6 @@ package io.streamshub.clik.kafka;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -34,25 +33,23 @@ public class AclService {
     /**
      * Create ACL bindings
      */
-    public void createAcls(Admin admin, Collection<AclBinding> aclBindings)
-            throws ExecutionException, InterruptedException {
-
+    public void createAcls(Admin admin, Collection<AclBinding> aclBindings) {
         admin.createAcls(aclBindings)
                 .all()
                 .toCompletionStage()
                 .toCompletableFuture()
-                .get();
+                .join();
     }
 
     /**
      * List ACLs matching the filter
      */
-    public List<AclInfo> listAcls(Admin admin, AclBindingFilter filter)
-            throws ExecutionException, InterruptedException {
-
+    public List<AclInfo> listAcls(Admin admin, AclBindingFilter filter) {
         Collection<AclBinding> bindings = admin.describeAcls(filter)
                 .values()
-                .get();
+                .toCompletionStage()
+                .toCompletableFuture()
+                .join();
 
         return bindings.stream()
                 .map(this::convertToAclInfo)
@@ -65,9 +62,7 @@ public class AclService {
      * Delete ACLs matching the filters
      * Returns collection of deleted ACL bindings
      */
-    public Collection<AclInfo> deleteAcls(Admin admin, Collection<AclBindingFilter> filters)
-            throws ExecutionException, InterruptedException {
-
+    public Collection<AclInfo> deleteAcls(Admin admin, Collection<AclBindingFilter> filters) {
         DeleteAclsResult result = admin.deleteAcls(filters);
 
         // Collect all deleted bindings
@@ -75,7 +70,9 @@ public class AclService {
         for (AclBindingFilter filter : filters) {
             Collection<AclBinding> matchedBindings = result.values()
                     .get(filter)
-                    .get()
+                    .toCompletionStage()
+                    .toCompletableFuture()
+                    .join()
                     .values()
                     .stream()
                     .map(FilterResult::binding)

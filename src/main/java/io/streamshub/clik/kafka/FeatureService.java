@@ -25,7 +25,7 @@ public class FeatureService {
      * @param admin Kafka Admin client
      * @return List of all features with their version ranges
      */
-    public List<FeatureInfo> listFeatures(Admin admin) throws Exception {
+    public List<FeatureInfo> listFeatures(Admin admin) {
         var describeResult = admin.describeFeatures();
         var metadata = describeResult.featureMetadata()
             .toCompletionStage()
@@ -49,9 +49,7 @@ public class FeatureService {
         // Add supported-only features (not finalized)
         for (Map.Entry<String, SupportedVersionRange> entry : supportedFeatures.entrySet()) {
             String name = entry.getKey();
-            if (!featureMap.containsKey(name)) {
-                featureMap.put(name, buildFeatureInfo(name, null, entry.getValue()));
-            }
+            featureMap.computeIfAbsent(name, _ -> buildFeatureInfo(name, null, entry.getValue()));
         }
 
         return new ArrayList<>(featureMap.values());
@@ -64,7 +62,7 @@ public class FeatureService {
      * @param featureName Feature name to describe
      * @return FeatureInfo or null if feature not found
      */
-    public FeatureInfo describeFeature(Admin admin, String featureName) throws Exception {
+    public FeatureInfo describeFeature(Admin admin, String featureName) {
         var describeResult = admin.describeFeatures();
         var metadata = describeResult.featureMetadata()
             .toCompletionStage()
@@ -92,7 +90,7 @@ public class FeatureService {
      * @param targetVersion Target version level
      * @param allowDowngrade Whether to allow downgrade
      */
-    public void updateFeature(Admin admin, String featureName, short targetVersion, boolean allowDowngrade) throws Exception {
+    public void updateFeature(Admin admin, String featureName, short targetVersion, boolean allowDowngrade) {
         Map<String, FeatureUpdate> updates = Map.of(
             featureName,
             new FeatureUpdate(targetVersion, allowDowngrade ? FeatureUpdate.UpgradeType.SAFE_DOWNGRADE : FeatureUpdate.UpgradeType.UPGRADE)
@@ -111,7 +109,7 @@ public class FeatureService {
      * @param admin Kafka Admin client
      * @param featureName Feature name to disable
      */
-    public void disableFeature(Admin admin, String featureName) throws Exception {
+    public void disableFeature(Admin admin, String featureName) {
         Map<String, FeatureUpdate> updates = Map.of(
             featureName,
             new FeatureUpdate((short) 0, FeatureUpdate.UpgradeType.SAFE_DOWNGRADE)

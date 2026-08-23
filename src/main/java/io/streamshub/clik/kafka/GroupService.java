@@ -38,6 +38,7 @@ import io.streamshub.clik.kafka.model.GroupOffsetInfo;
 import io.streamshub.clik.kafka.model.OffsetLagInfo;
 import io.streamshub.clik.support.RootCause;
 
+import static io.streamshub.clik.support.Futures.join;
 import static java.util.stream.Collectors.collectingAndThen;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
@@ -87,13 +88,9 @@ public class GroupService {
     /**
      * List all groups, optionally filtered by type
      */
-    public Collection<GroupInfo> listGroups(Admin admin, String typeFilter)
-            throws ExecutionException, InterruptedException {
-
+    public Collection<GroupInfo> listGroups(Admin admin, String typeFilter) {
         // List all consumer groups
-        Collection<GroupListing> listings = admin.listGroups()
-                .all()
-                .get()
+        Collection<GroupListing> listings = join(admin.listGroups().all())
                 .stream()
                 .filter(listing -> matchesType(listing, typeFilter))
                 .toList();
@@ -288,9 +285,7 @@ public class GroupService {
     /**
      * Describe a specific group with full details
      */
-    public GroupInfo describeGroup(Admin admin, String groupId)
-            throws ExecutionException, InterruptedException {
-
+    public GroupInfo describeGroup(Admin admin, String groupId) {
         Map<String, GroupInfo.Builder> groupData = Map.of(groupId, GroupInfo.builder());
 
         try {
@@ -312,9 +307,7 @@ public class GroupService {
     /**
      * Get offset and lag information for a consumer group
      */
-    private List<OffsetLagInfo> getGroupOffsets(Admin admin, String groupId)
-            throws ExecutionException, InterruptedException {
-
+    private List<OffsetLagInfo> getGroupOffsets(Admin admin, String groupId) {
         try {
             // Get current consumer group offsets
             Map<TopicPartition, GroupOffsetInfo> offsets = getGroupOffsetMap(admin, groupId);
@@ -330,7 +323,10 @@ public class GroupService {
             }
 
             ListOffsetsResult endOffsetsResult = admin.listOffsets(endOffsetsMap);
-            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> endOffsets = endOffsetsResult.all().get();
+            Map<TopicPartition, ListOffsetsResult.ListOffsetsResultInfo> endOffsets = endOffsetsResult.all()
+                    .toCompletionStage()
+                    .toCompletableFuture()
+                    .join();
 
             // Calculate lag
             List<OffsetLagInfo> lagInfoList = new ArrayList<>();
@@ -362,12 +358,8 @@ public class GroupService {
      *
      * @param admin Admin client
      * @param groupIds Collection of group IDs to delete
-     * @throws ExecutionException if the operation fails
-     * @throws InterruptedException if the operation is interrupted
      */
-    public Map<String, Throwable> deleteGroups(Admin admin, Collection<String> groupIds)
-            throws ExecutionException, InterruptedException {
-
+    public Map<String, Throwable> deleteGroups(Admin admin, Collection<String> groupIds) {
         Map<String, Throwable> errors = new HashMap<>();
         var groupsByType = groupsByType(admin);
 
@@ -412,12 +404,9 @@ public class GroupService {
      * @param admin Admin client
      * @param groupId Group ID
      * @param offsets Map of topic partitions to new offsets
-     * @throws ExecutionException if the operation fails
-     * @throws InterruptedException if the operation is interrupted
      */
     public void alterGroupOffsets(Admin admin, String groupId,
-            Map<TopicPartition, OffsetAndMetadata> offsets)
-            throws ExecutionException, InterruptedException {
+            Map<TopicPartition, OffsetAndMetadata> offsets) {
 
         KafkaFuture<Void> promise = switch (groupType(admin, groupId)) {
             case CLASSIC, CONSUMER -> admin.alterConsumerGroupOffsets(groupId, offsets).all();
@@ -438,13 +427,8 @@ public class GroupService {
      * @param admin Admin client
      * @param groupId Group ID
      * @param partitions Set of topic partitions to delete
-     * @throws ExecutionException if the operation fails
-     * @throws InterruptedException if the operation is interrupted
      */
-    public void deleteGroupOffsets(Admin admin, String groupId,
-            Set<TopicPartition> partitions)
-            throws ExecutionException, InterruptedException {
-
+    public void deleteGroupOffsets(Admin admin, String groupId, Set<TopicPartition> partitions) {
         KafkaFuture<Void> promise = switch (groupType(admin, groupId)) {
             case CLASSIC, CONSUMER -> admin.deleteConsumerGroupOffsets(groupId, partitions).all();
             case SHARE -> admin.deleteShareGroupOffsets(groupId, partitions.stream()
@@ -465,11 +449,8 @@ public class GroupService {
      * @param admin Admin client
      * @param groupId Group ID
      * @return Set of topic partitions with committed offsets
-     * @throws ExecutionException if the operation fails
-     * @throws InterruptedException if the operation is interrupted
      */
-    public Map<TopicPartition, GroupOffsetInfo> getGroupOffsetMap(Admin admin, String groupId)
-            throws ExecutionException, InterruptedException {
+    public Map<TopicPartition, GroupOffsetInfo> getGroupOffsetMap(Admin admin, String groupId) {
 
         KafkaFuture<Map<TopicPartition, GroupOffsetInfo>> promise = switch (groupType(admin, groupId)) {
             case CLASSIC, CONSUMER -> admin.listConsumerGroupOffsets(groupId)
@@ -520,12 +501,8 @@ public class GroupService {
      * @param admin Admin client
      * @param groupId Group ID
      * @return true if group has active members
-     * @throws ExecutionException if the operation fails
-     * @throws InterruptedException if the operation is interrupted
      */
-    public boolean hasActiveMembers(Admin admin, String groupId)
-            throws ExecutionException, InterruptedException {
-
+    public boolean hasActiveMembers(Admin admin, String groupId) {
         Map<String, GroupInfo.Builder> groupData = Map.of(groupId, GroupInfo.builder());
 
         return describeGroups(admin, groupType(admin, groupId), groupData, Set.of(groupId), true)

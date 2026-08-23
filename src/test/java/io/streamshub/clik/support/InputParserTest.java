@@ -134,13 +134,13 @@ class InputParserTest {
     @Test
     void testDuplicateNamedHeaders() {
         InputParser format = InputParser.withFormat("%k %v %{h[tag]} %{h[tag]}");
-        KafkaRecord record = format.parse("key1 value1 tag=v1 tag=v2");
+        KafkaRecord r = format.parse("key1 value1 tag=v1 tag=v2");
 
-        assertEquals("key1", record.keyString(null));
-        assertEquals("value1", record.valueString(null));
+        assertEquals("key1", r.keyString(null));
+        assertEquals("value1", r.valueString(null));
 
         // Verify both "tag" headers are present
-        List<KafkaRecord.Header> tagHeaders = record.headers("tag");
+        List<KafkaRecord.Header> tagHeaders = r.headers("tag");
         assertEquals(2, tagHeaders.size());
         assertEquals("v1", tagHeaders.get(0).valueString(null));
         assertEquals("v2", tagHeaders.get(1).valueString(null));
@@ -149,49 +149,49 @@ class InputParserTest {
     @Test
     void testMultipleGenericHeaders() {
         InputParser format = InputParser.withFormat("%k %v %h %h");
-        KafkaRecord record = format.parse("key1 value1 type=json version=1.0");
+        KafkaRecord r = format.parse("key1 value1 type=json version=1.0");
 
-        assertEquals("key1", record.keyString(null));
-        assertEquals("value1", record.valueString(null));
+        assertEquals("key1", r.keyString(null));
+        assertEquals("value1", r.valueString(null));
 
         // Verify both headers were parsed with different keys
-        assertEquals(2, record.headers().size());
-        assertEquals("json", record.firstHeader("type").valueString(null));
-        assertEquals("1.0", record.firstHeader("version").valueString(null));
+        assertEquals(2, r.headers().size());
+        assertEquals("json", r.firstHeader("type").valueString(null));
+        assertEquals("1.0", r.firstHeader("version").valueString(null));
     }
 
     @Test
     void testMixedDuplicateHeaders() {
         InputParser format = InputParser.withFormat("%k %v %{h[tag]} %h %{h[tag]}");
-        KafkaRecord record = format.parse("key1 value1 tag=v1 type=json tag=v2");
+        KafkaRecord r = format.parse("key1 value1 tag=v1 type=json tag=v2");
 
-        assertEquals("key1", record.keyString(null));
-        assertEquals("value1", record.valueString(null));
+        assertEquals("key1", r.keyString(null));
+        assertEquals("value1", r.valueString(null));
 
         // Verify three headers total
-        assertEquals(3, record.headers().size());
+        assertEquals(3, r.headers().size());
 
         // Verify two "tag" headers
-        List<KafkaRecord.Header> tagHeaders = record.headers("tag");
+        List<KafkaRecord.Header> tagHeaders = r.headers("tag");
         assertEquals(2, tagHeaders.size());
         assertEquals("v1", tagHeaders.get(0).valueString(null));
         assertEquals("v2", tagHeaders.get(1).valueString(null));
 
         // Verify one "type" header
-        assertEquals("json", record.firstHeader("type").valueString(null));
+        assertEquals("json", r.firstHeader("type").valueString(null));
     }
 
     @Test
     void testDuplicateHeadersWithEncoding() {
         // "plain" in base64 is "cGxhaW4="
         InputParser format = InputParser.withFormat("%k %v %{h[data]} %{base64:h[data]}");
-        KafkaRecord record = format.parse("key1 value1 data=plain data=cGxhaW4=");
+        KafkaRecord r = format.parse("key1 value1 data=plain data=cGxhaW4=");
 
-        assertEquals("key1", record.keyString(null));
-        assertEquals("value1", record.valueString(null));
+        assertEquals("key1", r.keyString(null));
+        assertEquals("value1", r.valueString(null));
 
         // Verify both "data" headers are present and decoded correctly
-        List<KafkaRecord.Header> dataHeaders = record.headers("data");
+        List<KafkaRecord.Header> dataHeaders = r.headers("data");
         assertEquals(2, dataHeaders.size());
         assertEquals("plain", dataHeaders.get(0).valueString(null));
         assertEquals("plain", dataHeaders.get(1).valueString(null)); // base64 decoded

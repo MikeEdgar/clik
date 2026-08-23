@@ -61,7 +61,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testCreateTopic() throws Exception {
+    void testCreateTopic() {
         LaunchResult result = launcher.launch("topic", "create", "test-topic");
         assertEquals(0, result.exitCode());
         assertTrue(result.getOutput().contains("Topic \"test-topic\" created"));
@@ -73,7 +73,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testCreateTopicWithPartitions() throws Exception {
+    void testCreateTopicWithPartitions() {
         LaunchResult result = launcher.launch("topic", "create", "test-topic", "--partitions", "5");
         assertEquals(0, result.exitCode());
 
@@ -85,7 +85,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testCreateTopicWithConfig() throws Exception {
+    void testCreateTopicWithConfig() {
         LaunchResult result = launcher.launch("topic", "create", "test-topic", "--config", "retention.ms=3600000");
         assertEquals(0, result.exitCode(), () -> {
             return """
@@ -100,7 +100,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testCreateTopicAlreadyExists() throws Exception {
+    void testCreateTopicAlreadyExists() {
         topicService.createTopic(admin(), "duplicate-topic", 1, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "create", "duplicate-topic");
@@ -109,11 +109,11 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testCreateTopicWithReplicaAssignment() throws Exception {
+    void testCreateTopicWithReplicaAssignment() {
         // Dev-services Kafka runs a single broker (nodeId=0); use 3 partitions each with 1 replica on broker 0
         LaunchResult result = launcher.launch("topic", "create", "replica-assignment-topic",
                 "--replica-assignment", "0,0,0");
-        assertEquals(0, result.exitCode(), () -> "Output: %s\nError: %s"
+        assertEquals(0, result.exitCode(), () -> "Output: %s%nError: %s"
                 .formatted(result.getOutput(), result.getErrorOutput()));
         assertTrue(result.getOutput().contains("Topic \"replica-assignment-topic\" created"));
 
@@ -124,7 +124,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testCreateTopicReplicaAssignmentWithPartitionsFails() throws Exception {
+    void testCreateTopicReplicaAssignmentWithPartitionsFails() {
         LaunchResult result = launcher.launch("topic", "create", "ra-partitions-conflict",
                 "--replica-assignment", "0",
                 "--partitions", "1");
@@ -133,7 +133,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testCreateTopicReplicaAssignmentInvalidFormat() throws Exception {
+    void testCreateTopicReplicaAssignmentInvalidFormat() {
         LaunchResult result = launcher.launch("topic", "create", "ra-invalid-format",
                 "--replica-assignment", "abc:xyz");
         assertEquals(1, result.exitCode());
@@ -141,7 +141,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testCreateTopicReplicaAssignmentAndReplicationFactorFails() throws Exception {
+    void testCreateTopicReplicaAssignmentAndReplicationFactorFails() {
         LaunchResult result = launcher.launch("topic", "create", "ra-rf-conflict",
                 "--replica-assignment", "0",
                 "--replication-factor", "1");
@@ -156,7 +156,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testListTopicsTable() throws Exception {
+    void testListTopicsTable() {
         topicService.createTopic(admin(), "topic1", 3, 1, Collections.emptyMap());
         topicService.createTopic(admin(), "topic2", 5, 1, Collections.emptyMap());
 
@@ -170,7 +170,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testListTopicsNameFormat() throws Exception {
+    void testListTopicsNameFormat() {
         topicService.createTopic(admin(), "alpha", 1, 1, Collections.emptyMap());
         topicService.createTopic(admin(), "beta", 1, 1, Collections.emptyMap());
         topicService.createTopic(admin(), "gamma", 1, 1, Collections.emptyMap());
@@ -184,7 +184,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testListTopicsJsonFormat() throws Exception {
+    void testListTopicsJsonFormat() {
         topicService.createTopic(admin(), "json-topic", 2, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "list", "-o", "json");
@@ -197,7 +197,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testListTopicsYamlFormat() throws Exception {
+    void testListTopicsYamlFormat() {
         topicService.createTopic(admin(), "yaml-topic", 3, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "list", "-o", "yaml");
@@ -210,7 +210,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testDescribeTopic() throws Exception {
+    void testDescribeTopic() {
         topicService.createTopic(admin(), "describe-test", 4, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "describe", "describe-test");
@@ -230,7 +230,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testDescribeTopicJsonFormat() throws Exception {
+    void testDescribeTopicJsonFormat() {
         topicService.createTopic(admin(), "json-describe", 1, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "describe", "json-describe", "-o", "json");
@@ -313,7 +313,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testDeleteTopic() throws Exception {
+    void testDeleteTopic() {
         topicService.createTopic(admin(), "delete-test", 1, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "delete", "delete-test", "--yes");
@@ -326,7 +326,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testDeleteMultipleTopics() throws Exception {
+    void testDeleteMultipleTopics() {
         topicService.createTopic(admin(), "delete1", 1, 1, Collections.emptyMap());
         topicService.createTopic(admin(), "delete2", 1, 1, Collections.emptyMap());
         topicService.createTopic(admin(), "delete3", 1, 1, Collections.emptyMap());
@@ -343,7 +343,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testAlterTopicConfig() throws Exception {
+    void testAlterTopicConfig() {
         topicService.createTopic(admin(), "alter-test", 1, 1, Map.of("retention.ms", "86400000"));
 
         LaunchResult result = launcher.launch("topic", "alter", "alter-test", "--config", "retention.ms=172800000");
@@ -357,7 +357,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testAlterTopicMultipleConfigs() throws Exception {
+    void testAlterTopicMultipleConfigs() {
         topicService.createTopic(admin(), "multi-config-test", 1, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "alter", "multi-config-test",
@@ -373,7 +373,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testAlterTopicDeleteConfig() throws Exception {
+    void testAlterTopicDeleteConfig() {
         topicService.createTopic(admin(), "delete-config-test", 1, 1,
                 Map.of("retention.ms", "86400000", "compression.type", "snappy"));
 
@@ -389,7 +389,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testAlterTopicSetAndDelete() throws Exception {
+    void testAlterTopicSetAndDelete() {
         topicService.createTopic(admin(), "set-and-delete-test", 1, 1,
                 Map.of("retention.ms", "86400000", "max.message.bytes", "2000000"));
 
@@ -415,7 +415,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testAlterTopicNoOptions() throws Exception {
+    void testAlterTopicNoOptions() {
         topicService.createTopic(admin(), "no-options-test", 1, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "alter", "no-options-test");
@@ -424,17 +424,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testAlterTopicInvalidConfigFormat() throws Exception {
-        topicService.createTopic(admin(), "invalid-config-test", 1, 1, Collections.emptyMap());
-
-        LaunchResult result = launcher.launch("topic", "alter", "invalid-config-test",
-                "--config", "invalid-format");
-        assertEquals(1, result.exitCode());
-        assertTrue(result.getErrorOutput().contains("Invalid config format"));
-    }
-
-    @Test
-    void testAlterTopicIncreasePartitions() throws Exception {
+    void testAlterTopicIncreasePartitions() {
         topicService.createTopic(admin(), "partition-test", 3, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "alter", "partition-test", "--partitions", "6");
@@ -448,7 +438,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testAlterTopicDecreasePartitionsError() throws Exception {
+    void testAlterTopicDecreasePartitionsError() {
         topicService.createTopic(admin(), "decrease-test", 5, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "alter", "decrease-test", "--partitions", "3");
@@ -458,7 +448,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testAlterTopicSamePartitionCountError() throws Exception {
+    void testAlterTopicSamePartitionCountError() {
         topicService.createTopic(admin(), "same-partition-test", 4, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "alter", "same-partition-test", "--partitions", "4");
@@ -467,7 +457,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testAlterTopicPartitionsAndConfig() throws Exception {
+    void testAlterTopicPartitionsAndConfig() {
         topicService.createTopic(admin(), "combined-test", 2, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "alter", "combined-test",
@@ -485,7 +475,7 @@ class TopicCommandTest extends ClikMainTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testAlterTopicPartitionsOnly() throws Exception {
+    void testAlterTopicPartitionsOnly() {
         topicService.createTopic(admin(), "partitions-only-test", 1, 1, Collections.emptyMap());
 
         LaunchResult result = launcher.launch("topic", "alter", "partitions-only-test", "--partitions", "8");

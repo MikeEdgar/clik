@@ -13,9 +13,6 @@ public class ContextConfig {
     private Map<String, String> consumer = new HashMap<>();
     private Map<String, String> producer = new HashMap<>();
 
-    public ContextConfig() {
-    }
-
     public Map<String, String> getCommon() {
         return common;
     }

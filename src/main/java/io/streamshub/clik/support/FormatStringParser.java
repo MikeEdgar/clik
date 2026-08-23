@@ -48,7 +48,7 @@ class FormatStringParser {
                     tokens.add(new LiteralToken("%"));
                     i += 2;
                 } else if (next == '{') {
-                    // Parameterized placeholder: %{encoding:type} or %{h[name]}
+                    // Parameterized placeholder: %{encoding:type} or %{h[name]} (NOSONAR)
                     PlaceholderToken token = parseParameterizedPlaceholder(format, i);
                     tokens.add(token);
                     hasPlaceholder = true;
@@ -62,13 +62,7 @@ class FormatStringParser {
                     i += 2;
                 }
             } else {
-                // Literal character - collect until next placeholder
-                StringBuilder literal = new StringBuilder();
-                while (i < format.length() && format.charAt(i) != '%') {
-                    literal.append(format.charAt(i));
-                    i++;
-                }
-                tokens.add(new LiteralToken(literal.toString()));
+                i = processLiteralToken(i, format, tokens);
             }
         }
 
@@ -78,6 +72,17 @@ class FormatStringParser {
         }
 
         return tokens;
+    }
+
+    static int processLiteralToken(int i, String format, List<FormatToken> tokens) {
+        // Literal character - collect until next placeholder
+        StringBuilder literal = new StringBuilder();
+        while (i < format.length() && format.charAt(i) != '%') {
+            literal.append(format.charAt(i));
+            i++;
+        }
+        tokens.add(new LiteralToken(literal.toString()));
+        return i;
     }
 
     /**
@@ -135,7 +140,7 @@ class FormatStringParser {
                 "Unclosed placeholder at position " + startPos + ": " + format.substring(startPos));
         }
 
-        // Extract content between %{ and }
+        // Extract content between %{ and } (NOSONAR)
         String content = format.substring(startPos + 2, endPos);
 
         // Check for encoding prefix (base64: or hex:)
@@ -152,7 +157,7 @@ class FormatStringParser {
                 // Check if this looks like an encoding attempt but is invalid
                 String afterColon = content.substring(colonPos + 1);
                 if (!afterColon.startsWith("h[")) {
-                    // This is likely an invalid encoding like %{unknown:k}
+                    // This is likely an invalid encoding like %{unknown:k} (NOSONAR)
                     throw new IllegalArgumentException(
                         "Unknown encoding: " + potentialEncoding + " at position " + startPos);
                 }
@@ -160,9 +165,13 @@ class FormatStringParser {
             }
         }
 
+        return parsePlaceholder(remainder, encoding, startPos);
+    }
+
+    static PlaceholderToken parsePlaceholder(String remainder, String encoding, int startPos) {
         // Parse the placeholder type and optional name
         if (remainder.startsWith("h[")) {
-            // Named header: %{h[name]} or %{base64:h[name]}
+            // Named header: %{h[name]} or %{base64:h[name]} (NOSONAR)
             int closeBracket = remainder.indexOf(']');
             if (closeBracket == -1) {
                 throw new IllegalArgumentException(
@@ -175,7 +184,7 @@ class FormatStringParser {
             }
             return new PlaceholderToken(PlaceholderType.HEADER, encoding, headerName);
         } else {
-            // Simple type with encoding: %{base64:k}, %{hex:v}
+            // Simple type with encoding: %{base64:k}, %{hex:v} (NOSONAR)
             if (encoding == null) {
                 throw new IllegalArgumentException(
                     "Only header placeholders can have names. " +

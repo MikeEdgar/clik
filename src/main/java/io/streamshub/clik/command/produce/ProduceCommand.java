@@ -105,48 +105,8 @@ public class ProduceCommand extends ContextualCommand implements Callable<Intege
 
     @Override
     public Integer call() {
-        // Validate mutually exclusive options
-        int inputModeCount = 0;
-
-        if (file != null) {
-            inputModeCount++;
-        }
-        if (interactive) {
-            inputModeCount++;
-        }
-        if (value != null) {
-            inputModeCount++;
-        }
-
-        if (inputModeCount > 1) {
-            err().println("Error: --file, --interactive, and --value are mutually exclusive");
+        if (!validateOptions()) {
             return 1;
-        }
-
-        // --input cannot be used with --value
-        if (inputFormat != null && value != null) {
-            err().println("Error: --input cannot be used with --value");
-            return 1;
-        }
-
-        // --input cannot be used with global --key, --header, --timestamp, or --partition
-        if (inputFormat != null) {
-            if (key != null) {
-                err().println("Error: --input cannot be used with --key (use %k in format string instead)");
-                return 1;
-            }
-            if (headers != null && !headers.isEmpty()) {
-                err().println("Error: --input cannot be used with --header (use %h in format string instead)");
-                return 1;
-            }
-            if (timestamp != null) {
-                err().println("Error: --input cannot be used with --timestamp (use %T in format string instead)");
-                return 1;
-            }
-            if (partition != null) {
-                err().println("Error: --input cannot be used with --partition (use %p in format string instead)");
-                return 1;
-            }
         }
 
         // Validate file exists if specified
@@ -177,6 +137,59 @@ public class ProduceCommand extends ContextualCommand implements Callable<Intege
         }
     }
 
+    private boolean validateOptions() {
+        if (inputModeCount() > 1) {
+            err().println("Error: --file, --interactive, and --value are mutually exclusive");
+            return false;
+        }
+
+        // Validate mutually exclusive options
+
+        // --input cannot be used with --value
+        if (inputFormat != null && value != null) {
+            err().println("Error: --input cannot be used with --value");
+            return false;
+        }
+
+        // --input cannot be used with global --key, --header, --timestamp, or --partition
+        if (inputFormat != null) {
+            if (key != null) {
+                err().println("Error: --input cannot be used with --key (use %k in format string instead)");
+                return false;
+            }
+            if (headers != null && !headers.isEmpty()) {
+                err().println("Error: --input cannot be used with --header (use %h in format string instead)");
+                return false;
+            }
+            if (timestamp != null) {
+                err().println("Error: --input cannot be used with --timestamp (use %T in format string instead)");
+                return false;
+            }
+            if (partition != null) {
+                err().println("Error: --input cannot be used with --partition (use %p in format string instead)");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private int inputModeCount() {
+        int inputModeCount = 0;
+
+        if (file != null) {
+            inputModeCount++;
+        }
+        if (interactive) {
+            inputModeCount++;
+        }
+        if (value != null) {
+            inputModeCount++;
+        }
+
+        return inputModeCount;
+    }
+
     private Stream<String> readMessages() throws IOException {
         if (value != null) {
             return Stream.of(value);
@@ -184,10 +197,14 @@ public class ProduceCommand extends ContextualCommand implements Callable<Intege
             return Files.lines(Paths.get(file));
         } else if (interactive) {
             err().println("Enter messages (Ctrl+D to finish):");
-            return new BufferedReader(new InputStreamReader(System.in)).lines();
+            return standardInput();
         } else {
-            return new BufferedReader(new InputStreamReader(System.in)).lines();
+            return standardInput();
         }
+    }
+
+    private Stream<String> standardInput() {
+        return new BufferedReader(new InputStreamReader(System.in)).lines(); //NOSONAR
     }
 
     private Headers parseHeaders(List<String> headerList) {
@@ -255,6 +272,7 @@ public class ProduceCommand extends ContextualCommand implements Callable<Intege
         if (inputFormat != null) {
             // Parse format string once
             InputParser format;
+
             try {
                 format = InputParser.withFormat(inputFormat);
             } catch (IllegalArgumentException e) {
@@ -262,62 +280,9 @@ public class ProduceCommand extends ContextualCommand implements Callable<Intege
                 return 1;
             }
 
-            // Process each line according to format string
-            messages.forEach(line -> {
-                try {
-                    // Parse line according to format
-                    KafkaRecord components = format.parse(line);
-
-                    // Create producer record from parsed components
-                    ProducerRecord<byte[], byte[]> rec = new ProducerRecord<>(
-                            topic,
-                            components.partition(),
-                            components.timestamp(),
-                            components.keyBytes(),
-                            components.valueBytes(),
-                            mapHeaders(components.headers()));
-
-                    producer.send(rec, (_, exception) -> {
-                        if (exception == null) {
-                            successCount.incrementAndGet();
-                        } else {
-                            failureCount.incrementAndGet();
-                            err().println("Failed to send message: " + exception.getMessage());
-                        }
-                    });
-                } catch (IllegalArgumentException e) {
-                    failureCount.incrementAndGet();
-                    err().println("Failed to parse line: " + e.getMessage());
-                }
-            });
+            sendFormattedMessages(producer, messages, format, successCount, failureCount);
         } else {
-            // Existing behavior: use global options
-            Headers recordHeaders = parseHeaders(headers);
-            Long timestampMillis = parseTimestamp(timestamp);
-            byte[] keyBytes = key != null ? Encoding.decodeValue(key) : null;
-
-            messages.forEach(message -> {
-                // Decode message value (may have base64: or hex: prefix)
-                byte[] valueBytes = Encoding.decodeValue(message);
-
-                // Use headers and/or timestamp may be null
-                ProducerRecord<byte[], byte[]> rec = new ProducerRecord<>(
-                        topic,
-                        partition,
-                        timestampMillis,
-                        keyBytes,
-                        valueBytes,
-                        recordHeaders);
-
-                producer.send(rec, (_, exception) -> {
-                    if (exception == null) {
-                        successCount.incrementAndGet();
-                    } else {
-                        failureCount.incrementAndGet();
-                        err().println("Failed to send message: " + exception.getMessage());
-                    }
-                });
-            });
+            sendSimpleMessages(producer, messages, successCount, failureCount);
         }
 
         producer.flush();
@@ -328,5 +293,77 @@ public class ProduceCommand extends ContextualCommand implements Callable<Intege
         }
 
         return failureCount.get() > 0 ? 1 : 0;
+    }
+
+    private void sendFormattedMessages(
+            Producer<byte[], byte[]> producer,
+            Stream<String> messages,
+            InputParser format,
+            AtomicInteger successCount,
+            AtomicInteger failureCount
+    ) {
+        // Process each line according to format string
+        messages.forEach(line -> {
+            try {
+                // Parse line according to format
+                KafkaRecord components = format.parse(line);
+
+                // Create producer record from parsed components
+                ProducerRecord<byte[], byte[]> rec = new ProducerRecord<>(
+                        topic,
+                        components.partition(),
+                        components.timestamp(),
+                        components.keyBytes(),
+                        components.valueBytes(),
+                        mapHeaders(components.headers()));
+
+                producer.send(rec, (_, exception) -> {
+                    if (exception == null) {
+                        successCount.incrementAndGet();
+                    } else {
+                        failureCount.incrementAndGet();
+                        err().println("Failed to send message: " + exception.getMessage());
+                    }
+                });
+            } catch (IllegalArgumentException e) {
+                failureCount.incrementAndGet();
+                err().println("Failed to parse line: " + e.getMessage());
+            }
+        });
+    }
+
+    private void sendSimpleMessages(
+            Producer<byte[], byte[]> producer,
+            Stream<String> messages,
+            AtomicInteger successCount,
+            AtomicInteger failureCount
+    ) {
+        // Existing behavior: use global options
+        Headers recordHeaders = parseHeaders(headers);
+        Long timestampMillis = parseTimestamp(timestamp);
+        byte[] keyBytes = key != null ? Encoding.decodeValue(key) : null;
+
+        messages.forEach(message -> {
+            // Decode message value (may have base64: or hex: prefix)
+            byte[] valueBytes = Encoding.decodeValue(message);
+
+            // Use headers and/or timestamp may be null
+            ProducerRecord<byte[], byte[]> rec = new ProducerRecord<>(
+                    topic,
+                    partition,
+                    timestampMillis,
+                    keyBytes,
+                    valueBytes,
+                    recordHeaders);
+
+            producer.send(rec, (_, exception) -> {
+                if (exception == null) {
+                    successCount.incrementAndGet();
+                } else {
+                    failureCount.incrementAndGet();
+                    err().println("Failed to send message: " + exception.getMessage());
+                }
+            });
+        });
     }
 }

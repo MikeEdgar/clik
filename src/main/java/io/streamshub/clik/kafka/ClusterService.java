@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -31,6 +30,8 @@ import io.streamshub.clik.kafka.model.NodeInfo;
 import io.streamshub.clik.kafka.model.NodeInfo.NodeRole;
 import io.streamshub.clik.kafka.model.NodeInfo.QuorumRole;
 
+import static io.streamshub.clik.support.Futures.join;
+
 @ApplicationScoped
 public class ClusterService {
 
@@ -49,18 +50,14 @@ public class ClusterService {
      *
      * @param admin Admin client
      * @return ClusterInfo containing cluster details
-     * @throws ExecutionException if the operation fails
-     * @throws InterruptedException if the operation is interrupted
      */
-    public ClusterInfo describeCluster(Admin admin)
-            throws ExecutionException, InterruptedException {
-
+    public ClusterInfo describeCluster(Admin admin) {
         // Step 1: Get basic cluster information
         DescribeClusterResult clusterResult = admin.describeCluster();
 
-        String clusterId = clusterResult.clusterId().get();
-        Node controller = clusterResult.controller().get();
-        Set<Node> nodes = new HashSet<>(clusterResult.nodes().get());
+        String clusterId = join(clusterResult.clusterId());
+        Node controller = join(clusterResult.controller());
+        Set<Node> nodes = new HashSet<>(join(clusterResult.nodes()));
 
         int controllerId = controller != null ? controller.id() : -1;
 
@@ -73,7 +70,7 @@ public class ClusterService {
 
         try {
             DescribeMetadataQuorumResult quorumResult = admin.describeMetadataQuorum();
-            QuorumInfo kafkaQuorumInfo = quorumResult.quorumInfo().toCompletionStage().toCompletableFuture().join();
+            QuorumInfo kafkaQuorumInfo = join(quorumResult.quorumInfo());
 
             // Extract voter and observer IDs
             for (ReplicaState voter : kafkaQuorumInfo.voters()) {
@@ -150,11 +147,7 @@ public class ClusterService {
     }
 
     /* testing */ String determineFeatureLevel(DescribeFeaturesResult features) {
-        var metadataVersionMax = Optional.ofNullable(features
-                .featureMetadata()
-                .toCompletionStage()
-                .toCompletableFuture()
-                .join()
+        var metadataVersionMax = Optional.ofNullable(join(features.featureMetadata())
                 .finalizedFeatures()
                 .get(MetadataVersion.FEATURE_NAME))
                 .map(FinalizedVersionRange::maxVersionLevel);

@@ -44,7 +44,7 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
     TopicService topicService;
 
     @Test
-    void testListGroupsEmpty() throws Exception {
+    void testListGroupsEmpty() {
         // Note: Kafka may have internal consumer groups (like __consumer_offsets consumer)
         // So we just verify the list operation works, not that it's strictly empty
         Collection<GroupInfo> groups = groupService.listGroups(admin(), null);
@@ -52,7 +52,7 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testListGroupsConsumer() throws Exception {
+    void testListGroupsConsumer() {
         // Create test topic
         topicService.createTopic(admin(), "test-topic", 3, 1, null);
 
@@ -94,7 +94,7 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testListGroupsFilterByType() throws Exception {
+    void testListGroupsFilterByType() {
         // Create test topic
         topicService.createTopic(admin(), "test-topic", 3, 1, null);
 
@@ -197,7 +197,7 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
     }
 
     @Test
-    void testDescribeGroupNotFound() throws Exception {
+    void testDescribeGroupNotFound() {
         GroupInfo group = groupService.describeGroup(admin(), "non-existent-group");
         assertNull(group);
     }
@@ -257,7 +257,7 @@ class GroupServiceTest extends ClikTestBase implements TestRecordProducer {
         "SHARE   ,         ,",
         "STREAMS ,         ,",
     })
-    void testDescribeGroupNoOffsets(GroupType type, GroupProtocol protocol) throws Exception {
+    void testDescribeGroupNoOffsets(GroupType type, GroupProtocol protocol) {
         // Create test topic
         topicService.createTopic(admin(), "no-offset-topic", 2, 1, null);
 

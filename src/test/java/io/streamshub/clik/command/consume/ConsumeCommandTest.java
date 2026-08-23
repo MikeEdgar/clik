@@ -110,13 +110,9 @@ class ConsumeCommandTest extends ClikMainTestBase implements TestRecordProducer 
     void testConsumeFromEnd() throws Exception {
         // Create topic and produce some initial messages
         topicService.createTopic(admin(), "end-topic", 1, 1, Collections.emptyMap());
-        produceMessages("end-topic", "old1", "old2");
+        produceMessages("end-topic", "msg1", "msg2", "msg3", "msg4");
 
-        // Produce new messages after a short delay
-        Thread.sleep(100);
-        produceMessages("end-topic", "new1", "new2");
-
-        // Consume from end (should not get the old messages)
+        // Consume from end (should not get any messages)
         LaunchResult result = launcher.launch("consume", "end-topic",
                 "--from-end",
                 "--timeout", "1000");
@@ -202,7 +198,7 @@ class ConsumeCommandTest extends ClikMainTestBase implements TestRecordProducer 
     }
 
     @Test
-    void testConsumeInvalidDatetime() throws Exception {
+    void testConsumeInvalidDatetime() {
         // Create topic with multiple partitions
         topicService.createTopic(admin(), "datetime-absolute-topic", 1, 1, Collections.emptyMap());
 
@@ -344,7 +340,7 @@ class ConsumeCommandTest extends ClikMainTestBase implements TestRecordProducer 
     }
 
     @Test
-    void testConsumeNoMessages() throws Exception {
+    void testConsumeNoMessages() {
         // Create empty topic
         topicService.createTopic(admin(), "empty-topic", 1, 1, Collections.emptyMap());
 
@@ -399,7 +395,7 @@ class ConsumeCommandTest extends ClikMainTestBase implements TestRecordProducer 
     }
 
     @Test
-    void testConsumeGroupWithPartitionError() throws Exception {
+    void testConsumeGroupWithPartitionError() {
         // Create topic with multiple partitions
         topicService.createTopic(admin(), "group-partition-error-topic", 3, 1, Collections.emptyMap());
 
@@ -709,34 +705,16 @@ class ConsumeCommandTest extends ClikMainTestBase implements TestRecordProducer 
         assertTrue(output.contains("\"key1\",\"value1\",0,0"));
     }
 
-    @Test
-    void testConsumeWithInvalidFormatString() {
-        // Try to consume with invalid format string (no placeholders)
+    @ParameterizedTest
+    @CsvSource({
+        "'Missing placeholders',    'just literal text'",
+        "'Malformed format string', '%{unclosed'",
+        "'Unknown placeholder',     '%x %v'"
+    })
+    void testConsumeWithInvalidFormatString(String title, String formatString) {
         LaunchResult result = launcher.launch("consume", "some-topic",
                 "--from-beginning",
-                "--output", "just literal text",
-                "--timeout", "2000");
-        assertEquals(1, result.exitCode());
-        assertTrue(result.getErrorOutput().contains("Invalid output format"));
-    }
-
-    @Test
-    void testConsumeWithMalformedFormatString() {
-        // Try to consume with malformed format string
-        LaunchResult result = launcher.launch("consume", "some-topic",
-                "--from-beginning",
-                "--output", "%{unclosed",
-                "--timeout", "2000");
-        assertEquals(1, result.exitCode());
-        assertTrue(result.getErrorOutput().contains("Invalid output format"));
-    }
-
-    @Test
-    void testConsumeFormatStringWithUnknownPlaceholder() {
-        // Try to consume with unknown placeholder
-        LaunchResult result = launcher.launch("consume", "some-topic",
-                "--from-beginning",
-                "--output", "%x %v",
+                "--output", formatString,
                 "--timeout", "2000");
         assertEquals(1, result.exitCode());
         assertTrue(result.getErrorOutput().contains("Invalid output format"));

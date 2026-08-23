@@ -95,7 +95,7 @@ class AclCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testCreateAclPrefixedPattern() throws Exception {
+    void testCreateAclPrefixedPattern() {
         LaunchResult result = launcher.launch("acl", "create",
                 "--topic", "orders",
                 "--pattern-type", "PREFIXED",
@@ -194,7 +194,7 @@ class AclCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testListAclsTable() throws Exception {
+    void testListAclsTable() {
         // Create test topic first
         topicService.createTopic(admin(), "list-test-topic", 1, 1, Collections.emptyMap());
 
@@ -222,7 +222,7 @@ class AclCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testListAclsJsonFormat() throws Exception {
+    void testListAclsJsonFormat() {
         // Create test topic first
         topicService.createTopic(admin(), "json-topic", 1, 1, Collections.emptyMap());
 
@@ -245,7 +245,7 @@ class AclCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testListAclsYamlFormat() throws Exception {
+    void testListAclsYamlFormat() {
         // Create test topic first
         topicService.createTopic(admin(), "yaml-topic", 1, 1, Collections.emptyMap());
 
@@ -268,7 +268,7 @@ class AclCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testListAclsFilterByTopic() throws Exception {
+    void testListAclsFilterByTopic() {
         // Create two test topics
         topicService.createTopic(admin(), "filter-topic-1", 1, 1, Collections.emptyMap());
         topicService.createTopic(admin(), "filter-topic-2", 1, 1, Collections.emptyMap());
@@ -292,7 +292,7 @@ class AclCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testListAclsFilterByPrincipal() throws Exception {
+    void testListAclsFilterByPrincipal() {
         // Create test topic
         topicService.createTopic(admin(), "principal-topic", 1, 1, Collections.emptyMap());
 
@@ -313,7 +313,7 @@ class AclCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testListAclsFilterByOperation() throws Exception {
+    void testListAclsFilterByOperation() {
         // Create test topic
         topicService.createTopic(admin(), "operation-topic", 1, 1, Collections.emptyMap());
 
@@ -335,7 +335,7 @@ class AclCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testListAclsMultipleFilters() throws Exception {
+    void testListAclsMultipleFilters() {
         // Create test topic
         topicService.createTopic(admin(), "multi-filter-topic", 1, 1, Collections.emptyMap());
 
@@ -376,7 +376,7 @@ class AclCommandTest extends ClikMainTestBase {
     // ============================
 
     @Test
-    void testDeleteAclSingle() throws Exception {
+    void testDeleteAclSingle() {
         // Create test topic
         topicService.createTopic(admin(), "delete-topic", 1, 1, Collections.emptyMap());
 
@@ -397,7 +397,7 @@ class AclCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testDeleteAclMultiple() throws Exception {
+    void testDeleteAclMultiple() {
         // Create test topic
         topicService.createTopic(admin(), "multi-delete-topic", 1, 1, Collections.emptyMap());
 
@@ -421,7 +421,7 @@ class AclCommandTest extends ClikMainTestBase {
 
     @Test
     @Disabled("Delete without --yes will cause clik to hang waiting for input")
-    void testDeleteAclConfirmationPrompt() throws Exception {
+    void testDeleteAclConfirmationPrompt() {
         // Create test topic
         topicService.createTopic(admin(), "confirm-topic", 1, 1, Collections.emptyMap());
 
@@ -443,7 +443,7 @@ class AclCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testDeleteAclNoMatches() throws Exception {
+    void testDeleteAclNoMatches() {
         // Create test topic without ACLs
         topicService.createTopic(admin(), "no-match-topic", 1, 1, Collections.emptyMap());
 
@@ -464,7 +464,7 @@ class AclCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testDeleteAclByPrincipalOnly() throws Exception {
+    void testDeleteAclByPrincipalOnly() {
         // Create test topics
         topicService.createTopic(admin(), "topic-a", 1, 1, Collections.emptyMap());
         topicService.createTopic(admin(), "topic-b", 1, 1, Collections.emptyMap());
@@ -546,7 +546,7 @@ class AclCommandTest extends ClikMainTestBase {
     }
 
     @Test
-    void testListAclsInvalidOutputFormat() throws Exception {
+    void testListAclsInvalidOutputFormat() {
         var binding = aclService.buildAclBinding(
                 ResourceType.TOPIC.name(), "some-topic", PatternType.LITERAL.name(),
                 "User:alice", "*", AclOperation.READ.name(), AclPermissionType.ALLOW.name());
